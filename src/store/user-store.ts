@@ -106,8 +106,10 @@ let bootstrapInFlight: Promise<void> | null = null;
  *
  * 🔴 **타입 단언만으로는 부족하다.** `mustChangePassword` 가 빠진 응답이 오면 `undefined` 는
  * 거짓이라 그대로 authed 가 되고, **비밀번호를 바꿔야 하는 사람이 관문을 지나간다.** 타입도
- * 화면도 깨지지 않아 아무도 모르는 종류의 고장이다. 서버가 아직 구현 전이라(→ README)
- * 지금은 더더욱 「오기로 한 모양」을 믿을 수 없다.
+ * 화면도 깨지지 않아 아무도 모르는 종류의 고장이다.
+ *
+ * 📌 **401 이 오지 404 는 오지 않는다.** 토큰이 유효한데 계정 문서가 없는 경우에도 서버는
+ * 401 을 준다 — 404 를 주면 앱이 「내 프로필이 없다」는 상태로 계속 돌기 때문이다.
  */
 async function fetchMe(): Promise<MeResponse> {
   const me = await api.get<MeResponse>('/users/me');

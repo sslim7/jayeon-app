@@ -102,6 +102,15 @@ export const API_ERROR_CODE = {
   UNAUTHORIZED: 'UNAUTHORIZED',
   /** 500 — 서버 내부 오류. */
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  /**
+   * 429 — 로그인 시도가 너무 잦다. `details.retryAfterSec` 에 남은 초가 온다.
+   *
+   * 📌 **서버는 아직 이 코드를 내지 않는다.** 그런데도 지금 갈래를 넣어 두는 이유는, 켜는 날
+   * 앱이 그 코드를 모르면 「알 수 없는 오류」를 띄우기 때문이다. 사용자가 보는 것은 「비밀번호가
+   * 틀렸나?」이고, 그래서 **더 시도한다** — 잠긴 사람에게 더 잠기라고 안내하는 화면이 된다.
+   * 이름은 jayeon-was 가 예약해 두었다.
+   */
+  TOO_MANY_ATTEMPTS: 'TOO_MANY_ATTEMPTS',
 } as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODE)[keyof typeof API_ERROR_CODE];

@@ -12,25 +12,99 @@
 | 저장소 | 역할 |
 | --- | --- |
 | `jayeon-was` | 백엔드(API). `https://jayeon-api.redhead.kr` |
-| `redhead-terraform` | `redhead.kr` 우산 도메인과 그 아래 앱들의 인프라를 소유한다 (구성 중) |
+| `redhead-terraform` | `redhead.kr` 우산 도메인과 그 아래 앱들의 인프라 관리 |
 | `birdieup-app` | 형제 프로젝트. 이 저장소의 빌드·배포 규칙이 여기서 왔다 |
 
 ## 시작하기
 
-```
+```bash
 npm install
-cp .env.example .env    # 값은 파일 안 주석에 [로컬]/[운영]으로 적혀 있다
+cp -n .env.example .env # 최초 1회. 기존 .env는 보존한다
+npm run dev             # Expo 개발 서버 (3103 포트). 실행 후 w로 웹 열기
+```
+
+웹을 바로 열거나 Android에서 실행할 때는 아래 명령 중 하나를 사용한다.
+
+```bash
 npm run dev:web         # 웹 (3103 포트)
 npm run android         # 안드로이드
 ```
 
-`npm run lint`, `npm run typecheck` 으로 검사한다.
+웹 주소는 **http://localhost:3103**이다. `npm run dev`는 앱 개발 서버만 실행한다.
+실제 로그인에는 **Firestore 에뮬레이터(8090)와 jayeon-was(8091)**가 함께 실행되어야 한다.
+
+### WAS와 초대 계정 준비
+
+먼저 [jayeon-was 로컬 개발 안내](../jayeon-was/README.md#로컬-개발-시작하기)에 따라
+WAS의 `.env`와 서로 다른 JWT 시크릿을 준비한다. 아래 명령은 `jayeon-was`에서 실행한다.
+
+```bash
+# 터미널 1: 개발 데이터 저장·복원용 Firestore 에뮬레이터
+firebase emulators:start --only firestore --project demo-jayeon \
+  --import=./emulator-data --export-on-exit=./emulator-data
+
+# 터미널 2: WAS (.env의 PORT=8091)
+go run .
+```
+
+계정은 공개 가입 대신 CLI로 만든다. 에뮬레이터가 실행된 상태에서 별도 터미널로 실행한다.
+CLI는 `.env`를 읽지 않으므로 대상 환경변수를 직접 전달한다.
+
+```bash
+GOOGLE_CLOUD_PROJECT=demo-jayeon FIRESTORE_EMULATOR_HOST=localhost:8090 \
+  go run ./cmd/create-user --email invitee@example.com --name '초대 사용자' \
+  --password '<8자 이상 임시 비밀번호>' --write
+```
+
+생성한 이메일과 임시 비밀번호로 앱에 로그인하면 비밀번호 변경 화면이 나온다.
+변경 후에는 **새 비밀번호로 다시 로그인**한다. 새 비밀번호는 8자 이상, UTF-8 기준
+72바이트 이하이며 현재 비밀번호와 달라야 한다. 정책 검증은 WAS가 수행한다.
+
+WAS 상태는 http://localhost:8091/health, API 문서는 http://localhost:8091/docs에서 확인한다.
+실기기에서는 개발 PC와 같은 네트워크를 사용하고 PC의 3103·8091 포트에 접근할 수 있어야 한다.
+필요하면 앱 `.env`의 API·웹뷰 주소에 개발 PC의 사설 IP를 지정한다.
+
+### 검사와 빌드
+
+```bash
+npm run lint
+npm run typecheck
+npm run test:auth
+npm run test:e2e
+npm run export:web      # 웹 정적 빌드 → dist/
+```
 
 인증 회귀 검사는 `npm run test:auth`, 브라우저 검사는 `npm run test:e2e`로 실행한다.
 브라우저 최초 실행 전 `npx playwright install chromium`이 필요하다. 이미 설치된 Chrome을
 쓰려면 `PLAYWRIGHT_CHANNEL=chrome npm run test:e2e`로 실행한다. 브라우저 검사는 3103의
 개발 서버를 자동으로 시작하거나 재사용하며, 인증 API 응답을 모의하므로 실제 서버 연동
 검증을 대신하지 않는다. 데스크톱과 모바일 화면 크기를 각각 검사한다.
+
+## 실제 서버에 붙여 보기
+
+위 `npm run test:e2e` 는 **인증 API 를 모의한다** — 화면과 스토어의 계약은 지키지만 서버가
+정말 그렇게 답하는지는 확인하지 못한다. 계약이 바뀌었을 때 그 사실이 드러나는 곳은 여기다.
+
+```bash
+# 1) 백엔드 (다른 터미널 두 개)
+cd ../jayeon-was
+cp .env.example .env    # JWT_SECRET 과 ADMIN_JWT_SECRET 을 서로 다른 값으로 채운다
+firebase emulators:start --only firestore --project demo-jayeon   # 8090
+go run .                                                          # 8091
+
+# 2) 계정 만들기 — 가입 API 가 없으므로 CLI 로만 만들어진다
+FIRESTORE_EMULATOR_HOST=localhost:8090 GOOGLE_CLOUD_PROJECT=demo-jayeon \
+  go run ./cmd/create-user -email you@redhead.kr -name 이름 -password temp-pass-1234 -write
+
+# 3) 앱
+cd ../jayeon-app && npm run dev:web    # 3103
+```
+
+만들어진 계정은 `mustChangePassword: true` 라 **첫 로그인이 곧 강제 변경 화면**이다. 즉 한
+번 로그인해 보는 것만으로 로그인 → 강제 변경 → 재로그인까지 다 지나간다.
+
+`.env` 의 `EXPO_PUBLIC_API_URL` 이 `http://localhost:8091` 이어야 한다. 이 값이 운영 주소를
+가리킨 채로 로컬을 확인하면 **아무것도 틀리지 않았는데 로그인만 안 되는** 상태가 된다.
 
 ## 디렉터리 구조
 
@@ -45,7 +119,8 @@ deploy/          nginx.conf — 운영 이미지가 dist/ 를 내보내는 설�
 docs/            문서. 배포 절차는 docs/deploy.md
 ```
 
-`src/` 아래는 지금 만들어지는 중이라 비어 있거나 일부만 있을 수 있다.
+현재 로그인·비밀번호 변경·계정 확인 홈과 네이티브 웹뷰 연결이 구현되어 있다.
+인증 이후 서비스 도메인 화면은 추가 구현 대상이다.
 
 ## 로컬 포트
 
@@ -56,10 +131,10 @@ docs/            문서. 배포 절차는 docs/deploy.md
 앱이 자기 API 대신 다른 프로젝트의 서버를 부르게 되고, 엉뚱한 404 를 받고도 원인이 자기
 코드에 있다고 생각하며 한참을 헤맨다.
 
-| | admin | app(dev) | Firestore 에뮬레이터 | was |
-| --- | --- | --- | --- | --- |
-| birdieup | 3000 | 3003 | 8080 | 8081 |
-| **jayeon** | (3100) | **3103** | **8090** | **8091** |
+| | admin | app(dev) | Firestore 에뮬레이터 | 에뮬 UI | was | 테스트 에뮬 |
+| --- | --- | --- | --- | --- | --- | --- |
+| birdieup | 3000 | 3003 | 8080 | 4000 | 8081 | 8085 |
+| **jayeon** | (3100) | **3103** | **8090** | **4090** | **8091** | **8095** |
 
 새 포트를 잡을 일이 생기면 이 표에 먼저 적고 쓴다.
 
@@ -80,7 +155,8 @@ Git 에서 **태그는 브랜치에 속하지 않는다.** 그래서 "release �
 안다. 어느 브랜치의 커밋에 태그를 붙였는지는 **태그를 미는 사람이 지키는 규칙**이다
 (근거: `birdieup-terraform/modules/cicd/variables.tf` 의 `tag_regex` 주석).
 
-자세한 절차와 아직 없는 인프라 목록은 [docs/deploy.md](docs/deploy.md).
+자세한 절차와 배포 전 확인 항목은 [docs/deploy.md](docs/deploy.md).
+`staging` 커밋·푸시만으로 배포하지 않는다. 배포는 별도 요청이 있을 때 진행한다.
 
 ## 환경변수
 
@@ -128,16 +204,29 @@ Git 에서 **태그는 브랜치에 속하지 않는다.** 그래서 "release �
   보호 화면을 열지 않고 로그인 안내를 보인다. 연결 복구 후 새로고침하면 저장된 세션을
   다시 확인한다. 인증 만료가 확인되거나 사용자가 로그아웃하면 토큰을 지운다.
 
-## 아직 없는 것
+## 인증 API 연동 상태
 
-솔직히 적어 둔다. 이 저장소는 오늘 시작했다.
+2026-09-16 기준, WAS 사용자 인증 구현과 앱 계약을 코드·OpenAPI 문서로 대조했다.
 
-- **인증 API**: 화면(로그인 · 비밀번호 변경)과 스토어는 서 있지만, **WAS 쪽 엔드포인트가 아직
-  하나도 없다** — `POST /auth/login`, `POST /auth/change-password`, `GET /users/me` 를 지금
-  부르면 404 다. 주고받는 모양은 `src/types/api.ts` 에 먼저 고정해 두었고, 화면은 그 404 를
-  자격 실패가 아니라 「서버에 연결할 수 없어요」로 말한다(`src/lib/api-errors.ts`).
+| API | 요청 | 성공 응답·앱 동작 |
+| --- | --- | --- |
+| `POST /auth/login` | `email`, `password` | `accessToken`, `refreshToken`, `expiresInSec`, `mustChangePassword`. 참이면 최초 변경 강제 |
+| `POST /auth/refresh` | `refreshToken` | 토큰 세트. `mustChangePassword`는 포함하지 않음 |
+| `POST /auth/change-password` | Bearer 인증, `currentPassword`, `newPassword` | `204`, 본문 없음. 앱 토큰 삭제 후 재로그인 안내 |
+| `GET /users/me` | Bearer 인증 | `userId`, `email`, `userName`, `mustChangePassword`, `createdAt` |
+
+앱 타입은 [src/types/api.ts](src/types/api.ts), 서버 스펙은
+[jayeon-was/docs/openapi.yaml](../jayeon-was/docs/openapi.yaml)을 참고한다.
+`INVALID_CREDENTIALS`는 입력 오류로 처리하며, 비밀번호 변경 중 이 오류가 나도 세션은 유지한다.
+`UNAUTHORIZED`에는 토큰 재발급을 시도하고, 재발급 자격도 만료되었으면 로그아웃한다.
+네트워크·타임아웃·서버 장애는 자격 오류와 구분한다.
+
+## 남은 구현과 검증
+
+- **실제 서버 통합 검증**: 앱 자동 테스트는 모의 응답 기반이다. 실제 WAS·에뮬레이터·초대
+  계정으로 로그인 → 최초 변경 → 재로그인 → 세션 복구를 별도로 확인해야 한다.
+- **Android 실기기 검증**: 웹뷰·SecureStore·앱 재실행 후 로그인 복구는 실기기 확인이 필요하다.
+- **서비스 도메인 화면**: 현재 홈은 계정 확인·비밀번호 변경·로그아웃을 제공한다.
 - **디자인 토큰**: `src/constants` 의 색·간격 값은 임시값이다. 디자인이 정해지면 바뀐다.
-- **인프라**: `redhead.kr` 은 이 프로젝트가 처음 쓰는 도메인이라 DNS 존·GCP 프로젝트·
-  Artifact Registry·Cloud Run 서비스·Cloud Build 트리거가 **하나도 없다.**
-  그래서 지금 태그를 밀어도 배포는 돌지 않는다. 무엇을 갖춰야 하는지는
-  [docs/deploy.md](docs/deploy.md) 의 체크리스트에 있다.
+- **운영 배포 상태**: 이 문서 갱신에서는 클라우드 리소스의 실제 생성·배포 여부를 확인하지
+  않았다. `redhead-terraform`과 [배포 체크리스트](docs/deploy.md)를 기준으로 확인한다.
