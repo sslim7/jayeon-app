@@ -191,14 +191,14 @@ test('그룹과 사용자 정의 열도 빈 값을 맨 뒤로 보내며 같은 �
   assert.deepEqual(names(rows, { key: 'group', direction: 'desc' }), ['1', '2', '3']);
   assert.deepEqual(names(rows, { key: customSortKey('직책'), direction: 'desc' }), ['1', '2', '3']);
 });
-test('발송건수는 건수 뒤 최근 발송일로 갈리고 0건은 항상 맨 뒤에 남는다', () => {
+test('발송건수는 건수 뒤 최근 발송일로 갈리고 0건도 숫자로 함께 줄 선다', () => {
   const rows = [
     person('none', '무', '', { sentCount: 0 }),
     person('old', '고', '', { sentCount: 2, latestSentAt: '2026-01-01T00:00:00.000Z' }),
     person('new', '신', '', { sentCount: 2, latestSentAt: '2026-05-01T00:00:00.000Z' }),
     person('one', '일', '', { sentCount: 1, latestSentAt: '2026-06-01T00:00:00.000Z' }),
   ];
-  assert.deepEqual(names(rows, { key: 'sent', direction: 'asc' }), ['one', 'old', 'new', 'none']);
+  assert.deepEqual(names(rows, { key: 'sent', direction: 'asc' }), ['none', 'one', 'old', 'new']);
   assert.deepEqual(names(rows, { key: 'sent', direction: 'desc' }), ['new', 'old', 'one', 'none']);
 });
 test('정렬은 원본 배열을 바꾸지 않고 같은 값 묶음의 순서를 유지한다', () => {
