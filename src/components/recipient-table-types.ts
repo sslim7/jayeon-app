@@ -8,4 +8,6 @@ export type RecipientTableProps = {
   includeSentFilter?: { selected: boolean; disabled?: boolean; onPress: () => void };
   onEdit?: (recipient: Recipient) => void;
   onRemove?: (recipient: Recipient) => void;
+  /** 좁은 화면의 발송 목록: 선택 수를 (M/N)로 줄이고 간단뷰를 한 줄 행으로, 남은 높이를 채워 그 안에서 스크롤한다(웹). */
+  dense?: boolean;
 };

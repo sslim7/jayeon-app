@@ -9,23 +9,27 @@ export function smsError(error: unknown): string {
   if (error instanceof Error && error.name === 'Error') return error.message;
   return readApiErrorMessage(error, {}, '처리하지 못했어요. 연결을 확인하고 다시 시도해 주세요.');
 }
-export function SmsPage({ title, children, wide = false, actions, hideTitle = false }: PropsWithChildren<{ title: string; wide?: boolean; actions?: ReactNode; hideTitle?: boolean }>) {
+export function SmsPage({ title, children, wide = false, actions, hideTitle = false, compact = false, footer }: PropsWithChildren<{ title: string; wide?: boolean; actions?: ReactNode; hideTitle?: boolean; compact?: boolean; footer?: ReactNode }>) {
   return (
     <SafeAreaView style={s.root}>
       <Stack.Screen options={{ title }} />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[s.page, wide && { maxWidth: '100%' }]}
+        // 제목을 앱 헤더가 대신 보여 주면 헤더 제목↔구분선 간격(약 12)과 같게 붙인다.
+        // footer 가 있으면 본문이 남은 높이를 채워 목록이 그 안에서 스크롤할 수 있게 한다.
+        contentContainerStyle={[s.page, wide && { maxWidth: '100%' }, hideTitle && { paddingTop: spacing.md }, compact && s.pageCompact, !!footer && { flexGrow: 1, paddingBottom: spacing.md }]}
       >
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.md }}>
+        {!hideTitle || actions ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.md }}>
         {!hideTitle ? <Text accessibilityRole="header" style={[s.title, { flexGrow: 1 }]}>
           {title}
         </Text> : null}
         {actions ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.sm, marginLeft: 'auto' }}>{actions}</View> : null}
-        </View>
+        </View> : null}
         {children}
       </ScrollView>
+      {/* 스크롤 영역 밖에 두어 목록 길이와 상관없이 항상 보인다. 하단 안전 영역은 루트가 채운다. */}
+      {footer ? <View style={[s.footer, compact && { paddingHorizontal: spacing.lg }]}>{footer}</View> : null}
     </SafeAreaView>
   );
 }
@@ -122,6 +126,8 @@ export const s = StyleSheet.create({
     gap: spacing.lg,
     paddingBottom: 60,
   },
+  pageCompact: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  footer: { paddingHorizontal: spacing.xxl, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.borderPill, backgroundColor: colors.bg },
   title: { ...fonts.bodyBold, color: colors.ink, fontSize: text.h1 },
   subtitle: { ...fonts.bodySemi, color: colors.ink, fontSize: text.xl },
   body: { ...fonts.body, color: colors.mid, fontSize: text.lg, lineHeight: 24 },

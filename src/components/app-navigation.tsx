@@ -1,6 +1,6 @@
-import { Link, usePathname } from 'expo-router';
+import { Link, useFocusEffect, usePathname } from 'expo-router';
 import { Image } from 'expo-image';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -13,6 +13,18 @@ import { colors, fonts, radii, spacing, text } from '@/constants/theme';
 
 const destination = { href: '/sms/new', label: '문자 보내기' } as const;
 
+// 헤더는 화면 트리 밖에 있으므로 화면이 오른쪽 슬롯을 채울 통로만 둔다. 세터는 안정적이라 화면을 다시 그리지 않는다.
+const HeaderActionsContext = createContext<(actions: ReactNode) => void>(() => {});
+
+/** 포커스된 화면만 헤더 오른쪽에 조작을 올린다. 다른 화면이 위에 쌓이거나 떠나면 비운다. */
+export function useHeaderActions(actions: ReactNode) {
+  const setActions = useContext(HeaderActionsContext);
+  useFocusEffect(useCallback(() => {
+    setActions(actions);
+    return () => setActions(null);
+  }, [actions, setActions]));
+}
+
 /** 화면마다 동일한 진입점을 제공하며 실제 발송 상태와는 독립적으로 동작한다. */
 export function AppNavigation({ children, enabled = true }: { children: ReactNode; enabled?: boolean }) {
   const pathname = usePathname();
@@ -21,6 +33,7 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
   const [stageWidth, setStageWidth] = useState(0);
   const drawerWidth = Math.min(stageWidth * 0.8, 340);
   const [sheet, setSheet] = useState<'profile' | 'password' | null>(null);
+  const [headerActions, setHeaderActions] = useState<ReactNode>(null);
   const [navigationContext, setNavigationContext] = useState({ pathname, enabled });
   // 인증 단계나 경로가 바뀌어도 화면 트리는 유지하고 메뉴 상태만 정리한다.
   if (navigationContext.pathname !== pathname || navigationContext.enabled !== enabled) {
@@ -119,10 +132,10 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
                     </View>
                   </Pressable>
                   <Text accessibilityRole="header" numberOfLines={1} style={styles.current}>{destination.label}</Text>
-                  <View style={styles.iconButton} />
+                  {headerActions ? <View style={styles.headerActions}>{headerActions}</View> : <View style={styles.iconButton} />}
                 </View>
               </SafeAreaView> : null}
-              {children}
+              <HeaderActionsContext.Provider value={setHeaderActions}>{children}</HeaderActionsContext.Provider>
             </View>
             <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, styles.dim, dimStyle]}>
               {open ? <Pressable accessibilityRole="button" accessibilityLabel="메뉴 닫기" onPress={() => setOpen(false)} style={StyleSheet.absoluteFill} /> : null}
@@ -149,6 +162,7 @@ const styles = StyleSheet.create({
   dim: { backgroundColor: colors.ink },
   headerSafe: { backgroundColor: colors.bg, borderBottomWidth: 1, borderBottomColor: colors.borderPill },
   header: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   iconButton: { width: 48, height: 48, borderRadius: radii.button, alignItems: 'center', justifyContent: 'center' },
   hamburger: { gap: 5 },
   line: { width: 22, height: 2, borderRadius: radii.hair, backgroundColor: colors.ink },

@@ -119,7 +119,7 @@ export class SmsRunner {
       await this.reconcile(campaignId, version);
       let rows = await this.api.recipients(campaignId);
       this.assertSession(version);
-      if (rows.some((row) => row.status === 'SENDING')) throw new Error('결과가 확인되지 않은 발송이 있어요. 재발송하지 말고 결과 동기화를 눌러 주세요.');
+      if (rows.some((row) => row.status === 'SENDING')) throw new Error('결과가 확인되지 않은 발송이 있어요. 재발송하지 말고 결과 다시 확인을 눌러 주세요.');
       for (const id of new Set(options.retryRecipientIds ?? [])) {
         const row = rows.find((item) => item.id === id);
         if (!row || row.status !== 'FAILED' || needsOutcomeReview(row)) throw new Error('확실하게 실패한 대상만 다시 보낼 수 있어요.');
