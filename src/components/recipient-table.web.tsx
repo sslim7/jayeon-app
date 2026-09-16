@@ -3,6 +3,7 @@ import { formatPhone } from '@/lib/phone';
 import type { CSSProperties } from 'react';
 import { colors, fonts, text } from '@/constants/theme';
 import { recipientSentSummary, useRecipientTableColumns } from './recipient-table-columns';
+import { ariaSort, customSortKey, sortHeaderLabel, sortIndicator, type RecipientSort } from './recipient-table-sort';
 import type { RecipientTableProps } from './recipient-table-types';
 
 const cell: CSSProperties = {
@@ -27,10 +28,13 @@ const checkbox: CSSProperties = { width: 18, height: 18, margin: 0, accentColor:
 const link: CSSProperties = { border: 0, padding: 0, background: 'transparent', color: colors.greenText, font: 'inherit', textAlign: 'left', overflowWrap: 'anywhere', textDecoration: 'underline', cursor: 'pointer' };
 // 한 줄 목록: 줄바꿈 대신 말줄임으로 한 사람을 한 줄 높이에 둔다.
 const oneLineText: CSSProperties = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', overflowWrap: 'normal' };
+// 제목 전체를 누를 수 있게 칸을 채우되 글자 모양은 제목 그대로 둔다.
+const sortButton: CSSProperties = { display: 'flex', alignItems: 'center', gap: 3, width: '100%', minWidth: 0, border: 0, padding: 0, margin: 0, background: 'transparent', color: 'inherit', font: 'inherit', textAlign: 'left', cursor: 'pointer' };
+const sortArrow: CSSProperties = { flexShrink: 0, fontSize: '0.7em', color: colors.greenText };
 
 /** 웹에서는 실제 표 구조로 열의 의미와 키보드 조작을 제공한다. */
 export function RecipientTable({ items, selectedIds, onSelectionChange, onHistory, disabled, onEdit, onRemove, includeSentFilter, dense = false }: RecipientTableProps) {
-  const { allInfo, compact, setAllInfo, fields } = useRecipientTableColumns(items);
+  const { allInfo, compact, setAllInfo, fields, rows, sort, toggleSort } = useRecipientTableColumns(items);
   const actions = !!onRemove;
   // 관리 열이 있는 수신자 관리 화면은 기존 간단뷰를 유지한다.
   const oneLine = dense && compact && !actions;
@@ -40,9 +44,9 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
   const cellStyle: CSSProperties = oneLine ? { ...cell, ...oneLineText, padding: '0 6px', height: 44, fontSize: text.md } : compact ? { ...cell, padding: '8px 4px', fontSize: text.base } : cell;
   const headingStyle: CSSProperties = oneLine ? { ...heading, ...oneLineText, padding: '0 6px', height: 40, fontSize: text.md } : compact ? { ...heading, padding: '8px 4px', fontSize: text.base } : heading;
   const linkStyle: CSSProperties = oneLine ? { ...link, ...oneLineText, display: 'block', maxWidth: '100%' } : link;
-  const visibleIds = items.map((item) => item.id);
+  const visibleIds = rows.map((item) => item.id);
   const selectedCount = visibleIds.filter((id) => selectedIds.includes(id)).length;
-  const all = items.length > 0 && selectedCount === items.length;
+  const all = rows.length > 0 && selectedCount === rows.length;
   const mixed = selectedCount > 0 && !all;
   return (
     // dense 는 부모 세로 flex 의 남은 높이를 채우고, 표 영역만 스크롤해 제목 행과 이름 열을 고정한다.
@@ -53,18 +57,18 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
         <thead>
           <tr>
             <th scope="col" style={{ ...headingStyle, ...fixedCheck, top: 0, zIndex: 4, backgroundColor: colors.bg, width: checkWidth, textAlign: 'center' }}>
-              <input type="checkbox" aria-label="전체 선택" aria-checked={mixed ? 'mixed' : all} checked={all} ref={(node) => { if (node) node.indeterminate = mixed; }} disabled={disabled || !items.length} style={checkbox} onChange={() => onSelectionChange(all ? selectedIds.filter((id) => !visibleIds.includes(id)) : [...new Set([...selectedIds, ...visibleIds])])} />
+              <input type="checkbox" aria-label="전체 선택" aria-checked={mixed ? 'mixed' : all} checked={all} ref={(node) => { if (node) node.indeterminate = mixed; }} disabled={disabled || !rows.length} style={checkbox} onChange={() => onSelectionChange(all ? selectedIds.filter((id) => !visibleIds.includes(id)) : [...new Set([...selectedIds, ...visibleIds])])} />
             </th>
-            <th scope="col" style={{ ...headingStyle, ...fixedName, top: 0, zIndex: 4, backgroundColor: colors.bg, width: oneLine ? '28%' : compact ? '17%' : 95 }}>이름</th>
-            <th scope="col" style={{ ...headingStyle, width: oneLine ? 112 : compact ? '25%' : 140 }}>전화번호</th>
-            {oneLine ? null : <th scope="col" style={{ ...headingStyle, width: compact ? '14%' : 95 }}>그룹</th>}
-            <th scope="col" style={{ ...headingStyle, width: compact || !fields.length ? undefined : 210 }}>발송건수</th>
-            {fields.map((name) => <th key={name} scope="col" style={headingStyle}>{name}</th>)}
+            <SortableHeading label="이름" sortKey="name" sort={sort} onToggle={toggleSort} style={{ ...headingStyle, ...fixedName, top: 0, zIndex: 4, backgroundColor: colors.bg, width: oneLine ? '28%' : compact ? '17%' : 95 }} />
+            <SortableHeading label="전화번호" sortKey="phone" sort={sort} onToggle={toggleSort} style={{ ...headingStyle, width: oneLine ? 112 : compact ? '25%' : 140 }} />
+            {oneLine ? null : <SortableHeading label="그룹" sortKey="group" sort={sort} onToggle={toggleSort} style={{ ...headingStyle, width: compact ? '14%' : 95 }} />}
+            <SortableHeading label="발송건수" sortKey="sent" sort={sort} onToggle={toggleSort} style={{ ...headingStyle, width: compact || !fields.length ? undefined : 210 }} />
+            {fields.map((name) => <SortableHeading key={name} label={name} sortKey={customSortKey(name)} sort={sort} onToggle={toggleSort} style={headingStyle} />)}
             {actions ? <th scope="col" style={{ ...headingStyle, width: compact ? 44 : 140 }}>관리</th> : null}
           </tr>
         </thead>
         <tbody>
-          {items.map((item, index) => (
+          {rows.map((item, index) => (
             <tr key={item.id} style={{ backgroundColor: selectedIds.includes(item.id) ? colors.sageRow : index % 2 ? colors.bg : colors.card }}>
               <td style={{ ...cellStyle, ...fixedCheck, textAlign: 'center' }}>
                 <input type="checkbox" aria-label={`${item.name} · ${formatPhone(item.phone)}${item.groupId ? ` · ${item.groupId}` : ''}`} checked={selectedIds.includes(item.id)} disabled={disabled} style={checkbox} onChange={() => onSelectionChange(selectedIds.includes(item.id) ? selectedIds.filter((id) => id !== item.id) : [...selectedIds, item.id])} />
@@ -86,10 +90,23 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
               </div></td> : null}
             </tr>
           ))}
-          {!items.length ? <tr><td colSpan={(oneLine ? 4 : 5) + fields.length + (actions ? 1 : 0)} style={{ ...cellStyle, padding: 24, ...(oneLine ? { height: 'auto', whiteSpace: 'normal' } : null), textAlign: 'center', color: colors.mid }}>조건에 맞는 수신자가 없습니다.</td></tr> : null}
+          {!rows.length ? <tr><td colSpan={(oneLine ? 4 : 5) + fields.length + (actions ? 1 : 0)} style={{ ...cellStyle, padding: 24, ...(oneLine ? { height: 'auto', whiteSpace: 'normal' } : null), textAlign: 'center', color: colors.mid }}>조건에 맞는 수신자가 없습니다.</td></tr> : null}
         </tbody>
       </table>
     </div>
     </div>
+  );
+}
+
+/** 제목을 눌러 그 열로 정렬한다(누를 때마다 오름/내림 토글). */
+function SortableHeading({ label, sortKey, sort, onToggle, style }: { label: string; sortKey: string; sort: RecipientSort; onToggle: (key: string) => void; style: CSSProperties }) {
+  const arrow = sortIndicator(sort, sortKey);
+  return (
+    <th scope="col" aria-sort={ariaSort(sort, sortKey)} style={style}>
+      <button type="button" aria-label={sortHeaderLabel(label, sort, sortKey)} title={label} onClick={() => onToggle(sortKey)} style={sortButton}>
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+        {arrow ? <span aria-hidden={true} style={sortArrow}>{arrow}</span> : null}
+      </button>
+    </th>
   );
 }
