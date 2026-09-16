@@ -12,10 +12,15 @@ export function NativeBootSplash({ ready, onFinished }: { ready: boolean; onFini
     return () => clearTimeout(timer);
   }, [ready, loadedAt, onFinished]);
   return <View accessibilityLabel="Nature를 준비하는 중" style={[StyleSheet.absoluteFill, styles.cover]}>
-    <Image source={require('../../assets/images/splash.png')} resizeMode="contain" style={StyleSheet.absoluteFill} onLoadEnd={() => {
+    <Image source={require('../../assets/images/splash.png')} resizeMode="contain" style={styles.photo} onLoadEnd={() => {
       setLoadedAt(Date.now());
       void SplashScreen.hideAsync().catch(() => {});
     }} />
   </View>;
 }
-const styles = StyleSheet.create({ cover: { backgroundColor: colors.bg, zIndex: 1000 } });
+// require 이미지는 원본 픽셀 크기가 width/height로 먼저 들어가 absoluteFill의 상하좌우를 이긴다.
+// 크기를 명시하지 않으면 사진이 원본 크기로 좌상단에 붙어 확대된 것처럼 보인다.
+const styles = StyleSheet.create({
+  cover: { backgroundColor: colors.bg, zIndex: 1000 },
+  photo: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
+});

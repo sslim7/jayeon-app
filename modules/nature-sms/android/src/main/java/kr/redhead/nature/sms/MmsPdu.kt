@@ -30,7 +30,12 @@ internal object MmsPdu {
     }
   }
 
-  fun prepare(input: SmsSendRecord, manager: SmsManager): ByteArray {
+  // 한 통에 본문과 이미지를 함께 넣으면 SMIL·파트 순서와 무관하게 수신 앱이 이미지를 본문 위에 표시한다.
+  // 순서를 보장하려고 본문(제목 포함) 한 통 → 이미지만 한 통으로 나눈다.
+  fun split(input: SmsSendRecord) = input.attachments.isNotEmpty() && input.message.isNotBlank()
+
+  /** 발송할 PDU 목록(분리 발송이면 [본문, 이미지]). 첫 무선 발송 전에 모든 PDU를 검증한다. */
+  fun prepare(input: SmsSendRecord, manager: SmsManager): List<ByteArray> {
     val images = decode(input.attachments)
     val config = manager.carrierConfigValues
     require(config.getBoolean(SmsManager.MMS_CONFIG_MMS_ENABLED, true)) { "선택한 SIM은 MMS 발송을 지원하지 않습니다." }
@@ -43,23 +48,37 @@ internal object MmsPdu {
         "이미지 해상도가 선택한 SIM의 MMS 제한을 초과합니다. 이미지를 줄여 주세요."
       }
     }
-    val pdu = encode(input.phone, input.message, input.attemptId, images, input.subject)
     val limit = config.getInt(SmsManager.MMS_CONFIG_MAX_MESSAGE_SIZE, 300 * 1024).takeIf { it > 0 } ?: 300 * 1024
+    if (split(input)) {
+      // 제목은 이미지 MMS에만 붙인다. 본문에 붙이면 수신 앱이 제목을 본문 첫 줄로 합쳐 보이고,
+      // 이미지에 제목이 없으면 통신사가 「제목없음」을 채워 넣는다. 통신사 용량은 각 PDU별로 검사한다.
+      val body = encode(input.phone, input.message, input.attemptId, emptyList())
+      val image = encode(input.phone, "", MmsPduProvider.key(input.attemptId, 1), images, input.subject)
+      require(body.size <= limit) { "본문이 선택한 SIM의 MMS 용량 제한을 초과합니다. 본문을 줄여 주세요." }
+      require(image.size <= limit) { "첨부 이미지가 선택한 SIM의 MMS 용량 제한을 초과합니다. 이미지를 줄여 주세요." }
+      return listOf(body, image)
+    }
+    val pdu = encode(input.phone, input.message, input.attemptId, images, input.subject)
     require(pdu.size <= limit) { "첨부와 본문이 선택한 SIM의 MMS 용량 제한을 초과합니다. 이미지를 줄여 주세요." }
-    return pdu
+    return listOf(pdu)
   }
 
   fun encode(phone: String, message: String, transactionId: String, images: List<Image>, subject: String = ""): ByteArray {
     require(phone.matches(Regex("\\+?[0-9]{8,15}")))
-    require(transactionId.matches(Regex("[A-Za-z0-9_-]{1,128}")))
-    require(images.size in 0..3)
+    require(transactionId.matches(MmsPduProvider.KEY))
+    require(images.size in 0..3 && (message.isNotBlank() || images.isNotEmpty()))
     val imageParts = images.mapIndexed { index, image ->
       Part("image${index + 1}.${if (image.mime == "image/png") "png" else "jpg"}", image.mime, image.bytes)
     }
-    // 파일명이 SMIL/XML에 삽입되지 않도록 내부 이름만 사용한다.
-    val smil = "<smil><head><layout><root-layout width=\"320\" height=\"480\"/><region id=\"Image\" left=\"0\" top=\"0\" width=\"320\" height=\"320\" fit=\"meet\"/><region id=\"Text\" left=\"0\" top=\"320\" width=\"320\" height=\"160\"/></layout></head><body>" +
-      (if (imageParts.isEmpty()) "<par dur=\"5000ms\"><text src=\"text.txt\" region=\"Text\"/></par>" else imageParts.joinToString("") { "<par dur=\"5000ms\"><text src=\"text.txt\" region=\"Text\"/><img src=\"${it.name}\" region=\"Image\"/></par>" }) + "</body></smil>"
-    val parts = listOf(Part("smil.xml", "application/smil", smil.toByteArray(Charsets.UTF_8), true), Part("text.txt", "text/plain", message.toByteArray(Charsets.UTF_8), true)) + imageParts
+    // 본문이 비면 text.txt 파트와 text par·region을 모두 생략한다. 빈 본문 말풍선이 생기지 않게 한다.
+    val textParts = if (message.isBlank()) emptyList() else listOf(Part("text.txt", "text/plain", message.toByteArray(Charsets.UTF_8), true))
+    // 파일명이 SMIL/XML에 삽입되지 않도록 내부 이름만 사용한다. 본문이 있으면 Text region을 위, 이미지를 아래에 둔다.
+    val regions = (if (textParts.isEmpty()) "" else "<region id=\"Text\" left=\"0\" top=\"0\" width=\"320\" height=\"160\"/>") +
+      (if (imageParts.isEmpty()) "" else "<region id=\"Image\" left=\"0\" top=\"${if (textParts.isEmpty()) 0 else 160}\" width=\"320\" height=\"320\" fit=\"meet\"/>")
+    val smil = "<smil><head><layout><root-layout width=\"320\" height=\"480\"/>$regions</layout></head><body>" +
+      textParts.joinToString("") { "<par dur=\"5000ms\"><text src=\"${it.name}\" region=\"Text\"/></par>" } +
+      imageParts.joinToString("") { "<par dur=\"5000ms\"><img src=\"${it.name}\" region=\"Image\"/></par>" } + "</body></smil>"
+    val parts = listOf(Part("smil.xml", "application/smil", smil.toByteArray(Charsets.UTF_8), true)) + textParts + imageParts
     return Bytes().apply {
       octet(0x8c); octet(0x80) // Message-Type: M-Send.req
       octet(0x98); text(transactionId)
