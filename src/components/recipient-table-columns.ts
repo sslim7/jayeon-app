@@ -9,5 +9,6 @@ export function useRecipientTableColumns(items: Recipient[]) {
   return { allInfo, compact: width < 768 && !allInfo, viewportWidth: width, setAllInfo: setPreference, fields: allInfo ? fields : [] };
 }
 export function recipientSentSummary(item: Recipient) {
-  return `${item.sentCount ?? 0}건 (${item.latestSentAt ? new Date(item.latestSentAt).toLocaleString('ko-KR') : '발송 이력 없음'})`;
+  if (!item.sentCount) return '';
+  return `${item.sentCount}건${item.latestSentAt ? ` (${new Date(item.latestSentAt).toLocaleString('ko-KR')})` : ''}`;
 }

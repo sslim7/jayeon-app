@@ -78,11 +78,13 @@ export function Choice({
   selected,
   onPress,
   disabled,
+  plain = false,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
   disabled?: boolean;
+  plain?: boolean;
 }) {
   return (
     <Pressable
@@ -92,7 +94,7 @@ export function Choice({
       aria-checked={selected}
       disabled={disabled}
       onPress={onPress}
-      style={[s.choice, selected && { backgroundColor: colors.sageRow }]}
+      style={[s.choice, selected && { backgroundColor: colors.sageRow }, plain && { borderWidth: 0, backgroundColor: 'transparent', paddingHorizontal: 0 }]}
     >
       <Text style={s.body}>
         {selected ? '☑' : '☐'} {label}

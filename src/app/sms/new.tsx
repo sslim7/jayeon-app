@@ -6,10 +6,11 @@ import { RecipientRegistrationSheet } from '@/components/recipient-registration-
 import { TemplateManager } from '@/components/template-manager';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { AttachmentEditor } from '@/components/message-attachments';
+import { RecipientFilters } from '@/components/recipient-filters';
 import { RecipientTable } from '@/components/recipient-table';
 import { RecipientHistorySheet } from '@/components/recipient-history';
 import { TextField } from '@/components/form-fields';
-import { Choice, Loading, Notice, SmsButton, SmsPage, s, smsError } from '@/components/sms-ui';
+import { Loading, Notice, SmsButton, SmsPage, s, smsError } from '@/components/sms-ui';
 import { colors, fonts, inputFontSize, radii, spacing, text } from '@/constants/theme';
 import { ApiError } from '@/lib/api';
 import { useUserStore } from '@/store/user-store';
@@ -163,17 +164,10 @@ export default function NewCampaignScreen() {
       {history ? <RecipientHistorySheet key={history.id} recipient={history} onClose={() => setHistory(null)} /> : null}
       {error ? <Notice error message={error} /> : null}
       {stage === 'recipients' ? <>
-        <TextField label="수신자 이름" value={query} onChangeText={setQuery} />
-        <Notice message="받을 사람을 선택한 다음 메시지를 작성하세요. 한 번에 50명까지 발송할 수 있어요." />
-        <Text style={s.subtitle}>그룹 선택</Text>
-        <View style={s.row}><SmsButton label="모든 그룹" secondary={!!group} onPress={() => setGroup('')} />{groups.map((item) => <SmsButton key={item} label={item} secondary={group !== item} onPress={() => setGroup(item)} />)}</View>
-        <Choice label="발송한 수신자 포함" selected={includeSent} disabled={frozen || loading} onPress={() => { setSelected([]); setIncludeSent(!includeSent); }} />
-        <Text accessibilityLiveRegion="polite" style={s.subtitle}>{selected.length}명 선택</Text>
-        {selected.length > 50 ? <Notice error message="한 캠페인은 50명까지 발송할 수 있어요. 선택 수를 줄여 주세요." /> : null}
+        <RecipientFilters groups={groups} group={group} onGroupChange={setGroup} query={query} onQueryChange={setQuery} />
         {loading ? <Loading /> : null}
-        <RecipientTable items={visible} selectedIds={selected} onSelectionChange={setSelected} onHistory={setHistory} onEdit={setEditingRecipient} disabled={frozen || loading} />
-        <SmsButton label={`${selected.length}명에게 발송`} disabled={frozen || loading || !selected.length || selected.length > 50} onPress={() => { setStage('compose'); void openTemplates(); }} />
-        <SmsButton label="수신자 새로고침" secondary disabled={loading} onPress={() => void load()} />
+        <RecipientTable includeSentFilter={{ selected: includeSent, disabled: frozen || loading, onPress: () => { setSelected([]); setIncludeSent(!includeSent); } }} items={visible} selectedIds={selected} onSelectionChange={setSelected} onHistory={setHistory} onEdit={setEditingRecipient} disabled={frozen || loading} />
+        <SmsButton label={`${selected.length}명에게 발송${selected.length > 50 ? ' (50명 제한)' : ''}`} secondary={selected.length > 50} danger={selected.length > 50} disabled={frozen || loading || !selected.length || selected.length > 50} onPress={() => { setStage('compose'); void openTemplates(); }} />
       </> : <>
         <Notice message="템플릿을 가져오거나 직접 작성하세요. 캠페인을 만든 다음 Android 앱에서 최종 전송합니다." />
         <Text style={s.subtitle}>수신자 {selected.length}명 선택</Text>

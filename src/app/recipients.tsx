@@ -86,7 +86,7 @@ export default function RecipientsScreen() {
         <SmsButton label="편집 취소" secondary disabled={busy} onPress={() => setEditing(undefined)} />
       </View> : null}
       {error ? <Notice error message={error} /> : null}
-      <Text style={s.subtitle} accessibilityLiveRegion="polite">{selected.length}명 선택 / 발송 최대 50명</Text>
+      <Text style={s.subtitle}>발송 최대 50명</Text>
       {selected.length > 50 ? <Notice error message="한 캠페인은 50명까지 발송할 수 있어요. 선택 수를 줄여 주세요." /> : null}
       {selected.length ? <View style={s.row}>
         <SmsButton label={`${selected.length}명에게 문자 작성`} disabled={selected.length > 50} onPress={() => router.push({ pathname: '/sms/new', params: { ids: selected.join(',') } })} />

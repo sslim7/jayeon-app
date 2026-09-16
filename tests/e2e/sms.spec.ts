@@ -207,59 +207,103 @@ test('삭제된 수신자 생성 거절은 잠금을 해제하고 없는 선택�
   expect(state.targets[0].recipientId).toBe('p2');
 });
 
-test('메뉴에는 문자 보내기와 하단 프로필만 표시하고 닫기·Escape로 복귀한다', async ({ page }) => {
+test('메뉴는 본문을 축소하고 선택을 유지하며 화면 탭·Escape로 복귀한다', async ({ page }) => {
   await setup(page);
+  await page.getByRole('checkbox', { name: /김영희/ }).click();
+  const main = page.getByTestId('navigation-main');
+  const original = (await main.boundingBox())!;
   const open = page.getByRole('button', { name: '메뉴 열기', exact: true });
+  const close = page.getByRole('button', { name: '메뉴 닫기', exact: true });
   await open.click();
-  await expect(page.getByRole('dialog').getByRole('img', { name: 'Nature', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: '문자 보내기', exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Nature', exact: true })).toBeVisible();
+  await expect.poll(async () => (await main.boundingBox())!.width / original.width).toBeCloseTo(0.92, 2);
+  expect((await main.boundingBox())!.x).toBeGreaterThan(original.x + 200);
+  await expect(page.getByRole('button', { name: '닫기', exact: true })).toHaveCount(0);
+  const link = page.getByRole('link', { name: '문자 보내기', exact: true });
+  await expect(link).toBeVisible();
+  await expect(link.locator('svg')).toBeVisible();
   for (const label of ['홈', '수신자 관리', '발송 이력', '발송 템플릿', '비밀번호 변경']) {
     await expect(page.getByRole('link', { name: label, exact: true })).toHaveCount(0);
   }
   await expect(page.getByRole('button', { name: '문자 사용자 프로필', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: '닫기', exact: true })).not.toBeVisible();
+  await expect(close).toHaveCount(0);
+  await expect.poll(async () => (await main.boundingBox())!.width / original.width).toBeCloseTo(1, 2);
+  await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeChecked();
   await open.click();
-  await page.getByRole('link', { name: '문자 보내기', exact: true }).click();
+  await link.click();
   await expect(page).toHaveURL(/\/sms\/new$/);
-  await expect(page.getByRole('button', { name: '닫기', exact: true })).not.toBeVisible();
+  await expect(close).toHaveCount(0);
   await open.click();
   await page.getByRole('button', { name: '문자 사용자 프로필', exact: true }).click();
   await expect(page.getByRole('heading', { name: '프로필', exact: true })).toBeVisible();
   await expect(page.getByText('sms@example.com', { exact: true })).toBeVisible();
   await page.screenshot({ path: `/tmp/nature-profile-${test.info().project.name}.png`, animations: 'disabled' });
   await page.getByRole('button', { name: '닫기', exact: true }).click();
-  await open.click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(close).toBeVisible();
+  await expect.poll(async () => (await main.boundingBox())!.width / original.width).toBeCloseTo(0.92, 2);
   await page.screenshot({ path: `/tmp/nature-menu-${test.info().project.name}.png`, animations: 'disabled' });
-  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  const shifted = (await main.boundingBox())!;
+  const dragStartX = Math.min(page.viewportSize()!.width - 12, shifted.x + 40);
+  await page.mouse.move(dragStartX, shifted.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(dragStartX - 240, shifted.y + 100, { steps: 12 });
+  await page.mouse.up();
+  await expect(close).toHaveCount(0);
+  await open.click();
+  await expect.poll(async () => (await main.boundingBox())!.width / original.width).toBeCloseTo(0.92, 2);
+  await close.click({ position: { x: 10, y: 80 } });
   await expect(open).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeChecked();
 });
 
 test('미발송 기본 조회·발송자 포함·전체 선택·최종 발송 이력', async ({ page }) => {
   const state = await setup(page);
   state.people[0].latestSentAt = now;
+  state.people[0].sentCount = 1;
   state.people[1].groupId = '친구';
   await page.goto('/sms/new');
   await expect(page.getByRole('checkbox', { name: /김철수/ })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeVisible();
-  await page.getByRole('checkbox', { name: '발송한 수신자 포함', exact: true }).click();
+  await expect(page.getByRole('button', { name: '김영희 발송 이력 보기', exact: true })).toHaveCount(0);
+  const groupBox = (await page.getByRole('button', { name: '모든그룹', exact: true }).boundingBox())!;
+  const nameFilter = page.getByRole('textbox', { name: '수신자 이름', exact: true });
+  await expect(nameFilter).toHaveAttribute('placeholder', '검색할 수신자 이름');
+  const nameBox = (await nameFilter.boundingBox())!;
+  expect(groupBox.x + groupBox.width).toBeLessThanOrEqual(nameBox.x);
+  expect(Math.abs(groupBox.y + groupBox.height / 2 - nameBox.y - nameBox.height / 2)).toBeLessThan(2);
+  await expect(page.getByRole('checkbox', { name: '기발신자포함', exact: true })).toHaveCSS('border-top-width', '0px');
+  await expect(page.getByRole('checkbox', { name: '기발신자포함', exact: true })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  const includeBox = (await page.getByRole('checkbox', { name: '기발신자포함', exact: true }).boundingBox())!;
+  const compactBox = (await page.getByRole('button', { name: '간단뷰', exact: true }).boundingBox())!;
+  const expandedBox = (await page.getByRole('button', { name: '전체정보뷰', exact: true }).boundingBox())!;
+  expect(includeBox.x + includeBox.width).toBeLessThanOrEqual(compactBox.x);
+  expect(compactBox.x).toBeLessThan(expandedBox.x);
+  await page.getByRole('checkbox', { name: '기발신자포함', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: /김철수/ })).toBeVisible();
   await page.getByLabel('수신자 이름', { exact: true }).fill('철수');
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: /김철수/ })).toBeVisible();
   await page.getByLabel('수신자 이름', { exact: true }).fill('');
-  await page.getByRole('button', { name: '모임', exact: true }).click();
+  await page.getByRole('button', { name: '모든그룹', exact: true }).click();
+  await page.getByRole('menuitem', { name: '모임', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toHaveCount(0);
-  await page.getByRole('button', { name: '모든 그룹', exact: true }).click();
+  await page.getByRole('button', { name: '모임', exact: true }).click();
+  await page.getByRole('menuitem', { name: '모든그룹', exact: true }).click();
   await page.screenshot({ path: `/tmp/nature-recipients-table-${test.info().project.name}.png`, animations: 'disabled' });
   const all = page.getByRole('checkbox', { name: '전체 선택', exact: true });
   await all.click();
   await expect(page.getByRole('button', { name: '2명에게 발송', exact: true })).toBeEnabled();
+  await expect(page.getByText('선택 2명', { exact: true })).toBeVisible();
+  const totalBox = (await page.getByText('전체 2명', { exact: true }).boundingBox())!;
+  const selectedBox = (await page.getByText('선택 2명', { exact: true }).boundingBox())!;
+  expect(selectedBox.x).toBeGreaterThan(totalBox.x);
+  expect(selectedBox.y).toBeCloseTo(totalBox.y, 0);
   await all.click();
   await expect(page.getByRole('button', { name: '0명에게 발송', exact: true })).toBeDisabled();
   await page.getByRole('checkbox', { name: /김영희/ }).click();
   await expect(all).toHaveAttribute('aria-checked', 'mixed');
+  await expect(page.getByText('선택 1명', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '김철수 발송 이력 보기', exact: true }).click();
   await expect(page.getByRole('heading', { name: '김철수 발송 이력', exact: true })).toBeVisible();
   await expect(page.getByText('이전에 보낸 안내입니다.', { exact: true })).toBeVisible();
@@ -327,7 +371,7 @@ test('첨부 없는 템플릿의 실제 서버 null 응답을 등록·조회·�
   await expect(page.getByLabel('메시지', { exact: true })).toHaveValue(template.message);
   await expect(page.getByText('첨부 이미지 0 / 3', { exact: true })).toBeVisible();
 });
-test('조회한 125명 전체를 이름순으로 보여주고 화면별 모든정보 기본값을 적용한다', async ({ page }, info) => {
+test('조회한 125명 전체를 이름순으로 보여주고 화면별 뷰 기본값을 적용한다', async ({ page }, info) => {
   const state = await setup(page);
   state.people.splice(0, state.people.length, ...Array.from({ length: 125 }, (_, i) => ({ id: `p${i + 1}`, name: `사람${String(125 - i).padStart(3, '0')}`, phone: `+8210${String(i).padStart(8, '0')}`, groupId: '모임', createdAt: now, updatedAt: now, customFields: [{ name: '부서', value: '영업부' }, { name: '우편번호', value: '00123' }, ...Array.from({ length: 10 }, (_, column) => ({ name: `추가정보${column + 1}`, value: `내용${column + 1}` }))] })));
   await page.goto('/sms/new');
@@ -336,12 +380,18 @@ test('조회한 125명 전체를 이름순으로 보여주고 화면별 모든�
   await expect(table.getByRole('row')).toHaveCount(126);
   await expect(table.getByRole('row').nth(1)).toContainText('사람001');
   await expect(table.getByRole('row').last()).toContainText('사람125');
-  const allInfo = page.getByRole('checkbox', { name: '모든정보', exact: true });
+  const allInfo = page.getByRole('button', { name: '전체정보뷰', exact: true });
+  const compact = page.getByRole('button', { name: '간단뷰', exact: true });
+  await expect(allInfo).toHaveAttribute('title', '전체정보뷰');
+  await expect(compact).toHaveAttribute('title', '간단뷰');
   if (info.project.name === 'mobile') {
-    await expect(allInfo).not.toBeChecked();
+    await expect(allInfo).toHaveAttribute('aria-pressed', 'false');
+    await expect(compact).toHaveAttribute('aria-pressed', 'true');
     await expect(table.getByRole('columnheader', { name: '부서', exact: true })).toHaveCount(0);
     await allInfo.click();
-  } else await expect(allInfo).toBeChecked();
+  } else await expect(allInfo).toHaveAttribute('aria-pressed', 'true');
+  await expect(allInfo).toHaveAttribute('aria-pressed', 'true');
+  await expect(compact).toHaveAttribute('aria-pressed', 'false');
   await expect(table.getByRole('columnheader', { name: '부서', exact: true })).toBeVisible();
   await expect(table.getByRole('columnheader', { name: '우편번호', exact: true })).toBeAttached();
   const nameHeader = table.getByRole('columnheader', { name: '이름', exact: true });
@@ -497,7 +547,7 @@ test('외부 발송 등록은 응답 유실 후에도 한 건만 저장하고 SM
   await expect(page.getByLabel('발송일시', { exact: true })).not.toBeEditable();
   expect(requests).toHaveLength(1);
   await page.reload();
-  await page.getByRole('checkbox', { name: '발송한 수신자 포함', exact: true }).click();
+  await page.getByRole('checkbox', { name: '기발신자포함', exact: true }).click();
   await page.getByRole('button', { name: '김철수 수정', exact: true }).click();
   await page.getByRole('button', { name: '발송등록', exact: true }).click();
   await page.getByRole('button', { name: '같은 발송 기록 요청 다시 확인', exact: true }).click();
@@ -507,9 +557,9 @@ test('외부 발송 등록은 응답 유실 후에도 한 건만 저장하고 SM
   expect(state.people[0].sentCount).toBe(1);
   await page.getByRole('button', { name: '닫기', exact: true }).click();
   await expect(page.getByRole('button', { name: '김철수 발송 이력 보기', exact: true })).toContainText('1건');
-  await page.getByRole('checkbox', { name: '발송한 수신자 포함', exact: true }).click();
+  await page.getByRole('checkbox', { name: '기발신자포함', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: /김철수/ })).toHaveCount(0);
-  await page.getByRole('checkbox', { name: '발송한 수신자 포함', exact: true }).click();
+  await page.getByRole('checkbox', { name: '기발신자포함', exact: true }).click();
   await page.getByRole('button', { name: '김철수 발송 이력 보기', exact: true }).click();
   await expect(page.getByText('외부에서 발송한 기록입니다.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '닫기', exact: true }).click();
@@ -518,4 +568,28 @@ test('외부 발송 등록은 응답 유실 후에도 한 건만 저장하고 SM
   await expect(page.getByRole('button', { name: '외부 발송 등록 발송 상세', exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('test.sms.calls') || '[]'))).toEqual([]);
   expect(state.campaigns).toHaveLength(0);
+});
+
+
+test('50명은 발송 가능하고 51명은 버튼 안의 빨간 제한 안내로 막는다', async ({ page }) => {
+  const state = await setup(page);
+  state.people.splice(0, state.people.length, ...Array.from({ length: 51 }, (_, i) => ({ id: `limit-${i}`, name: `대상${String(i + 1).padStart(2, '0')}`, phone: `010${String(i).padStart(8, '0')}`, groupId: i < 50 ? '첫 50명' : '추가', createdAt: now, updatedAt: now, customFields: [] })));
+  await page.goto('/sms/new');
+  await page.getByRole('button', { name: '모든그룹', exact: true }).click();
+  await page.getByRole('menuitem', { name: '첫 50명', exact: true }).click();
+  await page.getByRole('checkbox', { name: '전체 선택', exact: true }).click();
+  await expect(page.getByRole('button', { name: '50명에게 발송', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '첫 50명', exact: true }).click();
+  await page.getByRole('menuitem', { name: '모든그룹', exact: true }).click();
+  await expect(page.getByText('선택 50명', { exact: true })).toBeVisible();
+  await page.getByRole('checkbox', { name: /대상51/ }).click();
+  const warning = '51명에게 발송 (50명 제한)';
+  await expect(page.getByRole('button', { name: warning, exact: true })).toBeDisabled();
+  const rgb = await page.getByText(warning, { exact: true }).evaluate(node => getComputedStyle(node).color.match(/\d+/g)!.map(Number));
+  expect(rgb[0]).toBeGreaterThan(rgb[1] * 2);
+  expect(rgb[0]).toBeGreaterThan(rgb[2] * 2);
+  await expect(page.getByText('한 캠페인은 50명까지 발송할 수 있어요. 선택 수를 줄여 주세요.', { exact: true })).toHaveCount(0);
+  expect(state.campaigns).toHaveLength(0);
+  await page.getByRole('checkbox', { name: /대상51/ }).click();
+  await expect(page.getByRole('button', { name: '50명에게 발송', exact: true })).toBeEnabled();
 });

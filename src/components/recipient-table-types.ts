@@ -5,6 +5,7 @@ export type RecipientTableProps = {
   onSelectionChange: (ids: string[]) => void;
   onHistory: (recipient: Recipient) => void;
   disabled?: boolean;
+  includeSentFilter?: { selected: boolean; disabled?: boolean; onPress: () => void };
   onEdit?: (recipient: Recipient) => void;
   onRemove?: (recipient: Recipient) => void;
 };

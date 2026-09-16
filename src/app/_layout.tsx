@@ -117,7 +117,7 @@ export default function RootLayout() {
       {/* 종이 바탕이라 상태바 글자는 어두워야 한다. */}
       <StatusBar style="dark" />
       {ready ? <>
-      {authed && pathname !== '/shell' && !ENV.webShell ? <AppNavigation key={pathname} /> : null}
+      <AppNavigation enabled={authed && pathname !== '/shell' && !ENV.webShell}>
       <Stack
         screenOptions={{
           headerShown: false,
@@ -164,6 +164,7 @@ export default function RootLayout() {
           <Stack.Screen name="change-password" options={{ gestureEnabled: authed }} />
         </Stack.Protected>
       </Stack>
+      </AppNavigation>
       </> : null}
       {!nativeBootComplete ? <NativeBootSplash ready={ready} onFinished={finishNativeBoot} /> : null}
     </GestureHandlerRootView>

@@ -1,3 +1,4 @@
+import { RecipientTableToolbar } from './recipient-table-toolbar';
 import { formatPhone } from '@/lib/phone';
 import type { CSSProperties } from 'react';
 import { colors, fonts, text } from '@/constants/theme';
@@ -25,7 +26,7 @@ const heading: CSSProperties = {
 const checkbox: CSSProperties = { width: 18, height: 18, margin: 0, accentColor: colors.greenText, cursor: 'pointer' };
 
 /** 웹에서는 실제 표 구조로 열의 의미와 키보드 조작을 제공한다. */
-export function RecipientTable({ items, selectedIds, onSelectionChange, onHistory, disabled, onEdit, onRemove }: RecipientTableProps) {
+export function RecipientTable({ items, selectedIds, onSelectionChange, onHistory, disabled, onEdit, onRemove, includeSentFilter }: RecipientTableProps) {
   const { allInfo, compact, setAllInfo, fields } = useRecipientTableColumns(items);
   const actions = !!onRemove;
   const checkWidth = compact ? 28 : 48;
@@ -39,10 +40,7 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
   const mixed = selectedCount > 0 && !all;
   return (
     <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, color: colors.ink, ...fonts.body, fontSize: text.lg }}>
-        <span aria-live="polite">전체 {items.length}명</span>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}><input type="checkbox" aria-label="모든정보" checked={allInfo} onChange={(event) => setAllInfo(event.target.checked)} style={checkbox} />모든정보</label>
-      </div>
+      <RecipientTableToolbar total={items.length} selectedCount={selectedIds.length} allInfo={allInfo} onViewChange={setAllInfo} includeSentFilter={includeSentFilter} />
     <div style={{ width: '100%', maxHeight: 432, overflow: 'auto', border: `1px solid ${colors.borderPill}`, backgroundColor: colors.card }}>
       <table aria-label="발송 수신자 목록" style={{ width: '100%', minWidth: compact ? undefined : 600 + fields.length * 90 + (actions ? 140 : 0), borderSpacing: 0, tableLayout: 'fixed', color: colors.ink, ...fonts.body, fontSize: text.md }}>
         <thead>
@@ -53,7 +51,7 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
             <th scope="col" style={{ ...headingStyle, ...fixedName, top: 0, zIndex: 4, backgroundColor: colors.bg, width: compact ? '17%' : 95 }}>이름</th>
             <th scope="col" style={{ ...headingStyle, width: compact ? '25%' : 140 }}>전화번호</th>
             <th scope="col" style={{ ...headingStyle, width: compact ? '14%' : 95 }}>그룹</th>
-            <th scope="col" style={{ ...headingStyle, width: compact || !fields.length ? undefined : 210 }}>발송건수 (최종발송일시)</th>
+            <th scope="col" style={{ ...headingStyle, width: compact || !fields.length ? undefined : 210 }}>발송건수</th>
             {fields.map((name) => <th key={name} scope="col" style={headingStyle}>{name}</th>)}
             {actions ? <th scope="col" style={{ ...headingStyle, width: compact ? 44 : 140 }}>관리</th> : null}
           </tr>
@@ -70,9 +68,9 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
               <td style={cellStyle}>{formatPhone(item.phone)}</td>
               <td style={cellStyle} title={item.groupId}>{item.groupId || '—'}</td>
               <td style={cellStyle}>
-                <button type="button" aria-label={`${item.name} 발송 이력 보기`} onClick={() => onHistory(item)} style={{ border: 0, padding: 0, background: 'transparent', color: colors.greenText, font: 'inherit', textAlign: 'left', overflowWrap: 'anywhere', textDecoration: 'underline', cursor: 'pointer' }}>
+                {item.sentCount ? <button type="button" aria-label={`${item.name} 발송 이력 보기`} onClick={() => onHistory(item)} style={{ border: 0, padding: 0, background: 'transparent', color: colors.greenText, font: 'inherit', textAlign: 'left', overflowWrap: 'anywhere', textDecoration: 'underline', cursor: 'pointer' }}>
                   {recipientSentSummary(item)}
-                </button>
+                </button> : null}
               </td>
               {fields.map((name) => <td key={name} style={cellStyle}>{item.customFields?.find((field) => field.name === name)?.value || '—'}</td>)}
               {actions ? <td style={cellStyle}><div style={{ display: 'flex', gap: compact ? 6 : 12, flexWrap: 'wrap' }}>

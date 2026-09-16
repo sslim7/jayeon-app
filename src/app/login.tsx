@@ -20,6 +20,7 @@
  */
 
 import { useRef, useState } from 'react';
+import { Image } from 'expo-image';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -123,9 +124,7 @@ export default function LoginScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag">
-          <Text style={styles.kicker}>NATURE</Text>
-          <Text style={styles.title}>Nature</Text>
-          <Text style={styles.subtitle}>초대받은 계정으로 로그인해 주세요.</Text>
+          <Image source={require('../../assets/images/logo.png')} accessibilityLabel="Nature" contentFit="contain" style={styles.logo} />
 
           {authNotice ? (
             <View style={styles.helpBox} accessibilityRole="alert">
@@ -207,9 +206,6 @@ export default function LoginScreen() {
             </View>
           ) : null}
 
-          <Text style={styles.note}>
-            「Nature」은 초대받은 사람만 쓰는 서비스라 가입 화면이 없어요.
-          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -229,15 +225,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxl,
     paddingVertical: spacing.xxl,
   },
-  kicker: { ...fonts.mono, fontSize: text.sm, letterSpacing: 2, color: colors.muted },
-  title: { marginTop: spacing.xs, ...fonts.bodyBold, fontSize: text.h1, color: colors.ink },
-  subtitle: {
-    marginTop: spacing.sm,
-    ...fonts.body,
-    fontSize: text.md,
-    lineHeight: 20,
-    color: colors.mid,
-  },
+  logo: { width: '60%', maxWidth: 240, aspectRatio: 3, alignSelf: 'center', marginBottom: spacing.lg },
   error: {
     marginTop: spacing.md,
     ...fonts.bodyMedium,
@@ -268,12 +256,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   helpText: { ...fonts.body, fontSize: text.base, lineHeight: 18, color: colors.mid },
-  note: {
-    marginTop: spacing.xl,
-    ...fonts.body,
-    fontSize: text.base,
-    lineHeight: 18,
-    color: colors.muted,
-    textAlign: 'center',
-  },
 });

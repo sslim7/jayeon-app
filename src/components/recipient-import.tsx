@@ -21,7 +21,7 @@ export function RecipientImportPanel({ onSaved }: { onSaved: () => void }) {
   }
   return <View style={s.card}>
     <Text style={s.subtitle}>엑셀 수신자 등록</Text>
-    <Notice message=".xlsx 첫 시트의 첫 행은 컬럼 제목(이름·전화번호·그룹 필수), 두 번째 행부터 수신자를 입력해 주세요. 다른 열도 입력한 순서대로 함께 저장합니다. 전화번호 셀은 텍스트 형식으로 저장해 주세요. 최대 200행, 2 MB입니다." />
+    <Notice message=".xlsx 첫 행에 이름과 전화번호(또는 연락처)가 필요합니다. 그룹은 선택 항목이며, 다른 열도 그대로 저장합니다. 번호는 텍스트 형식으로 입력해 주세요. 최대 200행, 2 MB입니다." />
     <FilePicker label="수신자 엑셀 파일 선택" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" maxBytes={2 * 1024 * 1024} disabled={busy || confirmPending} onError={setError} onPick={(file) => {
       if (lock.current) return;
       if (!file.fileName.toLowerCase().endsWith('.xlsx')) { setError('.xlsx 파일을 선택해 주세요.'); return; }
