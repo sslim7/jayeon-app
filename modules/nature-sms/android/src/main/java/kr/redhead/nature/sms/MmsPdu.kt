@@ -50,9 +50,9 @@ internal object MmsPdu {
     }
     val limit = config.getInt(SmsManager.MMS_CONFIG_MAX_MESSAGE_SIZE, 300 * 1024).takeIf { it > 0 } ?: 300 * 1024
     if (split(input)) {
-      // 제목은 이미지 MMS에만 붙인다. 본문에 붙이면 수신 앱이 제목을 본문 첫 줄로 합쳐 보이고,
-      // 이미지에 제목이 없으면 통신사가 「제목없음」을 채워 넣는다. 통신사 용량은 각 PDU별로 검사한다.
-      val body = encode(input.phone, input.message, input.attemptId, emptyList())
+      // 제목은 두 통 모두에 넣는다. 비워 두면 통신사가 「제목없음」을 채워 넣어 수신 화면에 그대로 뜬다
+      // (실기기 확인, 2026-09-17). 통신사 용량은 각 PDU별로 검사한다.
+      val body = encode(input.phone, input.message, input.attemptId, emptyList(), input.subject)
       val image = encode(input.phone, "", MmsPduProvider.key(input.attemptId, 1), images, input.subject)
       require(body.size <= limit) { "본문이 선택한 SIM의 MMS 용량 제한을 초과합니다. 본문을 줄여 주세요." }
       require(image.size <= limit) { "첨부 이미지가 선택한 SIM의 MMS 용량 제한을 초과합니다. 이미지를 줄여 주세요." }

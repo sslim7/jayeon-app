@@ -158,3 +158,52 @@ test('외부 발송일시는 현지시각을 UTC로 변환하며 미래·존재�
   assert.throws(() => parseExternalSendTime('2026-09-16 15:01', now), /미래/);
   for (const value of ['2026-02-30 12:00', '2026-13-01 00:00', '2026-09-16 24:00', '2026-9-16 12:00']) assert.throws(() => parseExternalSendTime(value, now));
 });
+
+const sortModule = { exports: {} };
+const sortCompiled = ts.transpileModule(fs.readFileSync('src/components/recipient-table-sort.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+// 정렬 결과를 배열/객체째로 비교하므로 같은 realm 에서 실행한다.
+vm.runInThisContext(`(function(exports){${sortCompiled}\n})`)(sortModule.exports);
+const { DEFAULT_RECIPIENT_SORT, customSortKey, nextRecipientSort, sortRecipients } = sortModule.exports;
+const person = (id, name, phone = '', extra = {}) => ({ id, name, phone, groupId: '', sentCount: 0, customFields: [], createdAt: '', updatedAt: '', ...extra });
+const names = (rows, sort) => sortRecipients(rows, sort).map(row => row.id);
+test('기본은 이름 오름차순이고 같은 제목을 다시 누르면 내림차순으로 토글한다', () => {
+  const rows = [person('3', '최가을'), person('1', '김봄'), person('2', '박여름')];
+  assert.deepEqual(DEFAULT_RECIPIENT_SORT, { key: 'name', direction: 'asc' });
+  assert.deepEqual(names(rows, DEFAULT_RECIPIENT_SORT), ['1', '2', '3']);
+  const desc = nextRecipientSort(DEFAULT_RECIPIENT_SORT, 'name');
+  assert.deepEqual(desc, { key: 'name', direction: 'desc' });
+  assert.deepEqual(names(rows, desc), ['3', '2', '1']);
+  assert.deepEqual(nextRecipientSort(desc, 'name'), { key: 'name', direction: 'asc' });
+  assert.deepEqual(nextRecipientSort(desc, 'phone'), { key: 'phone', direction: 'asc' });
+});
+test('전화번호는 숫자만 뽑아 비교하고 빈 값은 방향과 무관하게 맨 뒤에 둔다', () => {
+  const rows = [person('a', '가', '010-9000-0000'), person('b', '나', ''), person('c', '다', '01012345678')];
+  assert.deepEqual(names(rows, { key: 'phone', direction: 'asc' }), ['c', 'a', 'b']);
+  assert.deepEqual(names(rows, { key: 'phone', direction: 'desc' }), ['a', 'c', 'b']);
+});
+test('그룹과 사용자 정의 열도 빈 값을 맨 뒤로 보내며 같은 값은 이름·id 순으로 안정 정렬한다', () => {
+  const rows = [
+    person('2', '나', '', { groupId: '나눔회', customFields: [{ name: '직책', value: '회원' }] }),
+    person('1', '가', '', { groupId: '나눔회', customFields: [{ name: '직책', value: '회원' }] }),
+    person('3', '다', '', { groupId: '', customFields: [] }),
+  ];
+  assert.deepEqual(names(rows, { key: 'group', direction: 'asc' }), ['1', '2', '3']);
+  assert.deepEqual(names(rows, { key: 'group', direction: 'desc' }), ['1', '2', '3']);
+  assert.deepEqual(names(rows, { key: customSortKey('직책'), direction: 'desc' }), ['1', '2', '3']);
+});
+test('발송건수는 건수 뒤 최근 발송일로 갈리고 0건은 항상 맨 뒤에 남는다', () => {
+  const rows = [
+    person('none', '무', '', { sentCount: 0 }),
+    person('old', '고', '', { sentCount: 2, latestSentAt: '2026-01-01T00:00:00.000Z' }),
+    person('new', '신', '', { sentCount: 2, latestSentAt: '2026-05-01T00:00:00.000Z' }),
+    person('one', '일', '', { sentCount: 1, latestSentAt: '2026-06-01T00:00:00.000Z' }),
+  ];
+  assert.deepEqual(names(rows, { key: 'sent', direction: 'asc' }), ['one', 'old', 'new', 'none']);
+  assert.deepEqual(names(rows, { key: 'sent', direction: 'desc' }), ['new', 'old', 'one', 'none']);
+});
+test('정렬은 원본 배열을 바꾸지 않고 같은 값 묶음의 순서를 유지한다', () => {
+  const rows = [person('b', '같은이름'), person('a', '같은이름'), person('c', '다른이름')];
+  const copy = rows.map(row => row.id);
+  assert.deepEqual(names(rows, { key: 'sent', direction: 'asc' }), ['a', 'b', 'c']);
+  assert.deepEqual(rows.map(row => row.id), copy);
+});

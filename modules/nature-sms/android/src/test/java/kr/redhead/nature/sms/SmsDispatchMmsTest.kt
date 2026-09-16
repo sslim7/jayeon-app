@@ -94,7 +94,7 @@ class SmsDispatchMmsTest {
     assertEquals(2, row.getJSONArray("parts").length()); assertTrue(row.getBoolean("split")); assertEquals(1, row.getInt("subscriptionId"))
     assertFalse("본문·이미지는 journal에 저장하지 않는다", row.toString().contains("안녕하세요") || row.toString().contains(splitInput(id).attachments[0].dataBase64))
     val body = parsePdu(id)
-    assertNull("본문 MMS에는 제목이 없다", body.subject)
+    assertEquals("본문에도 제목을 넣는다 — 비우면 통신사가 「제목없음」을 채운다", "캠페인 제목", body.subject)
     assertEquals(listOf("application/smil", "text/plain"), body.types)
     assertEquals("안녕하세요 본문입니다", body.data[1].toString(Charsets.UTF_8))
     assertTrue("두 PDU 모두 첫 발송 전에 준비한다", MmsPduProvider.file(context, "$id.1").isFile)

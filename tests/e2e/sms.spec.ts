@@ -405,14 +405,14 @@ test('조회한 125명 전체를 이름순으로 보여주고 화면별 뷰 기�
   if (info.project.name === 'mobile') {
     await expect(allInfo).toHaveAttribute('aria-pressed', 'false');
     await expect(compact).toHaveAttribute('aria-pressed', 'true');
-    await expect(table.getByRole('columnheader', { name: '부서', exact: true })).toHaveCount(0);
+    await expect(table.getByRole('columnheader', { name: /^부서/ })).toHaveCount(0);
     await allInfo.click();
   } else await expect(allInfo).toHaveAttribute('aria-pressed', 'true');
   await expect(allInfo).toHaveAttribute('aria-pressed', 'true');
   await expect(compact).toHaveAttribute('aria-pressed', 'false');
-  await expect(table.getByRole('columnheader', { name: '부서', exact: true })).toBeVisible();
-  await expect(table.getByRole('columnheader', { name: '우편번호', exact: true })).toBeAttached();
-  const nameHeader = table.getByRole('columnheader', { name: '이름', exact: true });
+  await expect(table.getByRole('columnheader', { name: /^부서/ })).toBeVisible();
+  await expect(table.getByRole('columnheader', { name: /^우편번호/ })).toBeAttached();
+  const nameHeader = table.getByRole('columnheader', { name: /^이름/ });
   const firstRow = table.getByRole('row').nth(1);
   const nameButton = firstRow.getByRole('button', { name: '사람001 수정', exact: true });
   const rowCheckbox = firstRow.getByRole('checkbox');
@@ -451,6 +451,49 @@ test('조회한 125명 전체를 이름순으로 보여주고 화면별 뷰 기�
   await expect(page.getByText('전체 1명', { exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /사람125/ })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /사람124/ })).toHaveCount(0);
+});
+
+test('열 제목을 눌러 정렬하고 선택은 그대로 둔다', async ({ page }, info) => {
+  const state = await setup(page);
+  // latestSentAt 을 두면 미발송 기본 조회에서 빠지므로 건수만 준다.
+  state.people.push({ id: 'p3', name: '박영수', phone: '+821000000000', groupId: '신규', createdAt: now, updatedAt: now, sentCount: 2 });
+  await page.goto('/sms/new');
+  const table = page.getByRole('table', { name: '발송 수신자 목록' });
+  const firstName = () => table.getByRole('row').nth(1);
+  const nameHeader = table.getByRole('columnheader', { name: /^이름/ });
+  const nameSort = nameHeader.getByRole('button');
+  // 기본은 이름 오름차순이고 현재 열에만 방향 표시가 붙는다.
+  await expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
+  await expect(nameSort).toHaveAccessibleName('이름, 오름차순 정렬됨. 누르면 내림차순');
+  await expect(nameHeader).toContainText('▲');
+  await expect(firstName()).toContainText('김영희');
+  const selected = page.getByRole('checkbox', { name: /김철수/ });
+  await selected.click();
+  await nameSort.click();
+  await expect(nameHeader).toHaveAttribute('aria-sort', 'descending');
+  await expect(nameHeader).toContainText('▼');
+  await expect(firstName()).toContainText('박영수');
+  await expect(selected).toBeChecked();
+  await expect(selectedCount(page, 1)).toBeVisible();
+  const phoneHeader = table.getByRole('columnheader', { name: /^전화번호/ });
+  await phoneHeader.getByRole('button').click();
+  await expect(phoneHeader).toHaveAttribute('aria-sort', 'ascending');
+  await expect(nameHeader).toHaveAttribute('aria-sort', 'none');
+  await expect(firstName()).toContainText('010-0000-0000');
+  await expect(table.getByRole('row').last()).toContainText('010-8765-4321');
+  await expect(selected).toBeChecked();
+  if (info.project.name === 'mobile') await page.setViewportSize({ width: 384, height: 832 });
+  await page.screenshot({ path: `/tmp/nature-sort-${info.project.name}.png`, animations: 'disabled' });
+  // 0건은 방향과 무관하게 맨 뒤에 남는다.
+  await page.goto('/recipients');
+  const sentHeader = page.getByRole('columnheader', { name: /^발송건수/ });
+  await sentHeader.getByRole('button').click();
+  await expect(sentHeader).toHaveAttribute('aria-sort', 'ascending');
+  await expect(page.getByRole('row').nth(1)).toContainText('박영수');
+  await sentHeader.getByRole('button').click();
+  await expect(sentHeader).toHaveAttribute('aria-sort', 'descending');
+  await expect(page.getByRole('row').nth(1)).toContainText('박영수');
+  await expect(page.getByRole('row').last()).toContainText('김철수');
 });
 
 test('문자 보내기 헤더의 등록·템플릿·이력 시트에서 작업해도 선택과 페이지를 유지한다', async ({ page }) => {

@@ -77,7 +77,8 @@ export const recipientApi = {
       .filter(([, v]) => v !== undefined && v !== '')
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
       .join('&');
-    return allPages<Recipient>(`/recipients${query ? `?${query}` : ''}`, normalizeRecipient).then((items) => items.sort((a, b) => a.name.localeCompare(b.name, 'ko') || a.id.localeCompare(b.id)));
+    // 정렬은 표(RecipientTable)가 열 제목 선택에 따라 한 곳에서 처리한다.
+    return allPages<Recipient>(`/recipients${query ? `?${query}` : ''}`, normalizeRecipient);
   },
   history: (id: string): Promise<RecipientHistory[]> => allPages<RecipientHistory>(`/recipients/${segment(id)}/history`, withAttachments),
   importPreview: (input: { name: string; mimeType: string; dataBase64: string }) => api.post<RecipientImport>('/recipients/imports/preview', input).then(normalizeImport),
