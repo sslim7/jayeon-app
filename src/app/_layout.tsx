@@ -26,9 +26,11 @@ export default function RootLayout() {
 
   // 저장된 토큰으로 세션을 복구하기 전에는 로그인/홈 중 어디로 보낼지 알 수 없다.
   const booted = useUserStore((s) => s.booted);
-  const authed = useUserStore((s) => s.stage === 'authed');
+  const stage = useUserStore((s) => s.stage);
   const bootstrap = useUserStore((s) => s.bootstrap);
   const pathname = usePathname();
+
+  const authed = stage === 'authed';
 
   const ready = fontsReady && booted;
 
@@ -63,6 +65,11 @@ export default function RootLayout() {
    * 조건이 바뀌었을 때 **라우터가 알아서 어디론가 가 주기를 기대하지 않는다** — 대체 목적지는
    * 그때 스택에 남아 있는 라우트의 순서에 따라 달라져서, 인증 직후 엉뚱한 화면에 설 수 있다.
    * 목적지를 여기서 못 박아 두면 그 우연에 기대지 않아도 된다.
+   *
+   * 📌 **조건이 `authed` 인 것이 곧 「인증까지만 네이티브」라는 결정이다.** 로그인과 비밀번호
+   * 강제 변경은 껍데기 모드에서도 네이티브가 그린다 — 웹뷰는 그 뒤에야 뜬다. 웹뷰를 먼저
+   * 열어 그 안에서 로그인하게 하면, 껍데기는 토큰을 주입해 줄 수도 되받을 수도 없는 상태로
+   * 시작하게 된다(→ `config/env.ts` 의 `webShell`, `components/web-shell.tsx`).
    */
   useEffect(() => {
     if (!ready) return;
@@ -112,8 +119,41 @@ export default function RootLayout() {
            * 흰 판이 스치는데, 밝은 화면끼리라 「깜빡였다」로만 보이고 원인이 잘 안 잡힌다.
            */
           contentStyle: { backgroundColor: colors.bg },
-        }}
-      />
+        }}>
+        {/*
+          🔴 **단계마다 스택에 남는 라우트 자체를 갈라 둔다.**
+
+          `Stack.Protected` 는 guard 가 거짓인 화면을 내비게이션 상태에서 **아예 빼 버린다.**
+          그래서 「가면 안 되는 화면으로 갔다가 되돌려 보내는」 리다이렉트와 달리, 그 화면에
+          닿는 순간 자체가 없다 — 되돌리기 전의 한 프레임이 스치는 일도, 뒤로 가기로 다시
+          들어가는 일도 없다.
+
+          비밀번호 강제 변경이 실제로 이 차이에 기댄다: `password-change` 단계에서는 스택에
+          그 화면 **하나뿐**이라 뒤로 나갈 곳이 없다. 화면 안에서 뒤로 가기를 막는 장치를
+          따로 두지 않아도 되는 이유다(→ `app/change-password.tsx`).
+
+          `change-password` 만 guard 가 `stage !== 'anonymous'` 인 것은, 이미 로그인한
+          사람도 스스로 비밀번호를 바꿀 수 있어야 하기 때문이다(→ `app/index.tsx`).
+        */}
+        <Stack.Protected guard={stage === 'anonymous'}>
+          <Stack.Screen name="login" />
+        </Stack.Protected>
+
+        {/* 일반 로그인 직후에는 첫 번째 허용 화면인 홈으로 들어간다. */}
+        <Stack.Protected guard={authed}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="shell" />
+        </Stack.Protected>
+
+        <Stack.Protected guard={stage !== 'anonymous'}>
+          {/*
+            강제 단계에서는 뒤로 밀어 닫는 제스처도 막는다. 스택에 돌아갈 화면이 없어 실제로
+            닫히지는 않지만, 화면이 끌려갔다 제자리로 튀는 모습은 **눌리는 버튼이 없는데도
+            반응하는** 것처럼 보여 사람을 계속 시도하게 만든다.
+          */}
+          <Stack.Screen name="change-password" options={{ gestureEnabled: authed }} />
+        </Stack.Protected>
+      </Stack>
     </GestureHandlerRootView>
   );
 }

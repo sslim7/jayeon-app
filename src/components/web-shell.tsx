@@ -29,7 +29,8 @@ import { WebView } from 'react-native-webview';
 import { ENV } from '@/config/env';
 import { APP_VERSION } from '@/constants/app-meta';
 import { colors, fonts, radii, text } from '@/constants/theme';
-import { getStoredTokens, saveTokens, type StoredTokens } from '@/lib/auth-tokens';
+import { PASSWORD_CHANGED_NOTICE, useUserStore } from '@/store/user-store';
+import { getStoredTokens, isStoredTokens, saveTokens, type StoredTokens } from '@/lib/auth-tokens';
 
 /**
  * 웹이 토큰을 읽는 localStorage 키. `@/lib/auth-tokens` 의 `KEY` 와 **같은 값이어야 한다.**
@@ -132,7 +133,9 @@ function linkToPath(url: string): string | null {
 }
 
 /** 웹이 껍데기에 보내는 말. `native-bridge.web.ts` 의 `OutboundMessage` 와 1:1 이다. */
-type ShellMessage = { type: 'ready' } | { type: 'tokens'; tokens: StoredTokens | null };
+type ShellMessage =
+  | { type: 'ready' }
+  | { type: 'tokens'; tokens: StoredTokens | null; reason?: 'password-changed' };
 
 /**
  * 페이지가 뜨기 전에 웹뷰에 심는 스크립트.
@@ -275,17 +278,13 @@ export function WebShell() {
         revealContent();
         return;
       case 'tokens':
-        /*
-         * **`null` 은 무시한다.** 웹이 토큰을 비웠다는 것은 곧 로그아웃이라는 뜻인데, 여기서
-         * 네이티브 토큰만 지우면 화면은 그대로 둔 채 토큰만 없는 어중간한 상태가 생긴다. 그
-         * 사이에 무엇이든 API 를 부르면 401 로 떨어져 사용자는 이유 없이 튕긴 것처럼 본다.
-         * 로그아웃 정리는 그것을 위한 메시지가 생겼을 때 그 한 곳에서만 해야 한다.
-         *
-         * 반대로 값이 있을 때는 **반드시 저장해야 한다** — 갱신은 대부분 웹뷰 안에서
-         * 일어나므로, 받아 두지 않으면 껍데기의 사본이 로그인 시점에 멈춰 선다
-         * (→ `lib/auth-tokens.ts` 의 `saveTokens`).
-         */
-        if (message.tokens) void saveTokens(message.tokens);
+        // null은 명시적 로그아웃/자격 만료일 때만 전송된다. 일시 복구 장애는 토큰을 보존한다.
+        if (message.tokens === null) {
+          void useUserStore.getState().signOut();
+          if (message.reason === 'password-changed') {
+            useUserStore.setState({ authNotice: PASSWORD_CHANGED_NOTICE });
+          }
+        } else if (isStoredTokens(message.tokens)) void saveTokens(message.tokens);
         return;
       default:
         console.warn('[web-shell] 모르는 메시지라 버려요:', raw);

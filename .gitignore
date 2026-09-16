@@ -48,3 +48,7 @@ example
 
 # IDE
 .idea/
+
+# 브라우저 검증 산출물
+/test-results/
+/playwright-report/

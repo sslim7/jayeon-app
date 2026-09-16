@@ -26,6 +26,31 @@ const isWeb = Platform.OS === 'web';
 
 let cache: StoredTokens | null = null;
 let loaded = false;
+let sessionVersion = 0;
+let persistence: Promise<void> = Promise.resolve();
+
+// 로그아웃 이후 도착한 요청이 예전 세션을 되살리지 못하게 한다.
+export function invalidateSessionRequests(): void {
+  sessionVersion += 1;
+}
+
+export function getSessionVersion(): number {
+  return sessionVersion;
+}
+
+function persist(operation: () => Promise<void>): Promise<void> {
+  persistence = persistence.then(operation).catch(() => {
+    // 저장소 접근이 막힌 환경에서도 현재 실행 중인 세션은 사용할 수 있다.
+  });
+  return persistence;
+}
+
+export function isStoredTokens(value: unknown): value is StoredTokens {
+  if (!value || typeof value !== 'object') return false;
+  const tokens = value as StoredTokens;
+  return typeof tokens.accessToken === 'string' && tokens.accessToken.length > 0 &&
+    typeof tokens.refreshToken === 'string' && tokens.refreshToken.length > 0;
+}
 
 async function readRaw(): Promise<string | null> {
   if (isWeb) {
@@ -58,14 +83,7 @@ function parse(raw: string | null): StoredTokens | null {
   if (!raw) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      typeof (parsed as StoredTokens).accessToken === 'string' &&
-      typeof (parsed as StoredTokens).refreshToken === 'string'
-    ) {
-      return parsed as StoredTokens;
-    }
+    if (isStoredTokens(parsed)) return parsed;
   } catch {
     // 파싱 실패도 같은 처리다.
   }
@@ -78,10 +96,12 @@ function parse(raw: string | null): StoredTokens | null {
  */
 export async function loadTokens(): Promise<StoredTokens | null> {
   if (loaded) return cache;
+  const version = sessionVersion;
   try {
-    cache = parse(await readRaw());
+    const stored = parse(await readRaw());
+    if (!loaded && version === sessionVersion) cache = stored;
   } catch {
-    cache = null;
+    // 읽는 동안 새 로그인이나 로그아웃이 있었다면 그 결과를 보존한다.
   }
   loaded = true;
   return cache;
@@ -111,11 +131,7 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
    * 시작한다 — 쓰기가 실패했을 때야말로 껍데기의 사본이 유일하게 살아 있는 최신본이다.
    */
   postTokensToNative(tokens);
-  try {
-    await writeRaw(JSON.stringify(tokens));
-  } catch {
-    // 저장에 실패해도 이번 세션은 메모리 캐시로 계속 동작한다.
-  }
+  await persist(() => writeRaw(JSON.stringify(tokens)));
 }
 
 /**
@@ -124,15 +140,12 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
  * 껍데기에도 「지워졌다」를 알린다 — 여기서 알리지 않으면 껍데기가 이미 죽은 토큰을 다음
  * 콜드 스타트에 그대로 다시 주입한다(→ `saveTokens` 주석).
  */
-export async function clearTokens(): Promise<void> {
+export async function clearTokens(reason?: 'password-changed'): Promise<void> {
+  sessionVersion += 1;
   cache = null;
   loaded = true;
-  postTokensToNative(null);
-  try {
-    await deleteRaw();
-  } catch {
-    // 무시 — 메모리 캐시는 이미 비웠다.
-  }
+  postTokensToNative(null, reason);
+  await persist(deleteRaw);
 }
 
 /** 동기 조회. `loadTokens()` 이전에는 항상 null 이다. */
