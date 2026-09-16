@@ -1,0 +1,74 @@
+{
+  "expo": {
+    "name": "자연",
+    "slug": "jayeon-app",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "jayeon",
+    "userInterfaceStyle": "light",
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1E3A2F",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "package": "kr.redhead.jayeon",
+      "versionCode": 1,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": [
+            { "scheme": "https", "host": "jayeon.redhead.kr", "pathPattern": "" },
+            { "scheme": "https", "host": "jayeon.redhead.kr", "pathPattern": "/*" },
+            { "scheme": "http", "host": "jayeon.redhead.kr", "pathPattern": "" },
+            { "scheme": "http", "host": "jayeon.redhead.kr", "pathPattern": "/*" }
+          ]
+        }
+      ]
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1E3A2F",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#1E3A2F",
+            "image": "./assets/images/splash-icon.png"
+          },
+          "android": {
+            "backgroundColor": "#1E3A2F",
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 200,
+            "resizeMode": "contain",
+            "dark": {
+              "backgroundColor": "#1E3A2F",
+              "image": "./assets/images/splash-icon.png"
+            }
+          }
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "ios": {
+      "bundleIdentifier": "kr.redhead.jayeon"
+    }
+  }
+}
