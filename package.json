@@ -1,5 +1,5 @@
 {
-  "name": "jayeon-app",
+  "name": "nature-app",
   "main": "expo-router/entry",
   "version": "0.1.0",
   "dependencies": {
@@ -48,7 +48,9 @@
     "typecheck": "tsc --noEmit",
     "export:web": "expo export --platform web",
     "test:auth": "node --test tests/auth.test.cjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:sms": "node --test tests/sms.test.cjs",
+    "android:dev": "expo run:android --port 3103"
   },
   "private": true
 }

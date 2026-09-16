@@ -15,20 +15,24 @@ async function mockAuth(page: Page, forced = false) {
     json: { ...profile, mustChangePassword: forced },
   }));
   await page.route('**/auth/refresh', (route) => route.fulfill({ json: tokens }));
+  await page.route(/\/recipients\?.*$/, route => route.fulfill({ json: { items: [], nextCursor: null, total: 0 } }));
 }
 
 async function login(page: Page) {
   await page.goto('/login');
+  await expect(page.getByRole('button', { name: '메뉴 열기', exact: true })).toHaveCount(0);
   await page.getByLabel('이메일', { exact: true }).fill(profile.email);
   await page.getByLabel('비밀번호', { exact: true }).fill('Temporary-password1!');
   await page.getByRole('button', { name: '로그인', exact: true }).click();
 }
 
-test('일반 로그인은 홈으로 이동하고 로그아웃은 새로고침 후에도 유지된다', async ({ page }) => {
+test('일반 로그인은 문자 보내기로 이동하고 프로필 로그아웃은 새로고침 후에도 유지된다', async ({ page }) => {
   await mockAuth(page);
   await login(page);
+  await expect(page).toHaveURL(/\/sms\/new$/);
+  await page.getByRole('button', { name: '메뉴 열기', exact: true }).click();
+  await page.getByRole('button', { name: `${profile.userName} 프로필`, exact: true }).click();
   await expect(page.getByText(profile.email, { exact: true })).toBeVisible();
-  await expect(page).toHaveURL(/\/$/);
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
   await expect(page.getByRole('button', { name: '로그인', exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('jayeon.tokens'))).toBeNull();
@@ -40,11 +44,14 @@ test('최초 변경은 직접 홈 주소와 새로고침으로 우회할 수 없
   await mockAuth(page, true);
   await login(page);
   await expect(page.getByLabel('임시 비밀번호', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '메뉴 열기', exact: true })).toHaveCount(0);
   await page.goto('/');
   await expect(page.getByLabel('임시 비밀번호', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '메뉴 열기', exact: true })).toHaveCount(0);
   await expect(page).toHaveURL(/\/change-password$/);
   await page.reload();
   await expect(page.getByLabel('임시 비밀번호', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '메뉴 열기', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '취소', exact: true })).toHaveCount(0);
 });
 
@@ -121,6 +128,7 @@ test('일시적인 부팅 장애는 토큰을 보존하고 연결 복구 후 강
   await mockAuth(page, true);
   await login(page);
   await expect(page.getByLabel('임시 비밀번호', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '메뉴 열기', exact: true })).toHaveCount(0);
   let unavailable = true;
   await page.route('**/users/me', (route) => unavailable
     ? route.abort('failed')
@@ -132,4 +140,29 @@ test('일시적인 부팅 장애는 토큰을 보존하고 연결 복구 후 강
   unavailable = false;
   await page.reload();
   await expect(page.getByLabel('임시 비밀번호', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '메뉴 열기', exact: true })).toHaveCount(0);
+});
+
+test('프로필에서 비밀번호를 변경하면 모달을 닫고 새 비밀번호 로그인을 안내한다', async ({ page }) => {
+  await mockAuth(page);
+  let changed: unknown;
+  await page.route('**/auth/change-password', route => {
+    changed = route.request().postDataJSON();
+    return route.fulfill({ status: 204 });
+  });
+  await login(page);
+  await expect(page).toHaveURL(/\/sms\/new$/);
+  await page.getByRole('button', { name: '메뉴 열기', exact: true }).click();
+  await page.getByRole('button', { name: `${profile.userName} 프로필`, exact: true }).click();
+  await expect(page.getByText(profile.email, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '비밀번호 수정', exact: true }).click();
+  await page.getByLabel('현재 비밀번호', { exact: true }).fill('Current-password1!');
+  await page.getByLabel('새 비밀번호', { exact: true }).fill('Changed-password1!');
+  await page.getByLabel('새 비밀번호 확인', { exact: true }).fill('Changed-password1!');
+  await page.getByRole('button', { name: '비밀번호 바꾸기', exact: true }).click();
+  await expect(page.getByRole('button', { name: '로그인', exact: true })).toBeVisible();
+  await expect(page.getByText(/새 비밀번호로.*로그인/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: '비밀번호 변경', exact: true })).toHaveCount(0);
+  expect(changed).toEqual({ currentPassword: 'Current-password1!', newPassword: 'Changed-password1!' });
+  expect(await page.evaluate(() => localStorage.getItem('jayeon.tokens'))).toBeNull();
 });

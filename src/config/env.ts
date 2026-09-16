@@ -43,7 +43,7 @@ export function rewriteDevHost(value: string): string {
  * 끝의 슬래시를 떼고 dev 호스트 재작성을 태운다.
  *
  * **끝 슬래시를 저장 시점에 한 번 다듬는 이유.** 이 값들은 쓰는 쪽에서 `/me` 나 `/shell`
- * 같은 경로를 그대로 이어 붙여 쓴다. 원본에 슬래시가 남아 있으면 `https://jayeon.redhead.kr//shell`
+ * 같은 경로를 그대로 이어 붙여 쓴다. 원본에 슬래시가 남아 있으면 `https://nature.redhead.kr//shell`
  * 이 되는데, 그 주소도 대개는 열린다 — 그래서 더 나쁘다. 오리진 비교(껍데기가 바깥 링크를
  * 걸러내는 판정, → `components/web-shell.tsx`)와 서버 로그가 조용히 지저분해질 뿐 아무도
  * 모른다. 붙이는 자리마다 조심하기보다 들어오는 자리에서 한 번 다듬는 편이 안전하다.
@@ -58,9 +58,9 @@ export const ENV = {
   name: envName,
   isDev,
   /** WAS REST 기준 주소. 끝 슬래시 없음 — 경로를 그대로 이어 붙여 쓴다. */
-  apiUrl: normalizeUrl(process.env.EXPO_PUBLIC_API_URL, 'https://jayeon-api.redhead.kr'),
+  apiUrl: normalizeUrl(process.env.EXPO_PUBLIC_API_URL, 'https://nature-api.redhead.kr'),
   /** 껍데기 웹뷰가 열 주소. 끝 슬래시 없음. */
-  webUrl: normalizeUrl(process.env.EXPO_PUBLIC_WEBVIEW_URL, 'https://jayeon.redhead.kr'),
+  webUrl: normalizeUrl(process.env.EXPO_PUBLIC_WEBVIEW_URL, 'https://nature.redhead.kr'),
   /**
    * 껍데기 모드 여부 — 인증까지만 네이티브가 그리고 그 뒤 화면은 웹뷰가 맡는다.
    *

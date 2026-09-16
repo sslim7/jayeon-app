@@ -15,7 +15,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
+  Image,
   Linking,
   Platform,
   Pressable,
@@ -31,6 +31,7 @@ import { APP_VERSION } from '@/constants/app-meta';
 import { colors, fonts, radii, text } from '@/constants/theme';
 import { PASSWORD_CHANGED_NOTICE, useUserStore } from '@/store/user-store';
 import { getStoredTokens, isStoredTokens, saveTokens, type StoredTokens } from '@/lib/auth-tokens';
+import { handleSmsRequest, type SmsShellRequest } from '@/lib/sms-shell-handler';
 
 /**
  * 웹이 토큰을 읽는 localStorage 키. `@/lib/auth-tokens` 의 `KEY` 와 **같은 값이어야 한다.**
@@ -39,6 +40,7 @@ import { getStoredTokens, isStoredTokens, saveTokens, type StoredTokens } from '
  * **껍데기와 웹 사이의 프로토콜**이기 때문이다. 껍데기는 자기보다 새 웹 빌드를 열 수도 있고
  * 그 반대일 수도 있어서, 한쪽이 저장 방식을 바꾼다고 다른 쪽이 조용히 따라 움직이면 안 된다.
  */
+// 브랜드 변경으로 기존 로그인 저장소를 잃지 않도록 프로토콜 키는 유지한다.
 const TOKENS_KEY = 'jayeon.tokens';
 
 /**
@@ -73,7 +75,7 @@ function splitUrl(url: string): UrlParts | null {
   if (!match) return null;
   const [, scheme, authority, rest] = match;
   /*
-   * `user:pass@host` 형태는 통째로 버린다. `https://jayeon.redhead.kr@evil.com/` 은 사람 눈에
+   * `user:pass@host` 형태는 통째로 버린다. `https://nature.redhead.kr@evil.com/` 은 사람 눈에
    * 우리 주소로 읽히지만 실제 목적지는 `evil.com` 이다 — 아래 오리진 비교로도 걸러지지만,
    * 이런 모양을 우리가 해석해 줄 이유가 없다.
    */
@@ -92,8 +94,8 @@ const WEB_ORIGIN = splitUrl(ENV.webUrl)?.origin ?? ENV.webUrl.toLowerCase();
 /**
  * 껍데기가 연 사이트 안의 주소인가.
  *
- * **오리진이 정확히 같아야 한다.** 접두사 비교로 때우면 `https://jayeon.redhead.kr.evil.com`
- * 이 그대로 통과한다. 기본 포트를 굳이 적은 주소(`https://jayeon.redhead.kr:443`)도 여기서는
+ * **오리진이 정확히 같아야 한다.** 접두사 비교로 때우면 `https://nature.redhead.kr.evil.com`
+ * 이 그대로 통과한다. 기본 포트를 굳이 적은 주소(`https://nature.redhead.kr:443`)도 여기서는
  * 남으로 본다 — 받아 주는 폭을 넓히는 것보다 좁게 두고 버리는 편이 안전하고, 웹뷰가 그런
  * 모양으로 주소를 만들지도 않는다.
  */
@@ -113,12 +115,12 @@ function restToPath(rest: string): string {
  * 어긋나면 **앱은 깨어나는데 껍데기가 못 알아들어 홈이 뜬다.** 스킴을 바꾸는 날 이 줄을
  * 함께 고쳐라.
  */
-const APP_SCHEME = 'jayeon';
+const APP_SCHEME = 'nature';
 
 /**
  * 앱을 깨운 주소를 웹의 경로로 바꾼다. 우리 것이 아니면 `null`.
  *
- * 받아 주는 모양은 둘이다 — 우리 오리진의 https 주소(App Link)와 `jayeon://...`(커스텀 스킴).
+ * 받아 주는 모양은 둘이다 — 우리 오리진의 https 주소(App Link)와 `nature://...`(커스텀 스킴).
  * **그 밖에는 전부 버린다.** 여기서 나온 값이 그대로 웹뷰의 주소가 되는데, 이 웹뷰는 로그인
  * 토큰이 심긴 창이다. 아무 앱이나 우리를 임의의 주소로 깨울 수 있으므로 좁게 받는다.
  */
@@ -128,12 +130,13 @@ function linkToPath(url: string): string | null {
   if (parts.origin === WEB_ORIGIN) return restToPath(parts.rest);
   const prefix = `${APP_SCHEME}://`;
   if (!parts.origin.startsWith(prefix)) return null;
-  // `jayeon://home/x` 는 authority 가 `home` 이다 — 경로의 첫 마디로 되돌린다.
+  // `nature://home/x` 는 authority 가 `home` 이다 — 경로의 첫 마디로 되돌린다.
   return restToPath(parts.origin.slice(prefix.length) + parts.rest);
 }
 
 /** 웹이 껍데기에 보내는 말. `native-bridge.web.ts` 의 `OutboundMessage` 와 1:1 이다. */
 type ShellMessage =
+  | SmsShellRequest
   | { type: 'ready' }
   | { type: 'tokens'; tokens: StoredTokens | null; reason?: 'password-changed' };
 
@@ -147,7 +150,7 @@ type ShellMessage =
  * 여기서는 전역과 localStorage 만 건드린다.
  */
 function buildInjectedScript(tokens: StoredTokens | null): string {
-  const nativeInfo = JSON.stringify({ platform: Platform.OS, appVersion: APP_VERSION });
+  const nativeInfo = JSON.stringify({ platform: Platform.OS, appVersion: APP_VERSION, smsApiVersion: 1 });
 
   /*
    * **`JSON.stringify` 를 두 번 쓴다.** 한 번은 토큰셋 → JSON 문자열(웹이 그대로 저장해 읽을
@@ -170,7 +173,7 @@ function buildInjectedScript(tokens: StoredTokens | null): string {
    * 표현식 값을 브리지로 넘기는데, 값이 없으면 iOS 가 경고를 뱉는다(공식 문서가 명시한다).
    */
   return `(function () {
-  try { window.__JAYEON_NATIVE__ = ${nativeInfo}; } catch (e) {}
+  try { window.__NATURE_NATIVE__ = ${nativeInfo}; window.__JAYEON_NATIVE__ = window.__NATURE_NATIVE__; } catch (e) {}
   try { ${setTokens} } catch (e) {}
 })();
 true;`;
@@ -192,7 +195,7 @@ true;`;
 function buildNavigateScript(path: string): string {
   const message = JSON.stringify(JSON.stringify({ type: 'navigate', path }));
   return `(function () {
-  try { window.__JAYEON_NATIVE_BRIDGE__.receive(${message}); } catch (e) {}
+  try { (window.__NATURE_NATIVE_BRIDGE__ || window.__JAYEON_NATIVE_BRIDGE__).receive(${message}); } catch (e) {}
 })();
 true;`;
 }
@@ -270,10 +273,15 @@ export function WebShell() {
     try {
       message = JSON.parse(raw) as ShellMessage;
     } catch {
-      console.warn('[web-shell] 웹이 보낸 메시지를 읽지 못했어요:', raw);
+      console.warn('[web-shell] 웹 메시지 형식 오류');
       return;
     }
     switch (message?.type) {
+      case 'sms':
+        void handleSmsRequest(message).then((reply) => {
+          ref.current?.injectJavaScript(`(window.__NATURE_SMS_BRIDGE__ || window.__JAYEON_SMS_BRIDGE__)?.receive(${JSON.stringify(reply)}); true;`);
+        });
+        return;
       case 'ready':
         revealContent();
         return;
@@ -287,7 +295,7 @@ export function WebShell() {
         } else if (isStoredTokens(message.tokens)) void saveTokens(message.tokens);
         return;
       default:
-        console.warn('[web-shell] 모르는 메시지라 버려요:', raw);
+        console.warn('[web-shell] 지원하지 않는 메시지');
     }
   }
 
@@ -316,7 +324,7 @@ export function WebShell() {
         overScrollMode="never"
         cacheEnabled
         // 서버와 웹이 「껍데기 안에서 열렸다」를 UA 만으로도 알아볼 수 있게 한다.
-        applicationNameForUserAgent={'JayeonApp/' + APP_VERSION}
+        applicationNameForUserAgent={'NatureApp/' + APP_VERSION}
         // 메모리 압박으로 웹 콘텐츠 프로세스가 죽으면 하얀 화면만 남는다. 조용히 다시 띄운다.
         onContentProcessDidTerminate={() => ref.current?.reload()}
         onMessage={(event) => handleMessage(event.nativeEvent.data)}
@@ -402,7 +410,7 @@ export function WebShell() {
 function LoadingCover() {
   return (
     <View style={styles.cover}>
-      <ActivityIndicator color={colors.green} />
+      <Image accessibilityLabel="Nature를 준비하는 중" source={require('../../assets/images/splash.png')} resizeMode="contain" style={StyleSheet.absoluteFill} />
     </View>
   );
 }

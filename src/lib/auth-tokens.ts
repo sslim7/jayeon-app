@@ -21,6 +21,7 @@ export interface StoredTokens {
  * 같아야 한다(→ `components/web-shell.tsx` 의 `TOKENS_KEY`). 그래서 가볍게 바꾸면 안 된다:
  * 키를 바꾼 웹 빌드가 옛 껍데기와 만나면 주입된 토큰을 못 찾아 **로그인 화면이 다시 뜬다.**
  */
+// Nature 전환에서도 미확정 요청·발송 결과와 로그인 복구를 위해 저장 식별자는 유지한다.
 const KEY = 'jayeon.tokens';
 const isWeb = Platform.OS === 'web';
 

@@ -14,9 +14,9 @@ COPY . .
 # Cloud Run 의 환경변수로는 절대 반영되지 않는다 — 이미 만들어진 정적 파일을 nginx 가
 # 그대로 내보낼 뿐이라, 서비스 환경변수를 고쳐도 브라우저가 받는 값은 그대로다.
 # 값이 바뀌면 이미지를 다시 빌드해야 한다. 값은 cloudbuild.yaml 의 substitution 으로 들어온다.
-ARG EXPO_PUBLIC_API_URL=https://jayeon-api.redhead.kr
+ARG EXPO_PUBLIC_API_URL=https://nature-api.redhead.kr
 ARG EXPO_PUBLIC_ENV=production
-ARG EXPO_PUBLIC_WEBVIEW_URL=https://jayeon.redhead.kr
+ARG EXPO_PUBLIC_WEBVIEW_URL=https://nature.redhead.kr
 
 ENV EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL \
     EXPO_PUBLIC_ENV=$EXPO_PUBLIC_ENV \

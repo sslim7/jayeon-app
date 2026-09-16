@@ -6,7 +6,7 @@
  *
  * 플랫폼이 갈리는 규칙과 그 이유는 짝인 `native-bridge.ts` 머리말에 적어 뒀다.
  *
- * 껍데기는 페이지 로드 **전에** `window.__JAYEON_NATIVE__` 와 저장해 둔 토큰을 주입하고,
+ * 껍데기는 페이지 로드 **전에** `window.__NATURE_NATIVE__` 와 저장해 둔 토큰을 주입하고,
  * 웹 → 껍데기 통로로 `window.ReactNativeWebView.postMessage(string)` 을 놓아 둔다
  * (→ `@/components/web-shell.tsx`).
  *
@@ -31,6 +31,9 @@ type NativeShellInfo = { platform: string; appVersion: string };
 declare global {
   interface Window {
     ReactNativeWebView?: NativeWebView;
+    __NATURE_NATIVE__?: NativeShellInfo;
+    __NATURE_NATIVE_BRIDGE__?: { receive(raw: string): void };
+    // 구형 네이티브 껍데기도 같은 웹을 열 수 있으므로 이전 수신구를 함께 유지한다.
     __JAYEON_NATIVE__?: NativeShellInfo;
     __JAYEON_NATIVE_BRIDGE__?: { receive(raw: string): void };
   }
@@ -77,7 +80,7 @@ function post(message: OutboundMessage): void {
 /**
  * 이 페이지가 네이티브 껍데기 웹뷰 안에서 돌고 있는가.
  *
- * 판정 근거는 껍데기가 **페이지 로드 전에** 주입하는 `__JAYEON_NATIVE__` 다. 첫 렌더부터
+ * 판정 근거는 껍데기가 **페이지 로드 전에** 주입하는 `__NATURE_NATIVE__` 다. 첫 렌더부터
  * 참이어야 하기 때문이다 — 이 값을 보고 숨는 화면 요소가 생기면, 뒤늦게 참이 되는 판정은
  * 껍데기 안에서 그 요소가 한 번 번쩍이고 사라지는 것으로 나타난다.
  *
@@ -86,13 +89,13 @@ function post(message: OutboundMessage): void {
  */
 export function isNativeShell(): boolean {
   if (typeof window === 'undefined') return false;
-  return !!window.__JAYEON_NATIVE__;
+  return !!(window.__NATURE_NATIVE__ ?? window.__JAYEON_NATIVE__);
 }
 
 /** 껍데기 앱 버전. 껍데기 밖이면 null. */
 export function nativeShellVersion(): string | null {
   if (typeof window === 'undefined') return null;
-  return window.__JAYEON_NATIVE__?.appVersion ?? null;
+  return (window.__NATURE_NATIVE__ ?? window.__JAYEON_NATIVE__)?.appVersion ?? null;
 }
 
 /**
@@ -161,22 +164,22 @@ function receive(raw: string): void {
   let message: unknown;
   try {
     message = JSON.parse(raw);
-  } catch (error) {
-    console.warn('[native-bridge] 알 수 없는 메시지(JSON 아님)', raw, error);
+  } catch {
+    console.warn('[native-bridge] 알 수 없는 메시지(JSON 아님)');
     return;
   }
   if (!message || typeof message !== 'object') {
-    console.warn('[native-bridge] 알 수 없는 메시지 모양', raw);
+    console.warn('[native-bridge] 알 수 없는 메시지 모양');
     return;
   }
   const { type, path } = message as { type?: unknown; path?: unknown };
   if (type !== 'navigate') {
-    console.warn('[native-bridge] 알 수 없는 메시지 종류', raw);
+    console.warn('[native-bridge] 알 수 없는 메시지 종류');
     return;
   }
   if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')) {
     // `//evil.com` 은 브라우저가 프로토콜 상대 주소로 읽는다 — 경로처럼 보이지만 바깥이다.
-    console.warn('[native-bridge] 앱 내부 경로가 아니라 버린다', raw);
+    console.warn('[native-bridge] 앱 내부 경로가 아니라 버린다');
     return;
   }
   deliver({ path });
@@ -187,7 +190,8 @@ function receive(raw: string): void {
  * 그 사이에 온 요청을 놓친다. 받을 사람이 없는 동안은 위 큐가 대신 들고 있는다.
  */
 if (typeof window !== 'undefined') {
-  window.__JAYEON_NATIVE_BRIDGE__ = { receive };
+  window.__NATURE_NATIVE_BRIDGE__ = { receive };
+  window.__JAYEON_NATIVE_BRIDGE__ = window.__NATURE_NATIVE_BRIDGE__;
 }
 
 /**

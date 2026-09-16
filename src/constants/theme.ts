@@ -1,5 +1,5 @@
 /**
- * 「자연」 디자인 토큰.
+ * 「Nature」 디자인 토큰.
  *
  * ┌──────────────────────────────────────────────────────────────────────────────┐
  * │ 🔴 **이 팔레트는 디자인이 나오기 전의 임시값이다.**                                │
@@ -242,5 +242,5 @@ export const layout = {
 
 export const theme = { colors, fonts, text, radii, spacing, layout } as const;
 
-export type JayeonColors = typeof colors;
-export type JayeonFonts = typeof fonts;
+export type NatureColors = typeof colors;
+export type NatureFonts = typeof fonts;

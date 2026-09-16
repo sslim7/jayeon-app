@@ -77,7 +77,10 @@ export default function Root({ children }: { children: ReactNode }) {
             'shrink-to-fit=no, viewport-fit=cover'
           }
         />
+        <title>Nature</title>
+        <meta name="application-name" content="Nature" />
         <meta name="theme-color" content={PAGE_BG} />
+        <link rel="preload" as="image" href="/splash.png" />
 
         {/*
           폰트를 **JS 번들과 동시에** 받게 하려는 preconnect 다.
@@ -95,11 +98,10 @@ export default function Root({ children }: { children: ReactNode }) {
 
         {/*
           부팅 스플래시 스타일. 폰트·리셋보다 **먼저** 둬서 첫 페인트에 이미 적용돼 있게 한다.
-          외부 파일로 빼지 않는 이유는 이 화면이 존재하는 이유와 같다 — 요청을 하나라도
-          기다리면 그동안 다시 하얀 화면이다.
+          배경 CSS는 즉시 적용하고 제공된 원본 사진은 head에서 미리 불러온다.
         */}
-        <style id="jayeon-boot-splash-css" dangerouslySetInnerHTML={{ __html: BOOT_SPLASH_CSS }} />
-        <style id="jayeon-page-css" dangerouslySetInnerHTML={{ __html: PAGE_CSS }} />
+        <style id="nature-boot-splash-css" dangerouslySetInnerHTML={{ __html: BOOT_SPLASH_CSS }} />
+        <style id="nature-page-css" dangerouslySetInnerHTML={{ __html: PAGE_CSS }} />
 
         {/* 루트 <ScrollView> 가 네이티브와 같게 동작하도록 하는 스타일 리셋. */}
         <ScrollViewStyleReset />

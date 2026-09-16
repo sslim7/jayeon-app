@@ -255,3 +255,22 @@ test('먼저 끝난 refresh 뒤 도착한 이전 401은 새 토큰으로만 재�
   await second;
   assert.equal(refreshes, 1);
 });
+
+test('Nature 변경 후에도 기존 설치에 저장된 토큰을 읽고 로그아웃 시 삭제한다', async () => {
+  const h = harness(async () => { throw new Error('unexpected network'); });
+  h.disk.set('jayeon.tokens', JSON.stringify(tokens));
+  const auth = h.load('@/lib/auth-tokens');
+  assert.equal((await auth.loadTokens()).accessToken, tokens.accessToken);
+  await auth.clearTokens();
+  assert.equal(h.disk.has('jayeon.tokens'), false);
+});
+
+test('Nature 변경 후 기존 캠페인 생성 요청 ID를 초안에서 복구한다', async () => {
+  const h = harness(async () => { throw new Error('unexpected network'); });
+  const draft = { requestId: 'before-rebrand', title: '미완료 요청', message: '안내', recipientIds: ['p1'], attachmentIds: [] };
+  h.disk.set('jayeon.sms.draft.75_31', JSON.stringify(draft));
+  const storage = h.load('@/lib/sms-draft');
+  assert.equal((await storage.readSmsDraft('u1')).requestId, draft.requestId);
+  await storage.clearSmsDraft('u1');
+  assert.equal(await storage.readSmsDraft('u1'), null);
+});

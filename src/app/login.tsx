@@ -3,7 +3,7 @@
  *
  * # 이 화면에 없는 것들과 그 이유
  *
- * **가입 화면이 없다.** 「자연」은 초대 전용 내부 서비스다. 계정은 서버 CLI 로 발급하고 임시
+ * **가입 화면이 없다.** 「Nature」은 초대 전용 내부 서비스다. 계정은 서버 CLI 로 발급하고 임시
  * 비밀번호를 사람이 직접 전달한다 — 약관 동의도, 이메일 중복 확인도, 가입 경로도 없다.
  * 빠뜨린 것이 아니라 **만들지 않기로 한 것**이다.
  *
@@ -123,8 +123,8 @@ export default function LoginScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag">
-          <Text style={styles.kicker}>JAYEON</Text>
-          <Text style={styles.title}>자연</Text>
+          <Text style={styles.kicker}>NATURE</Text>
+          <Text style={styles.title}>Nature</Text>
           <Text style={styles.subtitle}>초대받은 계정으로 로그인해 주세요.</Text>
 
           {authNotice ? (
@@ -208,7 +208,7 @@ export default function LoginScreen() {
           ) : null}
 
           <Text style={styles.note}>
-            「자연」은 초대받은 사람만 쓰는 서비스라 가입 화면이 없어요.
+            「Nature」은 초대받은 사람만 쓰는 서비스라 가입 화면이 없어요.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

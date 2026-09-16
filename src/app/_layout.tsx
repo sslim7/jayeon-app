@@ -1,10 +1,12 @@
 import { router, Stack, usePathname, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import { StyleSheet } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Platform, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { NativeBootSplash } from '@/components/native-boot-splash';
+import { AppNavigation } from '@/components/app-navigation';
 import { ErrorScreen } from '@/components/error-screen';
 import { ENV } from '@/config/env';
 import { colors } from '@/constants/theme';
@@ -33,6 +35,8 @@ export default function RootLayout() {
   const authed = stage === 'authed';
 
   const ready = fontsReady && booted;
+  const [nativeBootComplete, setNativeBootComplete] = useState(Platform.OS === 'web');
+  const finishNativeBoot = useCallback(() => setNativeBootComplete(true), []);
 
   useEffect(() => {
     void bootstrap();
@@ -92,7 +96,8 @@ export default function RootLayout() {
      * 마지막 것을 이보다 **먼저** 알리면 껍데기가 아직 준비 안 된 화면을 그대로 내보이고,
      * **늦게** 알리면 껍데기의 8초 폴백이 먼저 걷어 두 판이 어긋난다.
      */
-    SplashScreen.hideAsync().catch(() => {});
+    // 네이티브는 사진이 준비된 뒤 NativeBootSplash에서 시스템 화면을 걷는다.
+    if (Platform.OS === 'web') SplashScreen.hideAsync().catch(() => {});
     hideBootSplash();
     postReadyToNative();
   }, [ready]);
@@ -104,13 +109,15 @@ export default function RootLayout() {
    * 부팅 스플래시가 그 자리를 덮고 있다(→ `constants/boot-splash.ts`). 그래서 여기서 굳이
    * 로딩 화면을 그리지 않는다 — 그리면 스플래시 위에 또 한 겹이 얹혀 두 번 바뀐다.
    */
-  if (!ready) return null;
+  if (!ready && Platform.OS === 'web') return null;
 
   return (
     // react-native-gesture-handler 의 제스처는 이 루트 뷰 안에서만 동작한다(웹 포함).
     <GestureHandlerRootView style={styles.root}>
       {/* 종이 바탕이라 상태바 글자는 어두워야 한다. */}
       <StatusBar style="dark" />
+      {ready ? <>
+      {authed && pathname !== '/shell' && !ENV.webShell ? <AppNavigation key={pathname} /> : null}
       <Stack
         screenOptions={{
           headerShown: false,
@@ -143,6 +150,9 @@ export default function RootLayout() {
         <Stack.Protected guard={authed}>
           <Stack.Screen name="index" />
           <Stack.Screen name="shell" />
+          <Stack.Screen name="recipients" />
+          <Stack.Screen name="sms" />
+          <Stack.Screen name="templates" />
         </Stack.Protected>
 
         <Stack.Protected guard={stage !== 'anonymous'}>
@@ -154,6 +164,8 @@ export default function RootLayout() {
           <Stack.Screen name="change-password" options={{ gestureEnabled: authed }} />
         </Stack.Protected>
       </Stack>
+      </> : null}
+      {!nativeBootComplete ? <NativeBootSplash ready={ready} onFinished={finishNativeBoot} /> : null}
     </GestureHandlerRootView>
   );
 }

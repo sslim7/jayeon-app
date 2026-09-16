@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.SEND_SMS" />
+  <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+  <uses-feature android:name="android.hardware.telephony.messaging" android:required="false" />
+  <application>
+    <provider android:name="kr.redhead.nature.sms.MmsPduProvider" android:authorities="${applicationId}.nature.mms" android:exported="false" android:grantUriPermissions="true" />
+    <receiver android:name="kr.redhead.nature.sms.SmsSentReceiver" android:exported="false" />
+  </application>
+</manifest>

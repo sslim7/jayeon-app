@@ -1,4 +1,4 @@
-# 자연 웹(jayeon.redhead.kr) — Cloud Run 배포 파이프라인
+# Nature 웹(nature.redhead.kr) — Cloud Run 배포 파이프라인
 # 실행: release 브랜치의 커밋에 v* 태그를 밀면 Cloud Build 트리거가 부른다.
 #      손으로 돌릴 때는 `gcloud builds submit --config cloudbuild.yaml`
 
@@ -13,9 +13,9 @@ substitutions:
   #    앞으로 변수를 추가하는 사람은 트리거(Terraform)와 이 파일을 **같이** 고쳐야 한다.
   #    형제 프로젝트에서 트리거만 고치고 이 파일을 빼먹어 지도 기능이 통째로 꺼진 채
   #    배포된 적이 있다 (출처: birdieup-app/cloudbuild.yaml 주석, v1.27.0).
-  _EXPO_PUBLIC_API_URL: https://jayeon-api.redhead.kr
+  _EXPO_PUBLIC_API_URL: https://nature-api.redhead.kr
   _EXPO_PUBLIC_ENV: production
-  _EXPO_PUBLIC_WEBVIEW_URL: https://jayeon.redhead.kr
+  _EXPO_PUBLIC_WEBVIEW_URL: https://nature.redhead.kr
 
 steps:
   - id: build

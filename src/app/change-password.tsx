@@ -181,7 +181,7 @@ export default function ChangePasswordScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag">
-          <Text style={styles.kicker}>JAYEON</Text>
+          <Text style={styles.kicker}>NATURE</Text>
           <Text style={styles.title}>비밀번호 변경</Text>
 
           {forced ? (

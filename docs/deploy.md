@@ -43,8 +43,8 @@ git tag v0.1.0 && git push origin v0.1.0
 Cloud Run 앞에 Firebase Hosting 이 한 겹 있다. 바로 Cloud Run 을 가리키지 않는다.
 
 ```
-jayeon.redhead.kr     ─(CNAME)─▶ redhead-jayeon-app.web.app ─(rewrite)─▶ Cloud Run jayeon-app
-jayeon-api.redhead.kr ─(CNAME)─▶ redhead-jayeon-api.web.app ─(rewrite)─▶ Cloud Run jayeon-was
+nature.redhead.kr     ─(CNAME)─▶ redhead-jayeon-app.web.app ─(rewrite)─▶ Cloud Run jayeon-app
+nature-api.redhead.kr ─(CNAME)─▶ redhead-jayeon-api.web.app ─(rewrite)─▶ Cloud Run jayeon-was
 ```
 
 이 한 겹 때문에 이 저장소가 알아야 할 것이 둘 있다.
@@ -172,3 +172,18 @@ git push origin v0.1.1
 
 같은 태그를 지웠다 다시 미는 방법은 쓰지 마라. 태그가 가리키는 커밋이 바뀌면
 "v0.1.0 이 무엇이었는지" 를 나중에 아무도 알 수 없다.
+
+
+## Nature 이름·도메인 전환
+
+공개 웹 주소는 `https://nature.redhead.kr`, API 주소는 `https://nature-api.redhead.kr`이다.
+Cloud Run `jayeon-app`/`jayeon-was`, Hosting `redhead-jayeon-app`/`redhead-jayeon-api`,
+실제 Git 저장소와 Terraform state/서비스 계정은 기존 운영 식별자를 유지한다.
+앱 `cloudbuild.yaml`의 `_SERVICE`를 `nature-app`으로 바꾸지 않는다.
+신규 도메인은 기존 Hosting에 연결하고, 이전 도메인은 전환 기간의 별칭으로 유지한다.
+실제 DNS·Hosting·인증서 적용은 인프라 절차에 따라 별도로 검증해야 한다.
+
+Android App Links는 `kr.redhead.nature`와 `nature.redhead.kr`을 사용한다.
+운영 서명 인증서 SHA-256 지문이 아직 제공되지 않아 `public/.well-known/assetlinks.json`은
+임의로 생성하지 않았다. 실제 배포 키 지문으로 해당 파일을 만든 뒤 도메인 검증이 필요하다.
+디버그 인증서나 예시 지문을 운영 검증 파일에 넣지 않는다.
