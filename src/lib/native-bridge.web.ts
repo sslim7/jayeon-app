@@ -46,7 +46,7 @@ declare global {
  * 장치부터 세워라(형제 프로젝트의 `nativeShellSupports` →
  * `birdieup-app/src/lib/native-bridge.web.ts`).
  */
-type OutboundMessage = { type: 'tokens'; tokens: StoredTokens | null } | { type: 'ready' };
+type OutboundMessage = { type: 'tokens'; tokens: StoredTokens | null; reason?: 'password-changed' } | { type: 'ready' };
 
 // ──────────────────────────────────────────────────────────────
 // 웹 → 껍데기
@@ -100,8 +100,8 @@ export function nativeShellVersion(): string | null {
  * 갱신이 웹뷰 안에서 일어나므로 알리지 않으면 껍데기의 사본이 로그인 시점에 멈춰 서고,
  * 리프레시 토큰의 **수명이 갱신되지 않아** 어느 날 이유 없이 로그인이 풀린다.
  */
-export function postTokensToNative(tokens: StoredTokens | null): void {
-  post({ type: 'tokens', tokens });
+export function postTokensToNative(tokens: StoredTokens | null, reason?: 'password-changed'): void {
+  post({ type: 'tokens', tokens, reason });
 }
 
 /** 첫 화면을 보여도 된다고 알린다. 껍데기가 덮고 있던 로딩 판을 내린다. */

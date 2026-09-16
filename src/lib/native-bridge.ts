@@ -34,7 +34,7 @@ export function nativeShellVersion(): string | null {
   return null;
 }
 
-export function postTokensToNative(_tokens: StoredTokens | null): void {
+export function postTokensToNative(_tokens: StoredTokens | null, _reason?: 'password-changed'): void {
   // 껍데기 밖이다 — 토큰은 이미 이 앱의 SecureStore 에 있다.
 }
 

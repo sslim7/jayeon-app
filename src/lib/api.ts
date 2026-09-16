@@ -8,7 +8,7 @@
  */
 
 import { ENV } from '@/config/env';
-import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from '@/lib/auth-tokens';
+import { clearTokens, getAccessToken, getRefreshToken, getSessionVersion, isStoredTokens, saveTokens } from '@/lib/auth-tokens';
 import type { ApiErrorBody, TokenSet } from '@/types/api';
 
 export class ApiError extends Error {
@@ -101,42 +101,36 @@ export function onSessionExpired(handler: SessionExpiredHandler): () => void {
 // 토큰 재발급 (동시 401은 단일 프라미스 공유)
 // ──────────────────────────────────────────────────────────────
 
-let refreshInFlight: Promise<boolean> | null = null;
+let refreshInFlight: { token: string; version: number; promise: Promise<boolean> } | null = null;
 
-async function performRefresh(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
-
+async function performRefresh(refreshToken: string, version: number): Promise<boolean> {
   try {
-    const res = await fetch(`${ENV.apiUrl}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
+    // 재발급에도 일반 요청과 같은 타임아웃과 오류 분류를 적용한다.
+    const tokens = await send<TokenSet>('/auth/refresh', {
+      method: 'POST', auth: false, body: { refreshToken },
     });
-    if (!res.ok) return false;
-
-    const text = await res.text();
-    const tokens = (text ? JSON.parse(text) : null) as TokenSet | null;
-    if (!tokens?.accessToken || !tokens?.refreshToken) return false;
-
+    if (version !== getSessionVersion() || getRefreshToken() !== refreshToken) return false;
+    if (!isStoredTokens(tokens)) {
+      throw new Error('잘못된 토큰 재발급 응답');
+    }
     await saveTokens({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
-    return true;
-  } catch {
-    return false;
+    return version === getSessionVersion();
+  } catch (error) {
+    // 네트워크/서버 장애로는 저장된 세션을 버리지 않는다.
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return false;
+    throw error;
   }
 }
 
-/**
- * 진행 중인 재발급이 있으면 그 결과를 공유한다.
- *
- * 화면 하나가 요청 몇 개를 한꺼번에 보내면 401 도 한꺼번에 온다. 각자 재발급을 부르면
- * 리프레시 토큰이 연달아 회전하면서 **서로가 서로를 무효로 만들어** 결국 전부 실패한다.
- */
-function refreshTokens(): Promise<boolean> {
-  refreshInFlight ??= performRefresh().finally(() => {
-    refreshInFlight = null;
-  });
-  return refreshInFlight;
+function refreshTokens(version: number): Promise<boolean> {
+  const token = getRefreshToken();
+  if (!token) return Promise.resolve(false);
+  if (refreshInFlight?.token === token && refreshInFlight.version === version) return refreshInFlight.promise;
+  const pending = { token, version, promise: performRefresh(token, version).finally(() => {
+    if (refreshInFlight === pending) refreshInFlight = null;
+  }) };
+  refreshInFlight = pending;
+  return pending.promise;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -163,6 +157,7 @@ async function send<T>(path: string, options: RequestOptions): Promise<T> {
   }, timeoutMs);
   const onOuterAbort = () => controller.abort();
   signal?.addEventListener('abort', onOuterAbort);
+  if (signal?.aborted) controller.abort();
 
   /*
    * 한도가 **본문을 다 읽을 때까지** 살아 있어야 한다. 헤더만 오고 본문이 멈추는 연결이
@@ -212,28 +207,39 @@ async function send<T>(path: string, options: RequestOptions): Promise<T> {
   return data as T;
 }
 
+function isExpired(error: unknown): error is ApiError {
+  // 현재 비밀번호 불일치도 401이다. 자격 입력 오류로 세션을 재발급하면 안 된다.
+  return error instanceof ApiError && error.status === 401 &&
+    (error.code === 'UNAUTHORIZED' || error.code === null);
+}
+
+async function expireSession(version: number): Promise<void> {
+  if (version !== getSessionVersion()) return;
+  const clearing = clearTokens();
+  sessionExpiredHandler?.();
+  await clearing;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const originalAccess = getAccessToken();
+  const version = getSessionVersion();
   try {
     return await send<T>(path, options);
   } catch (error) {
-    const canRetry = error instanceof ApiError && error.status === 401 && options.auth !== false;
-    if (!canRetry) throw error;
-
-    const refreshed = await refreshTokens();
+    if (!isExpired(error) || options.auth === false) throw error;
+    // 로그아웃 또는 새 로그인 뒤 도착한 옛 응답은 새 세션을 건드리지 않는다.
+    if (version !== getSessionVersion() || options.signal?.aborted) throw error;
+    const refreshed = getAccessToken() !== originalAccess || await refreshTokens(version);
+    if (version !== getSessionVersion() || options.signal?.aborted) throw error;
     if (!refreshed) {
-      await clearTokens();
-      sessionExpiredHandler?.();
+      await expireSession(version);
       throw error;
     }
-
+    const retryAccess = getAccessToken();
     try {
       return await send<T>(path, options);
     } catch (retryError) {
-      // 방금 재발급한 토큰으로도 401 이면 서버가 세션을 무효화한 것이다.
-      if (retryError instanceof ApiError && retryError.status === 401) {
-        await clearTokens();
-        sessionExpiredHandler?.();
-      }
+      if (isExpired(retryError) && getAccessToken() === retryAccess) await expireSession(version);
       throw retryError;
     }
   }

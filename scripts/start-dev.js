@@ -13,7 +13,7 @@ if (fs.existsSync(envFile)) {
   }
 }
 
-const port = process.env.EXPO_DEV_PORT || '8081';
+const port = process.env.EXPO_DEV_PORT || '3103';
 const args = ['expo', 'start', '--port', port, ...process.argv.slice(2)];
 
 const child = spawn('npx', args, { stdio: 'inherit', env: process.env });
