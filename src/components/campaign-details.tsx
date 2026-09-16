@@ -107,6 +107,7 @@ export function CampaignDetails({ id }: { id: string }) {
     try {
       await smsDispatch.run(id, {
         subscriptionId: sim,
+        subject: campaign?.title,
         ...(retry ? { retryRecipientIds: [...retryIds] } : {}),
       });
       await load();

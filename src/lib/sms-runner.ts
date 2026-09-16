@@ -25,6 +25,11 @@ export function needsOutcomeReview(row: Pick<CampaignRecipient, 'status' | 'erro
     row.errorCode === 'OUTCOME_UNKNOWN' || row.errorCode === 'PARTIAL_SENT';
 }
 
+/** 캠페인 본문의 수신자 치환 토큰을 발송 직전에 해석한다. */
+export function personalizeMessage(message: string, name: string): string {
+  return message.replaceAll('@name', name);
+}
+
 // 한 JS 런타임당 한 발송 흐름만 허용한다. 별도 단말 경합은 서버의 원자적 claim이 막는다.
 export class SmsRunner {
   private state: DispatchSnapshot = {
@@ -101,7 +106,7 @@ export class SmsRunner {
     finally { this.syncing = null; }
   };
 
-  run = async (campaignId: string, options: { subscriptionId: number; retryRecipientIds?: string[] }): Promise<void> => {
+  run = async (campaignId: string, options: { subscriptionId: number; retryRecipientIds?: string[]; subject?: string }): Promise<void> => {
     if (this.state.running) throw new Error('이미 발송 중이에요. 현재 발송을 먼저 마쳐 주세요.');
     this.update({ campaignId, running: true, stopping: false, currentRecipientId: null, error: null });
     const version = this.sessionVersion();
@@ -181,7 +186,7 @@ export class SmsRunner {
         const recipient = claim.recipient;
         const result = await this.device.send({
           campaignRecipientId: recipient.id, attemptId, phone: recipient.phone,
-          message: recipient.message, subscriptionId: options.subscriptionId,
+          message: personalizeMessage(recipient.message, recipient.name), subject: options.subject, subscriptionId: options.subscriptionId,
           attachments: prepared.get(row.id),
         });
         await this.saveResult(campaignId, recipient, result, version);

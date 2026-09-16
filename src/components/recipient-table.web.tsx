@@ -41,7 +41,7 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
   return (
     <div style={{ width: '100%' }}>
       <RecipientTableToolbar total={items.length} selectedCount={selectedIds.length} allInfo={allInfo} onViewChange={setAllInfo} includeSentFilter={includeSentFilter} />
-    <div style={{ width: '100%', maxHeight: 432, overflow: 'auto', border: `1px solid ${colors.borderPill}`, backgroundColor: colors.card }}>
+    <div style={{ width: '100%', overflowX: 'auto', border: `1px solid ${colors.borderPill}`, backgroundColor: colors.card }}>
       <table aria-label="발송 수신자 목록" style={{ width: '100%', minWidth: compact ? undefined : 600 + fields.length * 90 + (actions ? 140 : 0), borderSpacing: 0, tableLayout: 'fixed', color: colors.ink, ...fonts.body, fontSize: text.md }}>
         <thead>
           <tr>

@@ -14,6 +14,8 @@ export type SmsSendInput = {
   attemptId: string;
   phone: string;
   message: string;
+  /** MMS 제목. 캠페인 제목을 전달하며, 비어 있으면 수신 앱이 제목없음으로 표시할 수 있다. */
+  subject?: string;
   subscriptionId: number;
   attachments?: { name: string; mimeType: string; dataBase64: string }[];
 };
