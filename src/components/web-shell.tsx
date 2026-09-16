@@ -15,6 +15,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
 import {
+  BackHandler,
   Image,
   Linking,
   Platform,
@@ -210,6 +211,14 @@ export function WebShell() {
   /** 로드 전에 도착한 이동 요청. 로드가 끝나는 순간 흘려보낸다. */
   const pendingPathRef = useRef<string | null>(null);
 
+  /**
+   * 웹뷰 히스토리를 한 칸 물릴 수 있는가. 뒤로가기 핸들러가 읽는다.
+   *
+   * state 가 아니라 ref 다 — 화면에 그리는 값이 아니고, 웹 안에서 이동할 때마다 바뀌는데
+   * 그때마다 껍데기 전체를 다시 그릴 이유가 없다.
+   */
+  const canGoBackRef = useRef(false);
+
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -248,6 +257,35 @@ export function WebShell() {
       if (url) handle(url);
     });
     const sub = Linking.addEventListener('url', (event) => handle(event.url));
+    return () => sub.remove();
+  }, []);
+
+  /**
+   * 안드로이드 하드웨어 뒤로가기.
+   *
+   * 핸들러가 없으면 뒤로가기가 곧바로 시스템에 넘어가 **어느 화면에서 누르든 앱이 닫힌다.**
+   * 모든 화면이 웹뷰 안에 있으니 네이티브 내비게이션 스택에는 물릴 것이 없고, 사용자가
+   * 기대하는 「이전 화면」은 웹뷰의 히스토리다. 그래서 웹뷰가 뒤로 갈 수 있으면 한 칸 물리고
+   * `true`, 못 가면 `false` 로 시스템에 넘긴다 — 첫 화면에서 누르면 앱이 닫히는 것이
+   * 안드로이드의 기본 기대다.
+   *
+   * 📌 **웹은 expo-router SPA 라 이동이 `history.pushState` 로만 일어난다.** 페이지 로드가 없어도
+   * 안드로이드 웹뷰는 `doUpdateVisitedHistory` 를 부르고, react-native-webview(13.16.1)는
+   * 거기서 `canGoBack` 을 실은 loadingStart 이벤트를 쏘아 `onNavigationStateChange` 까지
+   * 올려 보낸다(→ `RNCWebViewClient.java`). 그래서 아래 `onNavigationStateChange` 만으로
+   * SPA 이동도 따라간다.
+   *
+   * 웹의 ☰ 메뉴(`app-navigation.tsx`)도 BackHandler 를 걸지만 그건 **웹뷰 안의 웹 번들**이라
+   * 여기 네이티브 핸들러와 섞이지 않는다(웹의 BackHandler 는 아무 일도 하지 않는다).
+   * 메뉴가 열린 채로 뒤로가기를 누르면 이전 화면으로 가고, 메뉴는 경로가 바뀌며 닫힌다.
+   */
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!canGoBackRef.current || !ref.current) return false;
+      ref.current.goBack();
+      return true;
+    });
     return () => sub.remove();
   }, []);
 
@@ -328,6 +366,10 @@ export function WebShell() {
         // 메모리 압박으로 웹 콘텐츠 프로세스가 죽으면 하얀 화면만 남는다. 조용히 다시 띄운다.
         onContentProcessDidTerminate={() => ref.current?.reload()}
         onMessage={(event) => handleMessage(event.nativeEvent.data)}
+        // 뒤로가기 판단용(→ 위 `hardwareBackPress` 설명). pushState 이동에서도 불린다.
+        onNavigationStateChange={(navState) => {
+          canGoBackRef.current = navState.canGoBack;
+        }}
         onLoadEnd={() => {
           loadedRef.current = true;
           const pending = pendingPathRef.current;
@@ -409,8 +451,8 @@ export function WebShell() {
  */
 function LoadingCover() {
   return (
-    <View style={styles.cover}>
-      <Image accessibilityLabel="Nature를 준비하는 중" source={require('../../assets/images/splash.png')} resizeMode="contain" style={StyleSheet.absoluteFill} />
+    <View style={[styles.cover, styles.photoCover]}>
+      <Image accessibilityLabel="Nature를 준비하는 중" source={require('../../assets/images/splash.png')} resizeMode="contain" style={styles.photo} />
     </View>
   );
 }
@@ -438,6 +480,10 @@ function ErrorCover({ onRetry }: { onRetry: () => void }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   webview: { flex: 1, backgroundColor: colors.bg },
+  // require 이미지의 원본 크기가 absoluteFill을 이기지 않도록 크기를 명시한다(→ native-boot-splash.tsx).
+  photo: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
+  // cover의 좌우 여백은 오류 문구용이다. 사진까지 줄어 네이티브 스플래시보다 작고 왼쪽으로 쏠려 보였다.
+  photoCover: { paddingHorizontal: 0 },
   cover: {
     position: 'absolute',
     top: 0,

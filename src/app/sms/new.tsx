@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { useHeaderActions } from '@/components/app-navigation';
+import { SmsHeaderActions } from '@/components/sms-header-actions';
+import { COMPACT_MAX_WIDTH } from '@/components/recipient-table-columns';
 import { CampaignHistorySheet } from '@/components/campaign-history-sheet';
 import { RecipientRegistrationSheet } from '@/components/recipient-registration-sheet';
 import { TemplateManager } from '@/components/template-manager';
@@ -150,10 +153,15 @@ export default function NewCampaignScreen() {
     finally { setTemplateLoading(false); }
   }
   const frozen = busy || !draftLoaded || pending !== null;
+  // 폰 폭에서는 세 조작을 앱 헤더 아이콘으로 올려 목록에 세로 공간을 준다.
+  const phone = useWindowDimensions().width < COMPACT_MAX_WIDTH;
+  useHeaderActions(useMemo(() => phone ? <SmsHeaderActions frozen={frozen} onOpen={setPanel} /> : null, [phone, frozen]));
+  const sendButton = stage === 'recipients' ? <SmsButton label={`${selected.length}명에게 발송${selected.length > 50 ? ' (50명 제한)' : ''}`} secondary={selected.length > 50} danger={selected.length > 50} disabled={frozen || loading || !selected.length || selected.length > 50} onPress={() => { setStage('compose'); void openTemplates(); }} /> : null;
+  const listFooter = phone && stage === 'recipients';
   const groups = [...new Set(rows.map((item) => item.groupId).filter(Boolean))];
   const visible = rows.filter((item) => (!group || item.groupId === group) && item.name.toLowerCase().includes(query.trim().toLowerCase()));
   return (
-    <SmsPage hideTitle wide={stage === 'recipients'} title={stage === 'recipients' ? '문자 보내기' : '문자 작성'} actions={<>
+    <SmsPage hideTitle wide={stage === 'recipients'} compact={listFooter} footer={listFooter ? sendButton : undefined} title={stage === 'recipients' ? '문자 보내기' : '문자 작성'} actions={phone ? undefined : <>
       <SmsButton label="수신자 등록" secondary disabled={frozen} onPress={() => setPanel('register')} />
       <SmsButton label="템플릿" secondary disabled={frozen} onPress={() => setPanel('templates')} />
       <SmsButton label="발송 이력" secondary onPress={() => setPanel('history')} />
@@ -166,8 +174,8 @@ export default function NewCampaignScreen() {
       {stage === 'recipients' ? <>
         <RecipientFilters groups={groups} group={group} onGroupChange={setGroup} query={query} onQueryChange={setQuery} />
         {loading ? <Loading /> : null}
-        <RecipientTable includeSentFilter={{ selected: includeSent, disabled: frozen || loading, onPress: () => { setSelected([]); setIncludeSent(!includeSent); } }} items={visible} selectedIds={selected} onSelectionChange={setSelected} onHistory={setHistory} onEdit={setEditingRecipient} disabled={frozen || loading} />
-        <SmsButton label={`${selected.length}명에게 발송${selected.length > 50 ? ' (50명 제한)' : ''}`} secondary={selected.length > 50} danger={selected.length > 50} disabled={frozen || loading || !selected.length || selected.length > 50} onPress={() => { setStage('compose'); void openTemplates(); }} />
+        <RecipientTable includeSentFilter={{ selected: includeSent, disabled: frozen || loading, onPress: () => { setSelected([]); setIncludeSent(!includeSent); } }} items={visible} selectedIds={selected} onSelectionChange={setSelected} onHistory={setHistory} onEdit={setEditingRecipient} disabled={frozen || loading} dense={phone} />
+        {listFooter ? null : sendButton}
       </> : <>
         <Notice message="템플릿을 가져오거나 직접 작성하세요. 캠페인을 만든 다음 Android 앱에서 최종 전송합니다." />
         <Text style={s.subtitle}>수신자 {selected.length}명 선택</Text>

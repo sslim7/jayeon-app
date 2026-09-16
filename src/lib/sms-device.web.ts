@@ -41,7 +41,7 @@ function invoke<T>(method: string, args?: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(requestId);
-      reject(new Error('단말 응답을 확인하지 못했어요. 재발송하지 말고 결과 동기화를 눌러 주세요.'));
+      reject(new Error('단말 응답을 확인하지 못했어요. 재발송하지 말고 결과 다시 확인을 눌러 주세요.'));
     }, 150_000);
     pending.set(requestId, { resolve: (value) => resolve(value as T), reject, timer });
     try {

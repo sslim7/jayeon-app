@@ -31,7 +31,6 @@ export function CampaignDetails({ id }: { id: string }) {
   const [queryError, setQueryError] = useState('');
   const [capability, setCapability] = useState<SmsCapabilities | null>(null);
   const [sim, setSim] = useState<number | null>(null);
-  const [retryIds, setRetryIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const dispatch = useSyncExternalStore(
@@ -47,11 +46,6 @@ export function CampaignDetails({ id }: { id: string }) {
       const [c, recipients] = await Promise.all([smsApi.get(id), smsApi.recipients(id)]);
       setCampaign(c);
       setRows(recipients);
-      setRetryIds((ids) =>
-        ids.filter((rid) =>
-          recipients.some((r) => r.id === rid && r.status === 'FAILED' && !uncertain(r)),
-        ),
-      );
       setQueryError('');
     } catch (e) {
       setQueryError(smsError(e));
@@ -108,7 +102,7 @@ export function CampaignDetails({ id }: { id: string }) {
       await smsDispatch.run(id, {
         subscriptionId: sim,
         subject: campaign?.title,
-        ...(retry ? { retryRecipientIds: [...retryIds] } : {}),
+        ...(retry ? { retryRecipientIds: retryIds } : {}),
       });
       await load();
     } catch (e) {
@@ -118,10 +112,11 @@ export function CampaignDetails({ id }: { id: string }) {
       setBusy(false);
     }
   }
+  // 발송 중단만 한다. 캠페인 취소(CANCELLED) 경로는 이 화면에서 뺐다 — 발송이 이미 끝났으면 멈출 것이 없다.
   async function stop() {
+    if (!(running && mine)) return;
     try {
-      if (running && mine) await smsDispatch.stop();
-      else await smsApi.setStatus(id, 'CANCELLED');
+      await smsDispatch.stop();
       await load();
     } catch (e) {
       setError(smsError(e));
@@ -134,6 +129,26 @@ export function CampaignDetails({ id }: { id: string }) {
   const current = rows.find((r) => r.id === dispatch.currentRecipientId);
   const attachmentSupported = !campaign?.attachments?.length || !!capability?.mmsSupported;
   const available = !!capability?.supported && capability.permissionGranted && sim !== null && attachmentSupported;
+  // 데스크톱 브라우저처럼 발송 자체가 불가능한 곳. null(확인 중)과 구별한다 — 확인 중에는 버튼을 비활성으로 둔다.
+  const browserOnly = capability?.supported === false;
+  const sending = rows.some((r) => r.status === 'SENDING');
+  // 발송 중 지금 보내는 1건(SENDING)은 곧 확정되니 제외한다. 그 밖의 미확정은 자동 동기화로 안 풀릴 수 있어 직접 다시 확인할 길을 둔다.
+  const unresolved = rows.some((r) => uncertain(r) && !(running && r.status === 'SENDING'));
+  // 수신자 목록을 없애며 개별 선택도 없앴다. 확실히 실패한 행은 전부 다시 보낸다 — 결과 미확정 행은 중복 발송 위험이 있어 빼는 규칙은 그대로다.
+  const retryIds = rows.filter((r) => r.status === 'FAILED' && !uncertain(r)).map((r) => r.id);
+  const retryable = retryIds.length > 0;
+  // 수신자별 카드가 없으니 오류 사유는 대표 1건만 요약한다. 같은 사유가 반복되는 경우가 대부분이다.
+  const errorMessages = [...new Set(rows.filter((r) => r.status === 'FAILED' || uncertain(r)).map((r) => r.errorMessage).filter((m): m is string => !!m))];
+  // 발송이 끝나면 SIM·권한 설정이 더는 할 일이 아니다. 남아 있으면 「끝났는데 또 뭘 골라야 하나」로 읽혀 헷갈렸다.
+  const needsLine = running || ready > 0 || retryable;
+  // 평소에는 진입 시 자동 sync와 3초 load로 충분하다. 결과가 확정되지 않은 행이 남았을 때만 폰 journal을 다시 서버에 맞춘다.
+  function recheck() {
+    if (running || busy) return;
+    void smsDispatch
+      .sync(id)
+      .then(load)
+      .catch((e) => setError(smsError(e)));
+  }
   return (
     <View style={{ gap: 16 }}>
       <Text accessibilityRole="header" style={s.subtitle}>{campaign?.title ?? '발송 상세'}</Text>
@@ -172,10 +187,19 @@ export function CampaignDetails({ id }: { id: string }) {
             <Text selectable style={s.body}>
               성공 {sent} · 실패 {failed} · 대기 {ready}
             </Text>
+            {errorMessages.length ? (
+              <Notice
+                error
+                message={errorMessages.length > 1 ? `${errorMessages[0]} 외 사유 ${errorMessages.length - 1}가지` : errorMessages[0]}
+              />
+            ) : null}
             {unknown ? (
               <Notice
                 message={`결과 확인 필요 ${unknown}건 · 실제 발송 여부를 확정할 수 없어 자동 재발송하지 않습니다.`}
               />
+            ) : null}
+            {unresolved ? (
+              <SmsButton label="결과 다시 확인" secondary disabled={running || busy} onPress={recheck} />
             ) : null}
             {running && mine && current ? (
               <Text style={s.body}>
@@ -184,7 +208,7 @@ export function CampaignDetails({ id }: { id: string }) {
             ) : null}
           </View>
           <Notice message="성공은 Android 발송 요청 성공이며 상대방의 수신·읽음 확인이 아닙니다." />
-          {capability === null ? (
+          {!needsLine ? null : capability === null ? (
             <Notice message="Android SMS 기능을 확인하고 있어요." />
           ) : !capability.supported ? (
             <Notice message="이 기능은 Android 앱에서 사용할 수 있습니다. 수신자 관리와 이력 조회는 여기서도 가능합니다." />
@@ -222,12 +246,13 @@ export function CampaignDetails({ id }: { id: string }) {
               />
             </View>
           )}
-          {!attachmentSupported ? <Notice error message="첨부 발송을 지원하는 최신 Android 앱을 설치해 주세요." /> : null}
+          {/* 브라우저에서 보는 것만으로 「최신 앱을 설치하라」는 오류가 뜨면 고장으로 읽힌다. 실제 Android 앱에서 MMS 미지원일 때만 알린다. */}
+          {needsLine && capability?.supported && !attachmentSupported ? <Notice error message="첨부 발송을 지원하는 최신 Android 앱을 설치해 주세요." /> : null}
           {running ? (
             mine ? (
               <>
                 <SmsButton
-                  label={dispatch.stopping ? '현재 1건 저장 후 중지 중…' : '발송 중지'}
+                  label={dispatch.stopping ? '현재 1건 저장 후 중단 중…' : '발송 중단'}
                   secondary
                   danger
                   disabled={dispatch.stopping}
@@ -236,83 +261,33 @@ export function CampaignDetails({ id }: { id: string }) {
                 <Notice message="이미 Android에 전달한 문자는 취소할 수 없습니다. 현재 결과 저장 후 멈춥니다." />
               </>
             ) : (
-              <Notice message="다른 캠페인을 발송 중입니다. 완료 또는 중지 후 발송할 수 있어요." />
+              <Notice message="다른 캠페인을 발송 중입니다. 완료 또는 중단 후 발송할 수 있어요." />
             )
           ) : (
             <>
-              {ready > 0 ? (
+              {/* 브라우저에서는 보낼 수 없으니 비활성 버튼 대신 위의 「Android 앱에서 사용할 수 있습니다」 안내 하나만 남긴다. */}
+              {ready > 0 && !browserOnly ? (
                 <SmsButton
                   label={
                     campaign.status === 'READY'
-                      ? `${ready}명에게 전송`
+                      ? `${ready}명에게 발송하기`
                       : `미발송 ${ready}건 계속 보내기`
                   }
-                  disabled={!available || busy || rows.some((r) => r.status === 'SENDING')}
+                  disabled={!available || busy || sending}
                   onPress={() => void run()}
                 />
               ) : null}
-              {retryIds.length > 0 ? (
+              {retryable && !browserOnly ? (
                 <SmsButton
-                  label={`선택한 실패 ${retryIds.length}건 다시 보내기`}
-                  disabled={!available || busy || rows.some((r) => r.status === 'SENDING')}
+                  label={`실패 ${retryIds.length}건 다시 보내기`}
+                  disabled={!available || busy || sending}
                   onPress={() => void run(true)}
-                />
-              ) : null}
-              {ready > 0 && campaign.status !== 'CANCELLED' ? (
-                <SmsButton
-                  label="캠페인 중단"
-                  secondary
-                  danger
-                  disabled={busy}
-                  onPress={() => void stop()}
                 />
               ) : null}
             </>
           )}
-          <Text style={s.subtitle}>발송 당시 수신자</Text>
-          {rows.map((r) => (
-            <View key={r.id} style={s.card}>
-              <Text selectable style={s.subtitle}>
-                {r.name}
-              </Text>
-              <Text selectable style={s.body}>
-                {formatPhone(r.phone)}
-              </Text>
-              <Text style={s.meta}>{uncertain(r) ? '결과 확인 필요' : statusLabel[r.status]}{r.transport ? ` · ${r.transport}` : ''}</Text>
-              {r.sentAt || r.failedAt ? (
-                <Text style={s.meta}>
-                  {new Date((r.sentAt || r.failedAt)!).toLocaleString('ko-KR')}
-                </Text>
-              ) : null}
-              {r.errorMessage ? <Notice error message={r.errorMessage} /> : null}
-              {r.status === 'FAILED' && !uncertain(r) ? (
-                <Choice
-                  label={`${r.name} 실패 재발송 선택`}
-                  selected={retryIds.includes(r.id)}
-                  disabled={busy || running}
-                  onPress={() =>
-                    setRetryIds((ids) =>
-                      ids.includes(r.id) ? ids.filter((v) => v !== r.id) : [...ids, r.id],
-                    )
-                  }
-                />
-              ) : null}
-            </View>
-          ))}
         </>
       ) : null}
-      <SmsButton
-        label="결과 동기화"
-        secondary
-        disabled={running || busy}
-        onPress={() => {
-          void smsDispatch
-            .sync(id)
-            .then(load)
-            .catch((e) => setError(smsError(e)));
-        }}
-      />
-      <SmsButton label="진행 상태 새로고침" secondary onPress={() => void load()} />
     </View>
   );
 }

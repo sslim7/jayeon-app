@@ -71,6 +71,54 @@ class MmsPduTest {
     assertArrayEquals(image, parts[2].second)
     assertTrue(parts[2].first.toString(Charsets.ISO_8859_1).contains("image/png"))
   }
+  @Test fun imageMmsPlacesBodyAboveImages() {
+    val image = ByteArray(16) { it.toByte() }
+    val images = listOf(MmsPdu.Image("image/png", image), MmsPdu.Image("image/jpeg", image))
+    val smil = parseParts(MmsPdu.encode("01000000000", "본문", "attempt-mms", images))[0].second.toString(Charsets.UTF_8)
+    assertTrue(smil.contains("<region id=\"Text\" left=\"0\" top=\"0\""))
+    assertTrue(smil.contains("<region id=\"Image\" left=\"0\" top=\"160\""))
+    assertEquals(1, Regex("src=\"text.txt\"").findAll(smil).count())
+    val text = smil.indexOf("src=\"text.txt\"")
+    assertTrue(text in 0 until smil.indexOf("src=\"image1.png\""))
+    assertTrue(smil.indexOf("src=\"image1.png\"") < smil.indexOf("src=\"image2.jpg\""))
+  }
+  @Test fun imageOnlyMmsOmitsEmptyBodyPartAndTextPar() {
+    val image = ByteArray(16) { it.toByte() }
+    listOf("", "  ").forEach { message ->
+      val parts = parseParts(MmsPdu.encode("01000000000", message, "attempt-mms", listOf(MmsPdu.Image("image/png", image))))
+      assertEquals(2, parts.size)
+      val smil = parts[0].second.toString(Charsets.UTF_8)
+      assertFalse(smil.contains("text.txt")); assertFalse(smil.contains("region id=\"Text\""))
+      assertTrue(smil.contains("<region id=\"Image\" left=\"0\" top=\"0\""))
+      assertFalse(parts.any { it.first.toString(Charsets.ISO_8859_1).contains("text/plain") })
+      assertArrayEquals(image, parts[1].second)
+    }
+    assertThrows(IllegalArgumentException::class.java) { MmsPdu.encode("01000000000", "", "attempt-mms", emptyList()) }
+  }
+  @Test fun pduKeysSeparateSplitPartsEvenForMaxLengthAttemptIds() {
+    val attemptId = "a".repeat(128)
+    val imageKey = MmsPduProvider.key(attemptId, 1)
+    assertEquals(attemptId, MmsPduProvider.key(attemptId, 0)); assertEquals("$attemptId.1", imageKey)
+    // attemptId에 '.'이 없으므로 다른 attempt의 파트 0 파일과 겹치지 않는다.
+    assertFalse(MmsPduProvider.key("abc", 1).matches(Regex("[A-Za-z0-9_-]{1,128}")))
+    assertThrows(FileNotFoundException::class.java) { MmsPduProvider.file(context, "a".repeat(129)) }
+    assertThrows(FileNotFoundException::class.java) { MmsPduProvider.file(context, "$attemptId.2") }
+    MmsPdu.encode("01000000000", "", imageKey, listOf(MmsPdu.Image("image/png", byteArrayOf(1))))
+    MmsPduProvider.write(context, attemptId, byteArrayOf(1))
+    val uri = MmsPduProvider.write(context, imageKey, byteArrayOf(2))
+    assertEquals(imageKey, uri.lastPathSegment)
+    assertTrue(MmsPduProvider.file(context, attemptId).exists() && MmsPduProvider.file(context, imageKey).exists())
+    MmsPduProvider.removeAll(context, attemptId)
+    assertFalse(MmsPduProvider.file(context, attemptId).exists()); assertFalse(MmsPduProvider.file(context, imageKey).exists())
+  }
+  @Test fun expiredCleanupRemovesBothSplitPduFiles() {
+    MmsPduProvider.write(context, "old-attempt", byteArrayOf(1))
+    MmsPduProvider.write(context, "old-attempt.1", byteArrayOf(2))
+    listOf("old-attempt", "old-attempt.1").forEach { MmsPduProvider.file(context, it).setLastModified(System.currentTimeMillis() - 90_000_000L) }
+    MmsPduProvider.write(context, "new-attempt", byteArrayOf(3))
+    assertFalse(MmsPduProvider.file(context, "old-attempt").exists()); assertFalse(MmsPduProvider.file(context, "old-attempt.1").exists())
+    MmsPduProvider.removeAll(context, "new-attempt")
+  }
   @Test fun textOnlyLmsContainsSmilAndLongTextWithoutFakeImage() {
     val message = "긴 안내문입니다. ".repeat(200)
     val parts = parseParts(MmsPdu.encode("01000000000", message, "attempt-mms", emptyList()))
@@ -82,6 +130,11 @@ class MmsPduTest {
     // 테스트 전용 Android reference parser. 프로덕션은 숨겨진 API에 의존하지 않는다.
     val parserClass = Class.forName("com.google.android.mms.pdu.PduParser")
     val constructor = parserClass.getConstructor(ByteArray::class.java, Boolean::class.javaPrimitiveType)
+    // 이미지 전용 PDU(본문 파트 없음)도 reference parser가 받아들여야 한다.
+    val imageOnly = parserClass.getMethod("parse").invoke(constructor.newInstance(MmsPdu.encode("01000000000", "", "attempt-mms.1", listOf(MmsPdu.Image("image/png", byteArrayOf(1, 2, 3)))), true))
+    assertEquals("com.google.android.mms.pdu.SendReq", imageOnly.javaClass.name)
+    val imageOnlyBody = imageOnly.javaClass.getMethod("getBody").invoke(imageOnly)
+    assertEquals(2, imageOnlyBody.javaClass.getMethod("getPartsNum").invoke(imageOnlyBody))
     listOf(emptyList(), listOf(MmsPdu.Image("image/png", byteArrayOf(1, 2, 3)))).forEach { images ->
       val raw = MmsPdu.encode("01000000000", "한글 본문", "attempt-mms", images)
       val parser = constructor.newInstance(raw, true)
