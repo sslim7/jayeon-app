@@ -20,7 +20,7 @@
 ```
 npm install
 cp .env.example .env    # 값은 파일 안 주석에 [로컬]/[운영]으로 적혀 있다
-npm run dev:web         # 웹 (기본 8081 포트)
+npm run dev:web         # 웹 (3103 포트)
 npm run android         # 안드로이드
 ```
 
@@ -40,6 +40,22 @@ docs/            문서. 배포 절차는 docs/deploy.md
 ```
 
 `src/` 아래는 지금 만들어지는 중이라 비어 있거나 일부만 있을 수 있다.
+
+## 로컬 포트
+
+🔴 **jayeon 의 포트는 `31xx` / `809x` 대역에서 고른다.**
+
+한 머신에 birdieup 과 jayeon 이 같이 있고 둘을 동시에 띄우는 일이 실제로 있다. 겹치면
+나중에 뜬 쪽이 「주소가 이미 사용 중」으로 죽는데, **더 나쁜 것은 죽지 않는 경우다** —
+앱이 자기 API 대신 다른 프로젝트의 서버를 부르게 되고, 엉뚱한 404 를 받고도 원인이 자기
+코드에 있다고 생각하며 한참을 헤맨다.
+
+| | admin | app(dev) | Firestore 에뮬레이터 | was |
+| --- | --- | --- | --- | --- |
+| birdieup | 3000 | 3003 | 8080 | 8081 |
+| **jayeon** | (3100) | **3103** | **8090** | **8091** |
+
+새 포트를 잡을 일이 생기면 이 표에 먼저 적고 쓴다.
 
 ## 브랜치와 배포
 
@@ -69,9 +85,9 @@ Git 에서 **태그는 브랜치에 속하지 않는다.** 그래서 "release �
 | 이름 | 기본값(운영) | 설명 |
 | --- | --- | --- |
 | `EXPO_PUBLIC_ENV` | `production` | `development` \| `production`. 디버그 동작을 켤지 판단하는 유일한 스위치 |
-| `EXPO_PUBLIC_API_URL` | `https://jayeon-api.redhead.kr` | WAS 주소. 끝에 슬래시를 붙이지 마라 |
+| `EXPO_PUBLIC_API_URL` | `https://jayeon-api.redhead.kr` | WAS 주소. 끝에 슬래시를 붙이지 마라 (로컬은 `http://localhost:8091`) |
 | `EXPO_PUBLIC_WEBVIEW_URL` | `https://jayeon.redhead.kr` | 네이티브 껍데기의 웹뷰가 열 주소. 네이티브에서만 읽는다 |
-| `EXPO_DEV_PORT` | (로컬 전용) `8081` | 로컬 dev 서버 포트. `EXPO_PUBLIC_WEBVIEW_URL` 의 포트와 어긋나면 네이티브 웹뷰가 빈 화면이 된다 |
+| `EXPO_DEV_PORT` | (로컬 전용) `3103` | 로컬 dev 서버 포트. `EXPO_PUBLIC_WEBVIEW_URL` 의 포트와 어긋나면 네이티브 웹뷰가 빈 화면이 된다 |
 
 로컬 값은 `.env.example` 의 각 항목 주석에 `[로컬]` 로 적혀 있다.
 
