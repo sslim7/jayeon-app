@@ -20,9 +20,14 @@ function cellText(item: Recipient, key: string): string {
   return (item.name ?? '').trim();
 }
 
-/** 빈 칸으로 보이는 값(0건 포함)은 방향과 무관하게 맨 뒤로 보낸다. */
+/**
+ * 빈 칸은 방향과 무관하게 맨 뒤로 보낸다.
+ *
+ * 발송건수는 예외다 — 0건도 숫자로 함께 줄 세운다(오름차순이면 맨 앞). 「아직 안 보낸 사람부터
+ * 보고 싶다」가 이 열로 정렬하는 이유라서, 0을 빈 칸으로 빼면 그 쓰임이 사라진다.
+ */
 function isEmptyCell(item: Recipient, key: string): boolean {
-  return key === 'sent' ? !item.sentCount : !cellText(item, key);
+  return key !== 'sent' && !cellText(item, key);
 }
 
 function compareAscending(a: Recipient, b: Recipient, key: string): number {
