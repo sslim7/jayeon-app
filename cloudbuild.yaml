@@ -1,0 +1,60 @@
+# Nature 웹(nature.redhead.kr) — Cloud Run 배포 파이프라인
+# 실행: release 브랜치의 커밋에 v* 태그를 밀면 Cloud Build 트리거가 부른다.
+#      손으로 돌릴 때는 `gcloud builds submit --config cloudbuild.yaml`
+
+substitutions:
+  _REGION: asia-northeast3
+  _REPO: redhead             # Artifact Registry 저장소 이름
+  _SERVICE: jayeon-app       # Cloud Run 서비스 이름
+  # EXPO_PUBLIC_* 는 빌드 시점에 번들로 인라인된다. Cloud Run 환경변수로는 반영되지 않으므로
+  # 반드시 여기(=빌드 인자)로 들어와야 한다. 값이 바뀌면 이미지 재빌드가 필요하다.
+  #
+  # 🔴 **여기 선언이 없으면 트리거가 값을 줘도 빌드가 그 값을 무시한다.**
+  #    앞으로 변수를 추가하는 사람은 트리거(Terraform)와 이 파일을 **같이** 고쳐야 한다.
+  #    형제 프로젝트에서 트리거만 고치고 이 파일을 빼먹어 지도 기능이 통째로 꺼진 채
+  #    배포된 적이 있다 (출처: birdieup-app/cloudbuild.yaml 주석, v1.27.0).
+  _EXPO_PUBLIC_API_URL: https://nature-api.redhead.kr
+  _EXPO_PUBLIC_ENV: production
+  _EXPO_PUBLIC_WEBVIEW_URL: https://nature.redhead.kr
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+      - --build-arg=EXPO_PUBLIC_API_URL=${_EXPO_PUBLIC_API_URL}
+      - --build-arg=EXPO_PUBLIC_ENV=${_EXPO_PUBLIC_ENV}
+      - --build-arg=EXPO_PUBLIC_WEBVIEW_URL=${_EXPO_PUBLIC_WEBVIEW_URL}
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}"]
+
+  # 이 단계는 이미지 교체만 한다.
+  # 포트·IAM(--allow-unauthenticated)·환경변수·CPU·min-instances 같은 서비스 설정은
+  # Terraform(redhead-terraform)이 소유한다. CI 가 같이 넘기면 두 곳에서 서로 덮어써서
+  # "배포하고 나니 설정이 사라졌다" 형태로 나타난다. 설정 변경은 Terraform 에서 하라.
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+
+# 트리거는 전용 배포 서비스 계정으로 돈다.
+# 커스텀 SA 는 기본 로그 버킷에 쓸 수 없어, 이 설정이 없으면 빌드가 시작조차 못 한다.
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -1,0 +1,23 @@
+# 이미지에 들어갈 필요가 없거나, 들어가면 안 되는 것들.
+# 여기서 뺀 파일은 `COPY . .` 에도 잡히지 않고, 빌드 컨텍스트 전송 시간도 줄어든다.
+
+node_modules
+dist
+.expo
+.git
+.idea
+
+# 개발용 실행기만 있다(scripts/start-dev.js). 운영 이미지는 `npx expo export` 만 부르므로
+# 필요 없다. birdieup 은 postinstall 이 부르는 스크립트가 있어 일부를 되살렸지만
+# (birdieup-app/.dockerignore), 이 저장소의 package.json 에는 postinstall 자체가 없다.
+scripts
+
+android
+ios
+
+# 로컬 환경변수가 운영 빌드에 섞이지 않도록 반드시 제외한다.
+# .env.example 은 값이 아니라 설명서지만 빌드에 쓰이지 않으므로 함께 빠져도 무방하다.
+.env
+.env.*
+
+*.log

@@ -1,0 +1,54 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+.env
+.env.development
+.env.production
+
+# typescript
+*.tsbuildinfo
+
+example
+
+# 네이티브 프로젝트는 prebuild 산출물이라 추적하지 않는다. app.json 이 정본이고,
+# 여기 들어온 손질은 다음 prebuild 에서 조용히 사라진다.
+/ios
+/android
+
+# IDE
+.idea/
+
+# 브라우저 검증 산출물
+/test-results/
+/playwright-report/
