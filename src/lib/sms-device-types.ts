@@ -18,6 +18,7 @@ export interface SmsSendInput {
   attemptId: string;
   phone: string;
   message: string;
+  subject?: string;
   subscriptionId: number;
   attachments?: SmsAttachment[];
 }

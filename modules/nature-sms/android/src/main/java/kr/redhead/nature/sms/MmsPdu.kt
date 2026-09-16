@@ -43,13 +43,13 @@ internal object MmsPdu {
         "이미지 해상도가 선택한 SIM의 MMS 제한을 초과합니다. 이미지를 줄여 주세요."
       }
     }
-    val pdu = encode(input.phone, input.message, input.attemptId, images)
+    val pdu = encode(input.phone, input.message, input.attemptId, images, input.subject)
     val limit = config.getInt(SmsManager.MMS_CONFIG_MAX_MESSAGE_SIZE, 300 * 1024).takeIf { it > 0 } ?: 300 * 1024
     require(pdu.size <= limit) { "첨부와 본문이 선택한 SIM의 MMS 용량 제한을 초과합니다. 이미지를 줄여 주세요." }
     return pdu
   }
 
-  fun encode(phone: String, message: String, transactionId: String, images: List<Image>): ByteArray {
+  fun encode(phone: String, message: String, transactionId: String, images: List<Image>, subject: String = ""): ByteArray {
     require(phone.matches(Regex("\\+?[0-9]{8,15}")))
     require(transactionId.matches(Regex("[A-Za-z0-9_-]{1,128}")))
     require(images.size in 0..3)
@@ -58,7 +58,7 @@ internal object MmsPdu {
     }
     // 파일명이 SMIL/XML에 삽입되지 않도록 내부 이름만 사용한다.
     val smil = "<smil><head><layout><root-layout width=\"320\" height=\"480\"/><region id=\"Image\" left=\"0\" top=\"0\" width=\"320\" height=\"320\" fit=\"meet\"/><region id=\"Text\" left=\"0\" top=\"320\" width=\"320\" height=\"160\"/></layout></head><body>" +
-      (if (imageParts.isEmpty()) "<par dur=\"5000ms\"><text src=\"text.txt\" region=\"Text\"/></par>" else imageParts.joinToString("") { "<par dur=\"5000ms\"><img src=\"${it.name}\" region=\"Image\"/><text src=\"text.txt\" region=\"Text\"/></par>" }) + "</body></smil>"
+      (if (imageParts.isEmpty()) "<par dur=\"5000ms\"><text src=\"text.txt\" region=\"Text\"/></par>" else imageParts.joinToString("") { "<par dur=\"5000ms\"><text src=\"text.txt\" region=\"Text\"/><img src=\"${it.name}\" region=\"Image\"/></par>" }) + "</body></smil>"
     val parts = listOf(Part("smil.xml", "application/smil", smil.toByteArray(Charsets.UTF_8), true), Part("text.txt", "text/plain", message.toByteArray(Charsets.UTF_8), true)) + imageParts
     return Bytes().apply {
       octet(0x8c); octet(0x80) // Message-Type: M-Send.req
@@ -69,6 +69,7 @@ internal object MmsPdu {
       octet(0x8a); octet(0x80) // Message-Class: personal
       octet(0x86); octet(0x81) // Delivery-Report: no
       octet(0x90); octet(0x81) // Read-Report: no
+      if (subject.isNotBlank()) { octet(0x96); text(subject.take(40)) } // Subject: 캠페인 제목
       octet(0x84) // Content-Type (마지막 헤더)
       value(Bytes().apply {
         octet(0xb3) // application/vnd.wap.multipart.related

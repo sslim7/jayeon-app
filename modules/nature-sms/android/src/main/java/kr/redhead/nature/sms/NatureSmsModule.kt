@@ -21,6 +21,7 @@ class SmsSendRecord : Record {
   @Field var attemptId: String = ""
   @Field var phone: String = ""
   @Field var message: String = ""
+  @Field var subject: String = ""
   @Field var subscriptionId: Int = -1
   @Field var attachments: List<SmsAttachmentRecord> = emptyList()
 }

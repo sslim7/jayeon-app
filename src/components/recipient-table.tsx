@@ -26,7 +26,7 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
   return <View>
     <RecipientTableToolbar total={items.length} selectedCount={selectedIds.length} allInfo={allInfo} onViewChange={setAllInfo} includeSentFilter={includeSentFilter} />
     <Animated.ScrollView ref={horizontalRef} horizontal style={styles.table} removeClippedSubviews={false} scrollEventThrottle={16} onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}>
-    <ScrollView style={{ width: tableWidth, maxHeight: 432 }} stickyHeaderIndices={[0]} nestedScrollEnabled removeClippedSubviews={false}>
+    <View style={{ width: tableWidth }}>
       <View style={[styles.row, { backgroundColor: colors.bg }]}>
         <Animated.View style={[styles.fixedColumns, fixedStyle, { backgroundColor: colors.bg }]}>
         <Pressable accessibilityRole="checkbox" accessibilityLabel="전체 선택" aria-checked={mixed ? 'mixed' : all} accessibilityState={{ checked: mixed ? 'mixed' : all }} disabled={disabled || !items.length} style={[styles.check, columns.check]} onPress={() => onSelectionChange(all ? selectedIds.filter((id) => !ids.includes(id)) : [...new Set([...selectedIds, ...ids])])}><Text>{all ? '☑' : mixed ? '▣' : '☐'}</Text></Pressable>
@@ -49,7 +49,7 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
         </View> : null}
       </View>)}
       {!items.length ? <Text style={styles.cell}>조건에 맞는 수신자가 없습니다.</Text> : null}
-    </ScrollView>
+    </View>
   </Animated.ScrollView>
   </View>;
 }

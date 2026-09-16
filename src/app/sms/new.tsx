@@ -39,7 +39,7 @@ export default function NewCampaignScreen() {
   const [selected, setSelected] = useState<string[]>(() =>
     (ids ?? '').split(',').filter(Boolean),
   );
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState('더메이');
   const [message, setMessage] = useState('');
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
