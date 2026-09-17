@@ -13,6 +13,7 @@ import { colors } from '@/constants/theme';
 import { useAppFonts } from '@/hooks/use-app-fonts';
 import { hideBootSplash } from '@/lib/boot-splash';
 import { postReadyToNative, setNativeNavigationHandler } from '@/lib/native-bridge';
+import { registerServiceWorker } from '@/lib/service-worker';
 import { useUserStore } from '@/store/user-store';
 
 /**
@@ -61,6 +62,20 @@ export default function RootLayout() {
       router.push(path as Parameters<typeof router.push>[0]);
     });
     return () => setNativeNavigationHandler(null);
+  }, []);
+
+  /**
+   * 홈 화면 설치를 위한 서비스 워커 등록.
+   *
+   * `+html.tsx` 의 인라인 스크립트가 아니라 여기인 이유는 **껍데기 판정을 한 군데로 모으기
+   * 위해서다.** 인라인은 빌드 타임 문자열이라 `native-bridge` 를 부를 수 없어 판정을 복제해야
+   * 하는데, 그 사본은 타입 검사도 린트도 닿지 않는 자리에서 조용히 어긋난다. 등록이 몇 초
+   * 늦는 것은 대가가 아니다 — 설치 가능 여부는 부팅 속도와 무관하다.
+   *
+   * 네이티브에서는 스텁이라 아무 일도 하지 않는다(→ `lib/service-worker.ts`).
+   */
+  useEffect(() => {
+    registerServiceWorker();
   }, []);
 
   /**
