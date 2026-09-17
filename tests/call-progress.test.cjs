@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const mod = { exports: {} };
 const source = ts.transpileModule(fs.readFileSync('src/lib/call-progress.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 vm.runInNewContext(`(function(exports){${source}\n})`, { Date, Number, Math, String })(mod.exports);
-const { transcribeProgress, analysisProgress, elapsedMs, formatDuration, elapsedLabel, totalDurationLabel, callStageViews, stageMs, currentStageLabel, skippedNotice, diagnosticsLabel, missingAnalysisNotice } = mod.exports;
+const { transcribeProgress, analysisProgress, mergeSteps, unavailableSectionNotice, elapsedMs, formatDuration, elapsedLabel, totalDurationLabel, callStageViews, stageMs, currentStageLabel, skippedNotice, diagnosticsLabel, missingAnalysisNotice, tokensPerSecond, liveAnalysisText } = mod.exports;
 
 test('음성 변환 진행률은 whisper 가 준 값만 쓰고 범위를 벗어난 값은 다듬거나 버린다', () => {
   assert.equal(transcribeProgress(0), 0);
@@ -17,15 +17,30 @@ test('음성 변환 진행률은 whisper 가 준 값만 쓰고 범위를 벗어�
   for (const value of [NaN, Infinity, undefined, null, '50']) assert.equal(transcribeProgress(value), null);
 });
 
-test('분석 진행률은 chunk 와 요약 통합을 합쳐 2n-1 몫으로 센다', () => {
+test('요약 통합은 4개씩 묶어 호출 수를 줄이고, 하나 남은 묶음은 부르지 않는다', () => {
+  assert.equal(mergeSteps(1), 0);
+  assert.equal(mergeSteps(2), 1);
+  assert.equal(mergeSteps(4), 1);
+  // 5개는 [4]+[1] → 한 번, 남은 2개를 한 번 더. 둘씩 짝지으면 4번 걸리던 자리다.
+  assert.equal(mergeSteps(5), 2);
+  assert.equal(mergeSteps(9), 3);
+  assert.equal(mergeSteps(10), 4);
+  // 16개도 5번이면 끝난다(둘씩이면 15번).
+  assert.equal(mergeSteps(16), 5);
+  assert.equal(mergeSteps(0), 0);
+});
+
+test('분석 진행률은 chunk 와 요약 통합을 합쳐 센다', () => {
   // chunk 가 하나면 통합이 없다 — 그 하나가 전부다.
   assert.equal(analysisProgress(0, 1), 0);
   assert.equal(analysisProgress(1, 1), 100);
-  // chunk 3개 → 몫 5개(chunk 3 + 통합 2). chunk 를 다 끝내도 100% 가 되지 않는다.
-  assert.equal(analysisProgress(3, 3), 60);
-  assert.equal(analysisProgress(4, 3), 80);
-  assert.equal(analysisProgress(5, 3), 100);
+  // chunk 3개 → 몫 4개(chunk 3 + 통합 1). chunk 를 다 끝내도 100% 가 되지 않는다.
+  assert.equal(analysisProgress(3, 3), 75);
+  assert.equal(analysisProgress(4, 3), 100);
   assert.equal(analysisProgress(9, 3), 100);
+  // chunk 5개 → 몫 7개(chunk 5 + 통합 2).
+  assert.equal(analysisProgress(5, 5), 71);
+  assert.equal(analysisProgress(7, 5), 100);
   assert.equal(analysisProgress(0, 0), 0);
 });
 
@@ -106,7 +121,18 @@ test('부분 성공과 진단 숫자를 숨기지 않고 보여 준다', () => {
   assert.equal(skippedNotice({ started_at: 'x', llm: { ...llm, skipped: 0 } }), '');
   assert.equal(skippedNotice(null), '');
   assert.equal(diagnosticsLabel({ started_at: 'x', llm }), 'AI 호출 7회 · 생성 4210 토큰 · 2.4 토큰/초 · 출력 한도 도달 3회 · 요약 통합 대체 1회');
+  // 요약만 건진 구간도 숨기지 않는다 — 그 구간의 할 일·결정사항은 결과에 없다.
+  assert.equal(diagnosticsLabel({ started_at: 'x', llm: { ...llm, summary_only: 2 } }), 'AI 호출 7회 · 생성 4210 토큰 · 2.4 토큰/초 · 출력 한도 도달 3회 · 요약만 추출 2회 · 요약 통합 대체 1회');
   assert.equal(diagnosticsLabel({ started_at: 'x' }), '');
+});
+
+test('기기에서 만들지 않는 항목은 빈 화면 대신 이유를 말한다', () => {
+  const notice = unavailableSectionNotice('상세 내용');
+  assert.match(notice, /^상세 내용은 이 버전의 기기 분석에서 만들지 않습니다\./);
+  // 기기가 무엇을 만드는지, 이 항목은 언제 오는지까지 말한다.
+  assert.match(notice, /통화 요약과 할 일, 결정사항/);
+  assert.match(notice, /서버 분석이 준비되면/);
+  assert.match(unavailableSectionNotice('상담 분석'), /^상담 분석은/);
 });
 
 test('분석이 없는 탭에는 왜 비었는지 안내한다', () => {
@@ -119,4 +145,21 @@ test('분석이 없는 탭에는 왜 비었는지 안내한다', () => {
   assert.match(missingAnalysisNotice(failed, now), /코드: INCOMPLETE_ANALYSIS\) 목록에서 다시 시도하면/);
   assert.match(missingAnalysisNotice({ status: 'FAILED' }, now), /분석을 완료하지 못했습니다/);
   assert.match(missingAnalysisNotice({ status: 'COMPLETED' }, now), /아직 보여 드릴 내용이 없습니다/);
+});
+
+test('구간 안의 진행은 실제로 센 토큰 수와 속도로만 말한다', () => {
+  // 1초가 안 된 구간은 속도라고 부를 값이 없다.
+  assert.equal(tokensPerSecond(10, 500), null);
+  assert.equal(tokensPerSecond(0, 5000), null);
+  assert.equal(tokensPerSecond(120, 50_000), 2.4);
+  assert.equal(tokensPerSecond(1240, 60_000), 20.7);
+  for (const value of [NaN, Infinity, -1]) assert.equal(tokensPerSecond(value, 5000), null);
+  assert.equal(tokensPerSecond(10, NaN), null);
+  // 백분율을 만들지 않는다 — 생성 토큰 수는 상한 대비 비율일 뿐 완료율이 아니다.
+  assert.equal(liveAnalysisText({ chunk: 2, chunks: 5, tokens: 1240, tokens_per_second: 2.4 }), '구간 2/5 분석 중 · 1,240 토큰 · 2.4 토큰/초');
+  // 구간이 하나면 위치를 적지 않는다.
+  assert.equal(liveAnalysisText({ chunk: 1, chunks: 1, tokens: 30, tokens_per_second: null }), '30 토큰');
+  assert.equal(liveAnalysisText({ chunk: 0, chunks: 3, tokens: 12, tokens_per_second: 1.2 }), '요약 통합 중 · 12 토큰 · 1.2 토큰/초');
+  assert.equal(liveAnalysisText({ chunk: 1, chunks: 1, tokens: 0, tokens_per_second: null }), '');
+  assert.equal(liveAnalysisText(null), '');
 });

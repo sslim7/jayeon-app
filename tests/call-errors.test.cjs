@@ -24,7 +24,7 @@ test('실패 코드는 정해진 목록만 통과하고 내부 문구는 버린�
 });
 
 test('실패 이유는 사람이 읽을 수 있는 한 줄이고 코드가 함께 남는다', () => {
-  assert.match(failureReason('INCOMPLETE_ANALYSIS'), /출력 한도/);
+  assert.match(failureReason('INCOMPLETE_ANALYSIS'), /분석 내용을 내놓지 않았습니다/);
   assert.equal(httpCode(400), 'HTTP_400');
   assert.equal(httpCode(Number.NaN), 'UNKNOWN');
   assert.match(failureReason('HTTP_400'), /받지 않았습니다/);

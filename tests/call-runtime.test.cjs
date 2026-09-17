@@ -17,14 +17,15 @@ const errorsModule = { exports: {} };
 vm.runInNewContext(`(function(exports){${compile('src/lib/call-errors.ts')}\n})`, { ...realms, RegExp })(errorsModule.exports);
 const threadsModule = { exports: {} };
 vm.runInNewContext(`(function(exports){${compile('src/lib/call-threads.ts')}\n})`, { ...realms })(threadsModule.exports);
-const sample = { schema_version: 1, summary: '견적을 요청했다.', details: [], todos: [], decisions: [], consulting: { customer_needs: [], questions: [], concerns: [], objections: [], important_points: [], followups: [] } };
+// 모델이 내놓는 줄 단위 출력. JSON schema grammar 를 걷어 낸 뒤의 실제 모양이다.
+const OUTPUT = ['요약: 견적 전달을 요청한 통화입니다.', '할일: 견적서 전달 | 근거: 견적 주세요.', '결정: 다음 주에 다시 통화'].join('\n');
 class ApiError extends Error {
   constructor(status) { super(`API error ${status}`); this.status = status; this.name = 'ApiError'; }
 }
 function setup(seed = {}) {
   let owner = 'a'; let version = 1; let uuid = 0; let listener;
   const rows = seed.rows ?? new Map(); const chunks = seed.chunks ?? new Map(); const sync = seed.sync ?? new Map();
-  const calls = { stt: 0, llm: 0, upload: 0, payload: null, progress: [] };
+  const calls = { stt: 0, llm: 0, upload: 0, payload: null, progress: [], params: [], init: null };
   const failures = { llm: false, llmUntil: 0, upload: false, uploadStatus: 0 }; let duringLlm;
   let segments = seed.segments ?? [{ t0: 0, t1: 3000, text: '견적 주세요.' }];
   const copy = value => value == null ? value : structuredClone(value);
@@ -44,11 +45,11 @@ function setup(seed = {}) {
     syncSettled: async (owner, id) => sync.set(`${owner}:${id}`, { retry_count: 0, last_attempt_at: new Date().toISOString() }),
     syncState: async (owner, id) => sync.get(`${owner}:${id}`) ?? { retry_count: 0, last_attempt_at: null },
   };
+  // 프롬프트·파서·통합은 **실제 구현을 그대로 쓴다.** 가짜 파서로는 줄 단위 출력이 서버 계약에
+  // 맞는 JSON 이 되는지 알 수 없다. 구간 나누기만 개수를 고정하려고 갈아 끼운다.
   const analysis = {
-    analysisInstruction: 'system', analysisSchema: {}, boundedAnalysisSchema: {},
+    ...analysisModule.exports,
     chunkTranscript: segments => Array.from({ length: seed.chunkCount ?? 1 }, () => segments),
-    parseAnalysis: JSON.parse, mergeAnalyses: (parts, summary) => ({ ...parts[0], summary }),
-    sanitizeTranscript: analysisModule.exports.sanitizeTranscript, capSummary: analysisModule.exports.capSummary,
   };
   const mocks = {
     'react-native': { Platform: { OS: 'android' }, AppState: { currentState: 'active', addEventListener() {} } },
@@ -62,7 +63,7 @@ function setup(seed = {}) {
     './call-errors': errorsModule.exports, './call-threads': threadsModule.exports,
     './call-models': { cpuCores: () => seed.cores ?? 8, modelState: async () => ({ installed: true }), installModels: async () => {}, pauseModelDownload: async () => {}, excludeFromBackup: async () => {}, modelPath: index => `model${index}`, MODEL_FILES: [{}, { name: 'qwen', version: 'v1' }], audioNative: () => ({ decode: async () => 30 }) },
     'whisper.rn/index': { initWhisper: async () => ({ transcribe: (path, options) => { calls.stt++; options?.onProgress?.(37); options?.onProgress?.(150); return { stop: async () => {}, promise: Promise.resolve({ result: '견적 주세요.', segments }) }; }, release: async () => {} }) },
-    'llama.rn': { initLlama: async () => ({ tokenize: async () => ({ tokens: [1, 2] }), completion: async () => { calls.llm++; await duringLlm?.(); if (failures.llm || calls.llm <= failures.llmUntil) throw Error('out of memory'); return { text: JSON.stringify(sample), tokens_predicted: 120, stopped_limit: 0, timings: { predicted_per_second: 2.45 } }; }, stopCompletion: async () => {}, release: async () => {} }) },
+    'llama.rn': { initLlama: async options => { calls.init = options; return { tokenize: async () => ({ tokens: [1, 2] }), completion: async (params, onToken) => { calls.llm++; calls.params.push(params); for (let i = 0; i < (seed.tokens ?? 0); i++) onToken?.({ token: '가' }); await duringLlm?.(); if (failures.llm || calls.llm <= failures.llmUntil) throw Error('out of memory'); return { text: seed.output ?? OUTPUT, tokens_predicted: 120, stopped_limit: seed.stoppedLimit ? 1 : 0, timings: { predicted_per_second: 2.45 } }; }, stopCompletion: async () => {}, release: async () => {} }; } },
   };
   const module = { exports: {} };
   vm.runInNewContext(`(function(exports,require){${compiled}\n})`, { ...realms, Promise, __DEV__: false, setInterval() {} })(module.exports, name => { if (!(name in mocks)) throw Error(name); return mocks[name]; });
@@ -227,7 +228,75 @@ test('한 구간을 끝내 분석하지 못해도 나머지로 결과를 만들�
   assert.equal(saved.timing.llm.chunks, 2);
   assert.equal(saved.timing.llm.tokens, 120);
   assert.equal(saved.timing.llm.tokens_per_second, 2.5);
+  // 첫 구간은 기본 형식과 요약만 받기로 두 번 시도한다(2회) — 그 뒤 둘째 구간이 한 번에 된다.
+  assert.equal(h.calls.llm, 3);
   assert.ok(h.calls.payload.analysis);
+  // 살아남은 구간이 하나면 통합이 없다. 그래도 분석 단계는 100% 로 닫힌다.
+  assert.ok(h.calls.progress.includes('ANALYZING:100'), h.calls.progress.join(','));
+});
+test('구간 결과는 줄 단위 출력에서 만들고, 만들지 않는 항목은 빈 배열로 보낸다', async () => {
+  const h = setup();
+  const call = await h.start(); await h.settled(call.call_id, 'COMPLETED');
+  const analysis = h.calls.payload.analysis;
+  assert.equal(analysis.schema_version, 1);
+  assert.equal(analysis.summary, '견적 전달을 요청한 통화입니다.');
+  assert.equal(analysis.todos.length, 1);
+  assert.equal(analysis.todos[0].content, '견적서 전달');
+  assert.equal(analysis.todos[0].source, '견적 주세요.');
+  assert.equal(analysis.decisions.join('|'), '다음 주에 다시 통화');
+  // 서버는 이 필드들이 `null` 이면 400 으로 거부한다. 기기에서 만들지 않는 대신 빈 배열을 채운다.
+  assert.equal(analysis.details.length, 0);
+  assert.equal(Object.values(analysis.consulting).every(list => list.length === 0), true);
+  // 목록에 보이는 한 줄 요약도 같은 요약에서 나온다.
+  assert.equal(h.rows.get(`a:${call.call_id}`).summary, '견적 전달을 요청한 통화입니다.');
+});
+test('생성 설정은 grammar 없이 좁은 출력 한도와 줄어든 context 로 돈다', async () => {
+  const h = setup();
+  const call = await h.start(); await h.settled(call.call_id, 'COMPLETED');
+  // JSON schema grammar 는 151k vocab 을 token 마다 훑어 샘플링을 느리게 만든다. 쓰지 않는다.
+  assert.ok(h.calls.params.every(params => !('response_format' in params)), 'grammar 를 넘기지 않는다');
+  assert.ok(h.calls.params.every(params => params.n_predict <= 400), JSON.stringify(h.calls.params.map(p => p.n_predict)));
+  // 짧은 통화에 8,192 context 는 과하다(KV 캐시만 약 900MB).
+  assert.equal(h.calls.init.n_ctx, 4096);
+  assert.equal(h.calls.init.n_batch, 512);
+});
+test('출력 한도에 닿아도 구간을 버리지 않고 받은 줄로 결과를 만든다', async () => {
+  const h = setup({ stoppedLimit: true });
+  const call = await h.start(); await h.settled(call.call_id, 'COMPLETED');
+  const saved = h.rows.get(`a:${call.call_id}`);
+  // 예전에는 여기서 INCOMPLETE_ANALYSIS 로 끝나 25분을 기다리고 아무것도 못 받았다.
+  assert.equal(saved.timing.llm.stopped_limit, 1);
+  assert.equal(saved.timing.llm.skipped, 0);
+  assert.equal(saved.analysis.summary, '견적 전달을 요청한 통화입니다.');
+  // 잘린 마지막 줄(결정)은 버린다. 앞줄은 그대로 살린다.
+  assert.equal(saved.analysis.decisions.length, 0);
+  assert.equal(saved.analysis.todos.length, 1);
+  assert.equal(h.calls.llm, 1);
+});
+test('형식이 깨진 구간은 요약만 다시 받아 건지고 그 사실을 남긴다', async () => {
+  const h = setup({ output: '무슨 말인지 모르겠습니다.' });
+  const call = await h.start(); await h.settled(call.call_id, 'COMPLETED');
+  const saved = h.rows.get(`a:${call.call_id}`);
+  // 라벨이 없어도 앞머리 문장을 요약으로 받는다 — 한 번 더 부르지 않는다.
+  assert.equal(h.calls.llm, 1);
+  assert.equal(saved.analysis.summary, '무슨 말인지 모르겠습니다.');
+  assert.equal(saved.analysis.todos.length, 0);
+});
+test('구간이 여럿이면 요약을 4개씩 묶어 한 번에 통합한다', async () => {
+  const h = setup({ chunkCount: 5 });
+  const call = await h.start(); await h.settled(call.call_id, 'COMPLETED');
+  // 구간 5회 + 통합 2회(4개 묶음 하나 → 남은 2개). 둘씩 짝지으면 통합만 4회였다.
+  assert.equal(h.calls.llm, 7);
+  assert.equal(h.rows.get(`a:${call.call_id}`).timing.llm.completions, 7);
+  assert.ok(h.calls.progress.includes('ANALYZING:100'), h.calls.progress.join(','));
+  // 캐시 키는 구간·통합 모두 새 이름이다. 예전 버전이 남긴 `chunk:`/`summary:` 캐시는 모양이
+  // 달라 그대로 읽으면 안 된다(완료 뒤에는 지우므로 업로드가 막힌 상태에서 확인한다).
+  const kept = setup({ chunkCount: 5 }); kept.failures.upload = true;
+  const second = await kept.start(); await kept.settled(second.call_id, 'UPLOAD_FAILED');
+  const keys = [...kept.chunks.keys()].join(',');
+  assert.ok(keys.includes(':chunk2:0'), keys);
+  assert.ok(keys.includes(':merge:0:0'), keys);
+  assert.ok(!keys.includes(':chunk:'), keys);
 });
 test('실패 이유는 정해진 코드로만 남기고 내부 오류 문구를 흘리지 않는다', async () => {
   const h = setup(); h.failures.llm = true;
@@ -239,4 +308,20 @@ test('실패 이유는 정해진 코드로만 남기고 내부 오류 문구를 
   const rejected = setup(); rejected.failures.uploadStatus = 400;
   const second = await rejected.start(); await rejected.settled(second.call_id, 'UPLOAD_REJECTED');
   assert.match(rejected.rows.get(`a:${second.call_id}`).error, /코드: HTTP_400/);
+});
+
+test('구간을 도는 동안 생성 토큰 수를 메모리로만 들고 있다가 목록에 붙여 준다', async () => {
+  const h = setup({ tokens: 3, chunkCount: 2 });
+  let snapshot;
+  h.setDuringLlm(async () => { snapshot ??= await h.device.list(); });
+  const call = await h.start(); await h.settled(call.call_id, 'COMPLETED');
+  const live = snapshot[0].live;
+  assert.equal(live.tokens, 3);
+  assert.equal(live.chunk, 1);
+  assert.equal(live.chunks, 2);
+  // 실시간 값은 저장하지 않는다(DB 쓰기·업로드 payload 어디에도 없다).
+  assert.ok(!('live' in h.rows.get(`a:${call.call_id}`)));
+  assert.ok(!('live' in h.calls.payload));
+  // 끝나면 목록에서도 사라진다.
+  assert.equal((await h.device.list())[0].live, undefined);
 });

@@ -19,7 +19,9 @@ const REASONS: Record<string, string> = {
   TRANSCRIPT_TOO_LARGE: '통화 원문이 저장 한도를 넘었습니다.',
   INVALID_TRANSCRIPT: '통화 원문을 읽을 수 없습니다.',
   CONTEXT_TOO_LONG: '한 번에 분석할 내용이 모델이 다룰 수 있는 길이를 넘었습니다.',
-  INCOMPLETE_ANALYSIS: 'AI가 출력 한도 안에 분석을 끝내지 못했습니다.',
+  // 출력 한도에 닿는 것은 더 이상 실패가 아니다(잘린 마지막 줄만 버린다). 이 코드는 AI 가
+  // 아무 글자도 내놓지 않은 경우다.
+  INCOMPLETE_ANALYSIS: 'AI가 분석 내용을 내놓지 않았습니다.',
   INVALID_ANALYSIS: 'AI 분석 결과가 정해진 형식에 맞지 않았습니다.',
   INVALID_ANALYSIS_SIZE: 'AI 분석 결과가 허용 크기를 넘었습니다.',
   INVALID_TODO: 'AI가 만든 할 일 항목이 형식에 맞지 않았습니다.',

@@ -84,9 +84,15 @@ export default function CallsScreen() {
         return <View key={item.call_id} style={mobile ? styles.mobileRow : styles.row}>
         <Text style={[s.body, !mobile && styles.cell]}>{item.contact.name}</Text><Text selectable style={[s.body, !mobile && styles.cell]}>{formatPhone(item.contact.phone)}</Text><Text style={[s.meta, !mobile && styles.cell]}>{new Date(item.call.recorded_at).toLocaleString('ko-KR')}</Text>
         <View style={[!mobile && styles.cell, !mobile && styles.summary]}>{item.summary || item.analysis || item.status === 'COMPLETED' ? <Pressable accessibilityRole="button" accessibilityLabel={`${item.contact.name} 통화 요약 보기`} onPress={() => setDetail(item)}><Text style={s.link} numberOfLines={1}>{(item.analysis?.summary || item.summary)?.replace(/\s+/g, ' ') || '통화 요약 보기'}</Text></Pressable> : null}
-          {/* 행은 「지금 어느 단계이고 얼마나 기다렸는지」만 말한다. 자세한 것은 아래 단계 카드가 맡는다. */}
-          <View style={s.row}>{active && typeof item.progress !== 'number' ? <ActivityIndicator color={colors.green} accessibilityLabel={labels[item.status]} /> : null}<Text accessibilityLiveRegion="polite" style={s.meta}>{active ? `${currentStageLabel(item)}${elapsed ? ` · ${elapsed}` : ''}` : item.error || labels[item.status]}</Text></View>
-          {!active && elapsed ? <Text style={s.meta}>{elapsed}</Text> : null}
+          {/*
+            단계 카드가 펴진 행에는 **같은 말을 두 번 하지 않는다.** 카드가 단계·경과 시간·진행률을
+            모두 말하므로 위의 한 줄 요약(단계명·경과·스피너)은 그 행에서 걷는다.
+            카드가 없는 행(대기·완료)만 한 줄로 줄여 보여 준다.
+          */}
+          {!stages ? <View style={s.row}>{active && typeof item.progress !== 'number' ? <ActivityIndicator color={colors.green} accessibilityLabel={labels[item.status]} /> : null}<Text accessibilityLiveRegion="polite" style={s.meta}>{active ? `${currentStageLabel(item)}${elapsed ? ` · ${elapsed}` : ''}` : labels[item.status]}</Text></View> : null}
+          {/* 실패 이유는 여기 한 곳에만 둔다. 카드는 「어디서 멈췄는지」만 말한다. */}
+          {stages && item.error ? <Text style={s.meta}>{item.error}</Text> : null}
+          {!stages && !active && elapsed ? <Text style={s.meta}>{elapsed}</Text> : null}
           {/* 부분 성공을 숨기지 않는다 — 빠진 구간이 있으면 목록에서 바로 보인다. */}
           {skippedNotice(item.timing) ? <Text style={s.meta}>{skippedNotice(item.timing)}</Text> : null}
           {stages ? <CallStages item={item} now={now} /> : null}

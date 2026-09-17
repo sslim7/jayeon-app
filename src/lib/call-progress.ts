@@ -7,7 +7,7 @@
  * 단계는 `null` 을 돌려주고 화면은 막대 없이 단계 이름과 경과 시간만 보인다. 「대충 움직이는
  * 막대」는 멈춘 것과 도는 것을 구분하지 못하게 만들어, 이 기능이 풀려던 문제를 되살린다.
  */
-import type { CallStageKey, CallStatus, CallTiming } from '@/types/calls';
+import type { CallLive, CallStageKey, CallStatus, CallTiming } from '@/types/calls';
 
 /** 화면에 보이는 네 단계. 내부 status 를 이 넷으로 묶는다. */
 export const CALL_STAGES: CallStageKey[] = ['PREPARE', 'TRANSCRIBE', 'ANALYZE', 'UPLOAD'];
@@ -37,14 +37,45 @@ export function transcribeProgress(value: number): number | null {
 }
 
 /**
- * 분석 진행률. chunk 하나가 한 몫이고 **요약 통합도 한 몫**이다 — 두 요약을 합칠 때마다
- * 요약이 하나 줄어들므로 통합은 정확히 `chunks - 1` 번 일어난다. 그래서 전체 몫은 `2n-1`.
+ * 요약 통합의 묶음 크기. 구간 요약 4개를 **한 번에** 합친다.
+ *
+ * 둘씩 짝지어 올라가면 구간 n 개에 통합이 `n-1` 번 필요하다 — 구간 10개면 통합만 9번이고,
+ * 그 9번이 각각 몇 분씩 걸린다. 4개씩 묶으면 같은 10개가 4번으로 줄어든다. 묶음 입력은
+ * `SUMMARY_LIMIT`(600자) × 4 라 context 안에 들어온다(→ `lib/call-analysis.ts`).
+ */
+export const MERGE_FAN = 4;
+
+/**
+ * 구간 n 개를 하나로 줄이는 데 필요한 **통합 호출 수**. 진행률의 분모이자 실행 순서와 같은
+ * 계산이어야 한다(→ `call-runtime.ts` 의 통합 루프). 묶음에 하나만 남으면 호출하지 않고
+ * 그대로 올려 보낸다 — 요약 하나를 「합칠」 이유가 없다.
+ */
+export function mergeSteps(chunks: number): number {
+  let remaining = Number.isFinite(chunks) ? Math.floor(chunks) : 0;
+  let count = 0;
+  while (remaining > 1) {
+    const groups = Math.ceil(remaining / MERGE_FAN);
+    const last = remaining - (groups - 1) * MERGE_FAN;
+    count += last === 1 ? groups - 1 : groups;
+    remaining = groups;
+  }
+  return count;
+}
+
+/**
+ * 분석 진행률. chunk 하나가 한 몫이고 **요약 통합도 한 몫**이다 — 전체 몫은
+ * `chunks + merges` 다.
  *
  * 통합을 몫에서 빼면 chunk 가 끝나는 순간 100% 가 되고, 그 뒤 통합이 도는 동안 100% 인 채로
- * 멈춰 보인다. 실기기에서 이 단계가 가장 길어서(21분 이상) 그 차이가 그대로 드러난다.
+ * 멈춰 보인다. 구간이 하나면 통합이 없어 그 하나가 전부다.
+ *
+ * `merges` 는 구간을 다 돌기 전에는 알 수 없다 — 분석하지 못해 빠진 구간이 있으면 통합도 그만큼
+ * 줄어든다. 그래서 구간을 도는 동안은 **가장 많이 걸리는 경우**(`mergeSteps(chunks)`)를 쓰고,
+ * 통합 단계에 들어서면 살아남은 구간 수로 다시 센다. 덜 나온 진행률은 정직하지만, 100% 를
+ * 보이고도 계속 도는 것은 그렇지 않다.
  */
-export function analysisProgress(done: number, chunks: number): number {
-  const total = Math.max(1, chunks * 2 - 1);
+export function analysisProgress(done: number, chunks: number, merges: number = mergeSteps(chunks)): number {
+  const total = Math.max(1, chunks + merges);
   return Math.max(0, Math.min(100, Math.floor(Math.min(done, total) / total * 100)));
 }
 
@@ -154,6 +185,7 @@ export function diagnosticsLabel(timing: CallTiming | null | undefined): string 
   const parts = [`AI 호출 ${llm.completions}회`, `생성 ${llm.tokens} 토큰`];
   if (llm.tokens_per_second) parts.push(`${llm.tokens_per_second} 토큰/초`);
   if (llm.stopped_limit) parts.push(`출력 한도 도달 ${llm.stopped_limit}회`);
+  if (llm.summary_only) parts.push(`요약만 추출 ${llm.summary_only}회`);
   if (llm.merge_fallbacks) parts.push(`요약 통합 대체 ${llm.merge_fallbacks}회`);
   return parts.join(' · ');
 }
@@ -173,4 +205,40 @@ export function missingAnalysisNotice(record: { status: CallStatus; error?: stri
     return `${record.error || '분석을 완료하지 못했습니다.'} 목록에서 다시 시도하면 저장된 통화 원문부터 분석을 이어서 진행합니다.`;
   }
   return 'AI 분석이 완료되지 않아 아직 보여 드릴 내용이 없습니다. 통화 원문 탭에서 저장된 내용을 확인해 주세요.';
+}
+
+/**
+ * 기기 분석이 **만들지 않는** 항목의 안내.
+ *
+ * 이 버전의 기기 분석은 요약·할 일·결정사항만 만든다(→ `lib/call-analysis.ts`). 상세 내용과
+ * 상담 분석 탭을 빈 채로 두면 「고장 났나?」로 읽히므로, 없는 내용을 지어내는 대신 **왜
+ * 비었는지**를 적는다.
+ */
+export function unavailableSectionNotice(section: string): string {
+  return `${section}은 이 버전의 기기 분석에서 만들지 않습니다. 기기에서는 통화 요약과 할 일, 결정사항만 정리합니다. ${section}은 서버 분석이 준비되면 제공할 예정입니다.`;
+}
+
+/** 실제로 잰 속도만 말한다. 1초가 안 된 구간은 아직 속도라고 부를 값이 없어 null 이다. */
+export function tokensPerSecond(tokens: number, ms: number): number | null {
+  if (!Number.isFinite(tokens) || tokens <= 0 || !Number.isFinite(ms) || ms < 1000) return null;
+  return Math.round(tokens / (ms / 1000) * 10) / 10;
+}
+
+const groupDigits = (value: number) => String(Math.floor(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+/**
+ * chunk 하나를 도는 동안 보여 줄 실시간 한 줄.
+ *
+ * 🔴 **생성 토큰 수를 `n_predict` 로 나눈 값은 완료율이 아니다** — 상한 대비 비율일 뿐이라
+ * 그것으로 백분율을 만들면 거짓 진행률이 된다. 그래서 여기서는 **실제로 센 숫자만** 적는다.
+ * 숫자가 1초마다 바뀌는 것 자체가 「멈추지 않았다」는 증거다.
+ */
+export function liveAnalysisText(live: CallLive | null | undefined): string {
+  if (!live) return '';
+  const parts: string[] = [];
+  if (live.chunk === 0) parts.push('요약 통합 중');
+  else if (live.chunks > 1) parts.push(`구간 ${live.chunk}/${live.chunks} 분석 중`);
+  if (live.tokens > 0) parts.push(`${groupDigits(live.tokens)} 토큰`);
+  if (live.tokens_per_second) parts.push(`${live.tokens_per_second} 토큰/초`);
+  return parts.join(' · ');
 }
