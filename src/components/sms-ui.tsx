@@ -123,6 +123,25 @@ export const statusLabel: Record<string, string> = {
   PARTIAL_FAILED: '일부 실패 / 확인 필요',
   CANCELLED: '중단',
 };
+/**
+ * 진행 막대. **실제로 센 진행률만 그린다** — 값을 낼 수 없는 단계는 부르는 쪽이 스피너를
+ * 쓴다(→ `lib/call-progress.ts`). 움직이기만 하는 막대는 「멈췄나?」를 풀어 주지 못한다.
+ */
+export function ProgressBar({ percent, label }: { percent: number; label: string }) {
+  const value = Math.max(0, Math.min(100, Math.round(percent)));
+  return (
+    <View
+      // aria-* 로 적는다. react-native-web 은 RN 의 중첩 `accessibilityValue` 를 옮기지 않는다.
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={value}
+      style={s.progressTrack}>
+      <View style={[s.progressFill, { width: `${value}%` }]} />
+    </View>
+  );
+}
 export const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   page: {
@@ -166,6 +185,8 @@ export const s = StyleSheet.create({
     fontSize: text.lg,
     paddingVertical: spacing.sm,
   },
+  progressTrack: { width: '100%', height: 6, borderRadius: radii.hair, backgroundColor: colors.inkFillSoft, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: radii.hair, backgroundColor: colors.green },
   choice: {
     borderWidth: 1,
     borderColor: colors.borderCard,

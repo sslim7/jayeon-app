@@ -3,15 +3,20 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWi
 import { useHeaderActions } from '@/components/app-navigation';
 import { CallCreate } from '@/components/call-create';
 import { CallDetail } from '@/components/call-detail';
+import { CallStages } from '@/components/call-stages';
 import { TextField } from '@/components/form-fields';
 import { Loading, Notice, SmsButton, SmsPage, s } from '@/components/sms-ui';
 import { colors, spacing } from '@/constants/theme';
 import { callApi } from '@/lib/call-api';
 import { callDevice } from '@/lib/call-device';
+import { ACTIVE_STATUSES, currentStageLabel, elapsedLabel, skippedNotice } from '@/lib/call-progress';
 import { formatPhone } from '@/lib/phone';
 import type { CallRecord, CallStatus } from '@/types/calls';
 
-const labels: Record<CallStatus, string> = { PENDING: '분석 대기', PREPARING: '파일 준비 중…', TRANSCRIBING: '음성 내용을 확인하고 있습니다…', ANALYZING: '통화 내용을 분석하고 있습니다…', UPLOADING: '분석 결과를 저장하고 있습니다…', COMPLETED: '분석 완료', FAILED: '분석을 완료하지 못했습니다.', TRANSCRIPTION_FAILED: '음성 변환을 완료하지 못했습니다.', ANALYSIS_FAILED: '음성 변환은 완료되었지만 AI 분석을 완료하지 못했습니다.', UPLOAD_FAILED: '분석은 완료되었지만 서버에 저장하지 못했습니다.', UPLOAD_REJECTED: '분석 결과를 서버가 받지 못했습니다. 다시 분석해 주세요.' };
+// 진행 중인 단계 이름은 `call-progress.ts` 가 갖는다(화면 넷으로 묶은 단계와 같은 이름이어야 한다).
+const labels: Record<CallStatus, string> = { PENDING: '분석 대기', PREPARING: '분석 준비', TRANSCRIBING: '음성 변환', ANALYZING: '통화 분석', UPLOADING: '결과 저장', COMPLETED: '분석 완료', FAILED: '분석을 완료하지 못했습니다.', TRANSCRIPTION_FAILED: '음성 변환을 완료하지 못했습니다.', ANALYSIS_FAILED: '음성 변환은 완료되었지만 AI 분석을 완료하지 못했습니다.', UPLOAD_FAILED: '분석은 완료되었지만 서버에 저장하지 못했습니다.', UPLOAD_REJECTED: '분석 결과를 서버가 받지 못했습니다. 다시 분석해 주세요.' };
+/** 멈춘 자리를 함께 보여 줄 상태. 실패는 「어디까지 갔는지」가 유일한 단서다. */
+const STOPPED: CallStatus[] = ['FAILED', 'TRANSCRIPTION_FAILED', 'ANALYSIS_FAILED', 'UPLOAD_FAILED', 'UPLOAD_REJECTED'];
 const retryLabels: Partial<Record<CallStatus, string>> = { FAILED: '다시 시도', TRANSCRIPTION_FAILED: '음성 변환 다시 시도', ANALYSIS_FAILED: '분석 다시 시도', UPLOAD_FAILED: '서버 저장 다시 시도', UPLOAD_REJECTED: '분석 다시 시도' };
 export default function CallsScreen() {
   const mobile = useWindowDimensions().width < 650;
@@ -24,6 +29,7 @@ export default function CallsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const alive = useRef(true);
   const header = useMemo(() => <SmsButton label="분석하기" onPress={() => setCreating(true)} />, []);
   useHeaderActions(header);
@@ -52,6 +58,13 @@ export default function CallsScreen() {
     local.forEach((item) => merged.set(item.call_id, item));
     return [...merged.values()].filter((item) => item.contact.name.toLowerCase().includes(query.trim().toLowerCase())).sort((a, b) => b.call.recorded_at.localeCompare(a.call.recorded_at));
   }, [local, remote, query]);
+  const running = rows.some((item) => ACTIVE_STATUSES.includes(item.status));
+  // 경과 시간만 1초마다 다시 그린다. 목록 재조회(2초) 타이머와 분리해 요청이 늘지 않게 한다.
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
   async function retry(id: string) {
     if (retrying) return;
     setRetrying(id);
@@ -65,10 +78,18 @@ export default function CallsScreen() {
     {error ? <Notice error message={error} /> : null}{loading ? <Loading /> : null}
     <ScrollView horizontal={!mobile}><View style={!mobile ? styles.table : undefined}>
       {!mobile ? <View style={[styles.row, styles.heading]}>{['이름', '전화번호', '통화일시', '요약 한 줄'].map((label, i) => <Text key={label} style={[s.meta, styles.cell, i === 3 && styles.summary]}>{label}</Text>)}</View> : null}
-      {rows.slice(page * 50, (page + 1) * 50).map((item) => { const active = ['PENDING', 'PREPARING', 'TRANSCRIBING', 'ANALYZING', 'UPLOADING'].includes(item.status); return <View key={item.call_id} style={mobile ? styles.mobileRow : styles.row}>
+      {rows.slice(page * 50, (page + 1) * 50).map((item) => { const active = ACTIVE_STATUSES.includes(item.status); const elapsed = elapsedLabel(item.timing, now);
+        // 네 단계는 실제로 돌고 있는 통화와 멈춘 통화에만 편다. 대기·완료까지 펴면 목록이 카드 더미가 된다.
+        const stages = (active && item.status !== 'PENDING') || STOPPED.includes(item.status);
+        return <View key={item.call_id} style={mobile ? styles.mobileRow : styles.row}>
         <Text style={[s.body, !mobile && styles.cell]}>{item.contact.name}</Text><Text selectable style={[s.body, !mobile && styles.cell]}>{formatPhone(item.contact.phone)}</Text><Text style={[s.meta, !mobile && styles.cell]}>{new Date(item.call.recorded_at).toLocaleString('ko-KR')}</Text>
         <View style={[!mobile && styles.cell, !mobile && styles.summary]}>{item.summary || item.analysis || item.status === 'COMPLETED' ? <Pressable accessibilityRole="button" accessibilityLabel={`${item.contact.name} 통화 요약 보기`} onPress={() => setDetail(item)}><Text style={s.link} numberOfLines={1}>{(item.analysis?.summary || item.summary)?.replace(/\s+/g, ' ') || '통화 요약 보기'}</Text></Pressable> : null}
-          <View style={s.row}>{active ? <ActivityIndicator color={colors.green} accessibilityLabel={labels[item.status]} /> : null}<Text accessibilityLiveRegion="polite" style={s.meta}>{labels[item.status]}{active && typeof item.progress === 'number' ? ` ${item.progress}%` : ''}</Text></View>
+          {/* 행은 「지금 어느 단계이고 얼마나 기다렸는지」만 말한다. 자세한 것은 아래 단계 카드가 맡는다. */}
+          <View style={s.row}>{active && typeof item.progress !== 'number' ? <ActivityIndicator color={colors.green} accessibilityLabel={labels[item.status]} /> : null}<Text accessibilityLiveRegion="polite" style={s.meta}>{active ? `${currentStageLabel(item)}${elapsed ? ` · ${elapsed}` : ''}` : item.error || labels[item.status]}</Text></View>
+          {!active && elapsed ? <Text style={s.meta}>{elapsed}</Text> : null}
+          {/* 부분 성공을 숨기지 않는다 — 빠진 구간이 있으면 목록에서 바로 보인다. */}
+          {skippedNotice(item.timing) ? <Text style={s.meta}>{skippedNotice(item.timing)}</Text> : null}
+          {stages ? <CallStages item={item} now={now} /> : null}
           {retryLabels[item.status] && local.some((row) => row.call_id === item.call_id) ? <SmsButton secondary label={retryLabels[item.status]!} disabled={retrying !== null} onPress={() => void retry(item.call_id)} /> : null}
           {(item.transcript || item.status === 'ANALYSIS_FAILED') && !item.analysis ? <SmsButton secondary label="저장된 원문 보기" onPress={() => setDetail(item)} /> : null}
         </View>

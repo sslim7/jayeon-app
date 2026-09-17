@@ -1,0 +1,122 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const fs = require('node:fs');
+const ts = require('typescript');
+const vm = require('node:vm');
+const mod = { exports: {} };
+const source = ts.transpileModule(fs.readFileSync('src/lib/call-progress.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+vm.runInNewContext(`(function(exports){${source}\n})`, { Date, Number, Math, String })(mod.exports);
+const { transcribeProgress, analysisProgress, elapsedMs, formatDuration, elapsedLabel, totalDurationLabel, callStageViews, stageMs, currentStageLabel, skippedNotice, diagnosticsLabel, missingAnalysisNotice } = mod.exports;
+
+test('음성 변환 진행률은 whisper 가 준 값만 쓰고 범위를 벗어난 값은 다듬거나 버린다', () => {
+  assert.equal(transcribeProgress(0), 0);
+  assert.equal(transcribeProgress(37.9), 37);
+  assert.equal(transcribeProgress(100), 100);
+  assert.equal(transcribeProgress(150), 100);
+  assert.equal(transcribeProgress(-1), 0);
+  for (const value of [NaN, Infinity, undefined, null, '50']) assert.equal(transcribeProgress(value), null);
+});
+
+test('분석 진행률은 chunk 와 요약 통합을 합쳐 2n-1 몫으로 센다', () => {
+  // chunk 가 하나면 통합이 없다 — 그 하나가 전부다.
+  assert.equal(analysisProgress(0, 1), 0);
+  assert.equal(analysisProgress(1, 1), 100);
+  // chunk 3개 → 몫 5개(chunk 3 + 통합 2). chunk 를 다 끝내도 100% 가 되지 않는다.
+  assert.equal(analysisProgress(3, 3), 60);
+  assert.equal(analysisProgress(4, 3), 80);
+  assert.equal(analysisProgress(5, 3), 100);
+  assert.equal(analysisProgress(9, 3), 100);
+  assert.equal(analysisProgress(0, 0), 0);
+});
+
+test('경과 시간은 시작 시각부터 재고, 끝나면 최종 소요 시간으로 고정된다', () => {
+  const started = new Date(2026, 8, 17, 14, 0, 0);
+  const now = started.getTime() + 192_000;
+  const running = { started_at: started.toISOString() };
+  assert.equal(elapsedMs(running, now), 192_000);
+  assert.equal(elapsedLabel(running, now), '3분 12초 경과');
+  const done = { started_at: started.toISOString(), finished_at: new Date(started.getTime() + 245_000).toISOString() };
+  assert.equal(elapsedLabel(done, now + 9_999_999), '4분 05초 걸렸습니다');
+  // 시작 시각이 없으면 아무것도 보이지 않는다. 지어내지 않는다.
+  for (const value of [null, undefined, {}, { started_at: '언젠가' }]) {
+    assert.equal(elapsedMs(value, now), null);
+    assert.equal(elapsedLabel(value, now), '');
+  }
+  // 기기 시계가 뒤로 조정되면 음수가 된다. 0 으로 눌러 둔다.
+  assert.equal(elapsedMs(running, started.getTime() - 5_000), 0);
+});
+
+test('소요 시간 표기는 초·분·시간 단위로 끊는다', () => {
+  assert.equal(formatDuration(0), '0초');
+  assert.equal(formatDuration(45_400), '45초');
+  assert.equal(formatDuration(65_000), '1분 05초');
+  assert.equal(formatDuration(3_600_000), '1시간 00분');
+  assert.equal(formatDuration(-5), '0초');
+  // 끝난 기록의 총 소요 시간은 현재 시각과 무관하다(렌더 중 시계를 읽지 않는다).
+  assert.equal(totalDurationLabel({ started_at: new Date(2026, 8, 17, 14, 0, 0).toISOString(), finished_at: new Date(2026, 8, 17, 14, 4, 5).toISOString() }), '4분 05초 걸렸습니다');
+  assert.equal(totalDurationLabel({ started_at: new Date().toISOString() }), '');
+  assert.equal(totalDurationLabel(null), '');
+});
+
+test('네 단계는 지난 단계·도는 단계·예정 단계를 시간과 함께 구분한다', () => {
+  const started = new Date(2026, 8, 17, 14, 0, 0);
+  const now = started.getTime() + 600_000;
+  const timing = {
+    started_at: started.toISOString(),
+    stages: {
+      PREPARE: { started_at: null, ms: 3_000 },
+      TRANSCRIBE: { started_at: null, ms: 35_000 },
+      ANALYZE: { started_at: new Date(started.getTime() + 38_000).toISOString(), ms: 0 },
+    },
+  };
+  const views = callStageViews({ status: 'ANALYZING', progress: 42, timing }, now);
+  // vm 밖 realm 과 배열을 직접 비교하지 않는다(다른 Array 생성자다). 문자열로 붙여 비교한다.
+  assert.equal(views.map(view => `${view.label}:${view.state}`).join('|'), '분석 준비:done|음성 변환:done|통화 분석:running|결과 저장:pending');
+  assert.equal(views[0].ms, 3_000);
+  // 도는 단계는 시작 시각부터 지금까지 — 1초마다 다시 계산한다.
+  assert.equal(views[2].ms, 562_000);
+  assert.equal(views[2].percent, 42);
+  // 예정 단계는 시간도 진행률도 없다.
+  assert.equal(views[3].ms, null);
+  assert.equal(views[3].percent, null);
+  assert.equal(currentStageLabel({ status: 'ANALYZING' }), '통화 분석');
+  assert.equal(currentStageLabel({ status: 'COMPLETED' }), '');
+});
+
+test('실패는 멈춘 단계를 가리키고, 끝난 기록의 시간은 더 늘지 않는다', () => {
+  const started = new Date(2026, 8, 17, 14, 0, 0);
+  const timing = {
+    started_at: started.toISOString(),
+    finished_at: new Date(started.getTime() + 245_000).toISOString(),
+    stages: { PREPARE: { started_at: null, ms: 3_000 }, TRANSCRIBE: { started_at: new Date(started.getTime() + 3_000).toISOString(), ms: 0 } },
+  };
+  const views = callStageViews({ status: 'TRANSCRIPTION_FAILED', progress: null, timing }, started.getTime() + 9_999_999);
+  assert.equal(views.map(view => view.state).join('|'), 'done|failed|pending|pending');
+  // 끝난 시각에서 멈춘다 — 화면을 열어 둔 시간만큼 늘어나면 안 된다.
+  assert.equal(views[1].ms, 242_000);
+  assert.equal(stageMs(timing, 'TRANSCRIBE', Date.now()), 242_000);
+  assert.equal(stageMs(timing, 'ANALYZE', Date.now()), null);
+  // 완료는 네 단계를 모두 지난 상태다.
+  assert.equal(callStageViews({ status: 'COMPLETED', progress: null, timing }, 0).map(view => view.state).join('|'), 'done|done|done|done');
+});
+
+test('부분 성공과 진단 숫자를 숨기지 않고 보여 준다', () => {
+  const llm = { chunks: 5, completions: 7, skipped: 2, tokens: 4210, tokens_per_second: 2.4, stopped_limit: 3, merge_fallbacks: 1 };
+  assert.equal(skippedNotice({ started_at: 'x', llm }), '구간 5개 중 2개는 분석하지 못해 결과에서 빠졌습니다.');
+  assert.equal(skippedNotice({ started_at: 'x', llm: { ...llm, skipped: 0 } }), '');
+  assert.equal(skippedNotice(null), '');
+  assert.equal(diagnosticsLabel({ started_at: 'x', llm }), 'AI 호출 7회 · 생성 4210 토큰 · 2.4 토큰/초 · 출력 한도 도달 3회 · 요약 통합 대체 1회');
+  assert.equal(diagnosticsLabel({ started_at: 'x' }), '');
+});
+
+test('분석이 없는 탭에는 왜 비었는지 안내한다', () => {
+  const started = new Date(2026, 8, 17, 14, 0, 0);
+  const now = started.getTime() + 192_000;
+  const running = { status: 'ANALYZING', timing: { started_at: started.toISOString() } };
+  assert.equal(missingAnalysisNotice(running, now), 'AI 분석이 아직 끝나지 않았습니다. 현재 단계: 통화 분석 · 3분 12초 경과. 완료되면 이 탭에 내용이 나타납니다.');
+  // 실패는 저장해 둔 이유(+코드)를 그대로 보여 준다.
+  const failed = { status: 'ANALYSIS_FAILED', error: '음성 변환은 완료되었지만 AI 분석을 완료하지 못했습니다. AI가 출력 한도 안에 분석을 끝내지 못했습니다. (코드: INCOMPLETE_ANALYSIS)' };
+  assert.match(missingAnalysisNotice(failed, now), /코드: INCOMPLETE_ANALYSIS\) 목록에서 다시 시도하면/);
+  assert.match(missingAnalysisNotice({ status: 'FAILED' }, now), /분석을 완료하지 못했습니다/);
+  assert.match(missingAnalysisNotice({ status: 'COMPLETED' }, now), /아직 보여 드릴 내용이 없습니다/);
+});

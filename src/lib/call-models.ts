@@ -18,7 +18,12 @@ const state: CallModelState = { supported: Platform.OS === 'ios' || Platform.OS 
 let verification: Promise<boolean> | null = null;
 let installing: Promise<void> | null = null;
 let download: FS.DownloadResumable | null = null;
-export function audioNative() { return requireNativeModule<{ sha256(uri: string): Promise<string>; decode(input: string, output: string): Promise<number>; excludeFromBackup(uri: string): Promise<void> }>('NatureCallAudio'); }
+export function audioNative() { return requireNativeModule<{ sha256(uri: string): Promise<string>; decode(input: string, output: string): Promise<number>; excludeFromBackup(uri: string): Promise<void>; cpuCount?(): number }>('NatureCallAudio'); }
+/** 기기 코어 수. 옛 네이티브 껍데기에는 이 함수가 없으므로 모르면 null 이다(→ `call-threads.ts`). */
+export function cpuCores(): number | null {
+  try { const value = audioNative().cpuCount?.(); return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null; }
+  catch { return null; }
+}
 export function modelPath(index: number) { return modelDirectory + MODEL_FILES[index].file; }
 /** iOS 기본 백업(iCloud)에서 제외한다. Android 는 allowBackup=false 라 no-op 이다. */
 export async function excludeFromBackup(uri: string) {

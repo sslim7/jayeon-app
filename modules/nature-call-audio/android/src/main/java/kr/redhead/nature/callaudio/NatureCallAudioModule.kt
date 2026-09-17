@@ -28,6 +28,8 @@ class NatureCallAudioModule : Module() {
   }
   override fun definition() = ModuleDefinition {
     Name("NatureCallAudio")
+    // 추론 스레드 수를 정하려면 코어 수가 필요하다. JS 에는 이 값을 주는 API 가 없다.
+    Function("cpuCount") { Runtime.getRuntime().availableProcessors() }
     // Android 는 allowBackup=false 로 이미 백업 대상이 아니다. iOS 와 같은 인터페이스만 맞춘다.
     AsyncFunction("excludeFromBackup") { uri: String -> privateFile(uri); Unit }
     AsyncFunction("sha256") { uri: String ->

@@ -18,6 +18,28 @@ export const analysisSchema = {
     consulting: { type: 'object', additionalProperties: false, required: ['customer_needs', 'questions', 'concerns', 'objections', 'important_points', 'followups'], properties: { customer_needs: strings, questions: strings, concerns: strings, objections: strings, important_points: strings, followups: strings } },
   },
 };
+/**
+ * 재시도용 스키마. 모양은 같고 **항목 수 상한만 있다.**
+ *
+ * grammar 로 JSON 을 강제하면 작은 모델이 배열을 끝없이 이어 붙이다 출력 한도에 닿아
+ * `INCOMPLETE_ANALYSIS` 로 끝나는 일이 있다(실기기에서 25분 뒤 실패). 상한이 있으면 배열을
+ * 닫을 수밖에 없어 끝맺을 여지가 생긴다. 첫 시도는 상한 없는 스키마 그대로다 — 잘 되는
+ * 통화에서 항목이 잘리면 안 된다.
+ */
+const CAP = 12;
+export const boundedAnalysisSchema = {
+  ...analysisSchema,
+  properties: {
+    ...analysisSchema.properties,
+    details: { ...analysisSchema.properties.details, maxItems: CAP },
+    todos: { ...analysisSchema.properties.todos, maxItems: CAP },
+    decisions: { ...strings, maxItems: CAP },
+    consulting: {
+      ...analysisSchema.properties.consulting,
+      properties: Object.fromEntries(Object.keys(analysisSchema.properties.consulting.properties).map(key => [key, { ...strings, maxItems: CAP }])),
+    },
+  },
+};
 const keys = ['customer_needs', 'questions', 'concerns', 'objections', 'important_points', 'followups'] as const;
 const isString = (v: unknown): v is string => typeof v === 'string';
 const byteLength = (v: string) => unescape(encodeURIComponent(v)).length;
