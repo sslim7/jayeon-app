@@ -21,9 +21,18 @@ export interface CallStageTiming { started_at?: string | null; ms?: number | nul
  */
 /**
  * 실패를 다음에 짚기 위한 **숫자만** 담는다. 통화 내용은 절대 담지 않는다.
- * `stopped_limit` 은 출력 한도에 닿아 끊긴 횟수, `skipped` 는 끝내 분석하지 못해 뺀 구간 수다.
+ * `stopped_limit` 은 출력 한도에 닿아 끊긴 횟수, `skipped` 는 끝내 분석하지 못해 뺀 구간 수,
+ * `summary_only` 는 형식이 깨져 요약만 건진 구간 수다(할 일·결정사항을 포기한 구간).
+ *
+ * `summary_only` 는 **없을 수 있다** — 이 값을 세기 전에 분석한 기록이 그대로 남아 있다.
  */
-export interface CallLlmStats { chunks: number; completions: number; skipped: number; tokens: number; tokens_per_second: number | null; stopped_limit: number; merge_fallbacks: number }
+export interface CallLlmStats { chunks: number; completions: number; skipped: number; tokens: number; tokens_per_second: number | null; stopped_limit: number; merge_fallbacks: number; summary_only?: number }
+/**
+ * 진행 중인 구간의 실시간 상태. **메모리에만 있고 저장·업로드하지 않는다**(토큰마다 DB 를
+ * 쓰면 SQLite 가 종일 돈다). 목록·상세를 읽을 때 그 순간 값을 붙여 준다.
+ * `chunk: 0` 은 요약 통합 단계다.
+ */
+export interface CallLive { chunk: number; chunks: number; tokens: number; tokens_per_second: number | null }
 export interface CallTiming { started_at: string; llm?: CallLlmStats; finished_at?: string | null; stages?: { [K in CallStageKey]?: CallStageTiming } }
 export interface CallRecord {
   call_id: string;
@@ -38,6 +47,7 @@ export interface CallRecord {
   ai?: { model: string; model_version: string; processed_on_device: true };
   error?: string | null;
   timing?: CallTiming | null;
+  live?: CallLive | null;
 }
 /** `modified_at` 은 고른 파일의 시각(ms). 통화일시 기본값으로만 쓰고, 없으면 사용자가 고른다. */
 export interface CallFile { token: string; name: string; size: number; modified_at?: number | null }

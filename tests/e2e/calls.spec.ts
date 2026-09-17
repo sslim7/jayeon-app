@@ -101,15 +101,17 @@ test('분석 중인 통화는 진행 막대와 경과 시간을 보여 준다', 
   await installCallShell(page, [running]);
   await page.goto('/calls');
   await expect(page.getByText('이진행', { exact: true })).toBeVisible();
-  // 행은 현재 단계와 경과 시간만 말한다.
-  await expect(page.getByText(/^음성 변환 · 3분 \d{2}초 경과$/)).toBeVisible();
   // 네 단계 카드: 지난 단계는 걸린 시간, 도는 단계는 진행 막대, 남은 단계는 「예정」.
   await expect(page.getByText('분석 준비', { exact: true })).toBeVisible();
-  await expect(page.getByText('3초', { exact: true })).toBeVisible();
+  await expect(page.getByText('완료 · 3초', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^진행 중 · 3분 \d{2}초 경과 · 42%$/)).toBeVisible();
   const bar = page.getByRole('progressbar', { name: '음성 변환 42%' });
   await expect(bar).toHaveAttribute('aria-valuenow', '42');
   await expect(page.getByText('통화 분석', { exact: true })).toBeVisible();
   await expect(page.getByText('예정', { exact: true }).first()).toBeVisible();
+  // 카드가 펴진 행에는 같은 단계·경과 시간을 다시 적는 한 줄 요약이 없다.
+  await expect(page.getByText(/^음성 변환 · /)).toHaveCount(0);
+  await expect(page.getByText('음성 변환', { exact: true })).toHaveCount(1);
 });
 test('실패한 통화는 멈춘 단계와 이유·코드를 보여 준다', async ({ page }) => {
   const failed: CallRecord = {
@@ -124,8 +126,10 @@ test('실패한 통화는 멈춘 단계와 이유·코드를 보여 준다', asy
   await page.goto('/calls');
   await expect(page.getByText('최실패', { exact: true })).toBeVisible();
   // 이유와 내부 코드를 함께 보여 준다. 이게 없으면 다음에도 추측만 하게 된다.
-  await expect(page.getByText(/코드: INCOMPLETE_ANALYSIS/)).toBeVisible();
-  await expect(page.getByText(/^3분 \d{2}초에서 멈춤$/)).toBeVisible();
+  // 이유는 한 곳에만 적는다. 카드는 어디서 멈췄는지만 말한다.
+  await expect(page.getByText(/코드: INCOMPLETE_ANALYSIS/)).toHaveCount(1);
+  await expect(page.getByText(/^멈춤 · 3분 \d{2}초$/)).toBeVisible();
+  await expect(page.getByText(/걸렸습니다$/)).toHaveCount(0);
   await expect(page.getByText('구간 3개 중 3개는 분석하지 못해 결과에서 빠졌습니다.')).toBeVisible();
   await expect(page.getByRole('button', { name: '분석 다시 시도' })).toBeVisible();
   // 분석이 없는 통화에서도 다른 탭이 빈 화면이 되지 않는다.
@@ -135,4 +139,44 @@ test('실패한 통화는 멈춘 단계와 이유·코드를 보여 준다', asy
   await expect(page.getByText(/코드: INCOMPLETE_ANALYSIS\) 목록에서 다시 시도하면/)).toBeVisible();
   await page.getByRole('tab', { name: '할 일' }).click();
   await expect(page.getByText(/목록에서 다시 시도하면/)).toBeVisible();
+});
+test('기기에서 만들지 않는 탭은 빈 화면 대신 이유를 보여 준다', async ({ page }) => {
+  // 이 버전의 기기 분석은 요약·할 일·결정사항만 만든다. 나머지 필드는 서버 계약을 맞추려고
+  // 빈 배열로 채워 보내는데, 그 탭이 빈 화면이 되면 「고장 났나?」로 읽힌다.
+  const reduced: CallRecord = {
+    call_id: 'call-5', contact: { name: '정요약', phone: '+821033332222' },
+    call: { file_name: 'short.m4a', duration: 150, recorded_at: '2026-09-17T01:00:00Z' }, created_at: '2026-09-17T01:05:00Z',
+    status: 'COMPLETED', progress: null, summary: '견적 전달을 요청한 통화입니다.',
+    analysis: { schema_version: 1, summary: '견적 전달을 요청한 통화입니다.', details: [], todos: [{ content: '견적서 전달', owner: null, due_date: null, source: '견적 주세요.' }], decisions: ['다음 주에 다시 통화'], consulting: { customer_needs: [], questions: [], concerns: [], objections: [], important_points: [], followups: [] } },
+    timing: { started_at: 'RUNNING', finished_at: 'NOW', llm: { chunks: 1, completions: 1, skipped: 0, tokens: 260, tokens_per_second: 9.4, stopped_limit: 0, merge_fallbacks: 0, summary_only: 0 } },
+  };
+  await installCallShell(page, [reduced]);
+  await page.goto('/calls');
+  await page.getByRole('button', { name: '정요약 통화 요약 보기' }).click();
+  // 결정사항은 요약 다음으로 중요한 결과다. 상담 분석 탭이 비는 버전에서는 요약 탭에 둔다.
+  await expect(page.getByText('• 다음 주에 다시 통화')).toBeVisible();
+  await page.getByRole('tab', { name: '할 일' }).click();
+  await expect(page.getByText('☐ 견적서 전달')).toBeVisible();
+  await page.getByRole('tab', { name: '상세 내용' }).click();
+  await expect(page.getByText(/^상세 내용은 이 버전의 기기 분석에서 만들지 않습니다\./)).toBeVisible();
+  await page.getByRole('tab', { name: '상담 분석' }).click();
+  await expect(page.getByText(/^상담 분석은 이 버전의 기기 분석에서 만들지 않습니다\./)).toBeVisible();
+  // 빈 화면이 아니라는 뜻은 「왜 비었는지」가 보인다는 뜻이다.
+  await expect(page.getByText(/서버 분석이 준비되면 제공할 예정입니다\./)).toBeVisible();
+});
+test('구간 하나를 도는 동안 토큰 수와 속도로 살아 있음을 보여 준다', async ({ page }) => {
+  const single: CallRecord = {
+    call_id: 'call-4', contact: { name: '박구간', phone: '+821055554444' },
+    call: { file_name: 'one.m4a', duration: 90, recorded_at: '2026-09-17T02:00:00Z' }, created_at: '2026-09-17T02:05:00Z',
+    status: 'ANALYZING', progress: null,
+    live: { chunk: 1, chunks: 1, tokens: 1240, tokens_per_second: 2.4 },
+    timing: { started_at: 'RUNNING', stages: { PREPARE: { started_at: null, ms: 3_000 }, TRANSCRIBE: { started_at: null, ms: 35_000 }, ANALYZE: { started_at: 'RUNNING', ms: 0 } } },
+  };
+  await installCallShell(page, [single]);
+  await page.goto('/calls');
+  await expect(page.getByText('박구간', { exact: true })).toBeVisible();
+  // 구간이 하나면 백분율을 만들 수 없다. 대신 실제로 센 숫자를 보여 준다.
+  await expect(page.getByText('1,240 토큰 · 2.4 토큰/초', { exact: true })).toBeVisible();
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
+  await expect(page.getByText(/^진행 중 · 3분 \d{2}초 경과$/)).toBeVisible();
 });

@@ -5,7 +5,7 @@ import { Loading, Notice, s } from '@/components/sms-ui';
 import { callApi } from '@/lib/call-api';
 import { callDevice } from '@/lib/call-device';
 import { CallStages } from '@/components/call-stages';
-import { diagnosticsLabel, missingAnalysisNotice, skippedNotice, totalDurationLabel } from '@/lib/call-progress';
+import { diagnosticsLabel, missingAnalysisNotice, skippedNotice, totalDurationLabel, unavailableSectionNotice } from '@/lib/call-progress';
 import { formatPhone } from '@/lib/phone';
 import type { CallRecord } from '@/types/calls';
 
@@ -32,6 +32,9 @@ export function CallDetail({ item, onClose }: { item: CallRecord; onClose: () =>
     return () => { live = false; };
   }, [item.call_id]);
   const analysis = record.analysis;
+  // 이 버전의 기기 분석은 상세 내용과 상담 분석을 만들지 않는다(→ `lib/call-analysis.ts`).
+  // 예전 버전이 만들어 둔 기록에는 남아 있으므로, **있으면 보여 주고 없으면 이유를 말한다.**
+  const consulting = analysis ? Object.values(analysis.consulting).some((list) => list.length) : false;
   // 분석 시간은 기기에만 남는다. 서버에서 받은 기록에는 없으므로 목록이 넘겨준 값도 함께 본다.
   const timing = record.timing ?? item.timing;
   const total = totalDurationLabel(timing);
@@ -47,10 +50,11 @@ export function CallDetail({ item, onClose }: { item: CallRecord; onClose: () =>
     {record.error ? <Notice error message={record.error} /> : null}
     <View style={s.row}>{tabs.map((label) => <Pressable key={label} accessibilityRole="tab" aria-selected={label === tab} accessibilityState={{ selected: label === tab }} onPress={() => setTab(label)} style={[s.choice, label === tab && s.secondary]}><Text style={label === tab ? s.link : s.body}>{label}</Text></Pressable>)}</View>
     {loading ? <Loading /> : null}{error ? <Notice error message={error} /> : null}
-    {analysis && tab === '통화 요약' ? <><Text selectable style={s.body}>{analysis.summary}</Text><Items title="중요 포인트" items={analysis.consulting.important_points} /></> : null}
-    {analysis && tab === '상세 내용' ? analysis.details.length ? analysis.details.map((detail, i) => <View key={i} style={s.card}><Text style={s.subtitle}>{detail.title}</Text><Text selectable style={s.body}>{detail.content}</Text></View>) : <Notice message="기록된 상세 내용이 없습니다." /> : null}
+    {/* 결정사항은 요약 다음으로 중요한 결과다. 상담 분석 탭이 비는 버전에서는 여기 둔다. */}
+    {analysis && tab === '통화 요약' ? <><Text selectable style={s.body}>{analysis.summary}</Text><Items title="결정사항" items={analysis.decisions} />{analysis.consulting.important_points.length ? <Items title="중요 포인트" items={analysis.consulting.important_points} /> : null}</> : null}
+    {analysis && tab === '상세 내용' ? analysis.details.length ? analysis.details.map((detail, i) => <View key={i} style={s.card}><Text style={s.subtitle}>{detail.title}</Text><Text selectable style={s.body}>{detail.content}</Text></View>) : <Notice message={unavailableSectionNotice('상세 내용')} /> : null}
     {analysis && tab === '할 일' ? analysis.todos.length ? analysis.todos.map((todo, i) => <View key={i} style={s.card}><Text selectable style={s.body}>☐ {todo.content}</Text><Text style={s.meta}>담당: {todo.owner || '확인되지 않음'} · 기한: {todo.due_date || '확인되지 않음'}</Text><Text selectable style={s.meta}>근거: {todo.source}</Text></View>) : <Notice message="통화에서 확인된 할 일이 없습니다." /> : null}
-    {analysis && tab === '상담 분석' ? <>{Object.entries(sections).map(([key, label]) => <Items key={key} title={label} items={analysis.consulting[key as keyof typeof sections]} />)}<Items title="결정사항" items={analysis.decisions} /></> : null}
+    {analysis && tab === '상담 분석' ? consulting ? <>{Object.entries(sections).map(([key, label]) => <Items key={key} title={label} items={analysis.consulting[key as keyof typeof sections]} />)}</> : <Notice message={unavailableSectionNotice('상담 분석')} /> : null}
     {/* 분석이 없는 통화에서 다른 탭을 누르면 빈 화면이 된다. 왜 비었는지를 말해 준다. */}
     {!analysis && !loading && tab !== '통화 원문' ? <Notice message={missingAnalysisNotice(state, now)} /> : null}
     {tab === '통화 원문' ? record.transcript ? record.transcript.segments.length ? record.transcript.segments.map((segment, i) => <View key={i} style={s.card}><Text style={s.meta}>{time(segment.start)}{segment.speaker ? ` · ${segment.speaker}` : ''}</Text><Text selectable style={s.body}>{segment.text}</Text></View>) : <Text selectable style={s.body}>{record.transcript.text}</Text> : <Notice message="저장된 통화 원문이 없습니다." /> : null}
