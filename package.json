@@ -6,6 +6,7 @@
     "@expo-google-fonts/archivo": "^0.4.2",
     "@expo-google-fonts/ibm-plex-mono": "^0.4.1",
     "@expo-google-fonts/ibm-plex-sans-kr": "^0.4.1",
+    "buffer": "^6.0.3",
     "expo": "~57.0.9",
     "expo-constants": "~57.0.8",
     "expo-crypto": "~57.0.3",
