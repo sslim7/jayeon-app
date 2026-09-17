@@ -40,6 +40,7 @@ export function SmsButton({
   disabled,
   secondary = false,
   danger = false,
+  fill = false,
 }: {
   label: string;
   accessibilityLabel?: string;
@@ -47,6 +48,8 @@ export function SmsButton({
   disabled?: boolean;
   secondary?: boolean;
   danger?: boolean;
+  /** 한 줄에 여러 버튼을 나란히 둘 때. 폭을 나눠 갖고 좌우 여백을 줄여 폰 폭에서도 한 줄에 들어간다. */
+  fill?: boolean;
 }) {
   return (
     <Pressable
@@ -55,13 +58,17 @@ export function SmsButton({
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[s.button, secondary && s.secondary, disabled && { opacity: 0.5 }]}
+      style={[s.button, secondary && s.secondary, fill && s.buttonFill, disabled && { opacity: 0.5 }]}
     >
-      <Text style={[s.buttonText, secondary && { color: danger ? colors.red : colors.ink }]}>
+      <Text numberOfLines={fill ? 1 : undefined} style={[s.buttonText, secondary && { color: danger ? colors.red : colors.ink }]}>
         {label}
       </Text>
     </Pressable>
   );
+}
+/** 한 줄에 나란히 놓는 조작 묶음. 자식은 `fill` 버튼이어야 폭을 고르게 나눈다. */
+export function ButtonRow({ children }: PropsWithChildren) {
+  return <View style={s.buttonRow}>{children}</View>;
 }
 export function Notice({ message, error = false }: { message: string; error?: boolean }) {
   return (
@@ -150,6 +157,8 @@ export const s = StyleSheet.create({
     padding: spacing.md,
   },
   secondary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.borderPill },
+  buttonFill: { flex: 1, paddingHorizontal: spacing.xs },
+  buttonRow: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm },
   buttonText: { ...fonts.bodySemi, color: colors.onInk, fontSize: text.lg },
   link: {
     ...fonts.bodySemi,

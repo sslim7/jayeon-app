@@ -1,4 +1,5 @@
 import { RecipientTableToolbar } from './recipient-table-toolbar';
+import { ReservedMark } from './reserved-mark';
 import { formatPhone } from '@/lib/phone';
 import type { CSSProperties } from 'react';
 import { colors, fonts, text } from '@/constants/theme';
@@ -33,7 +34,7 @@ const sortButton: CSSProperties = { display: 'flex', alignItems: 'center', gap: 
 const sortArrow: CSSProperties = { flexShrink: 0, fontSize: '0.7em', color: colors.greenText };
 
 /** 웹에서는 실제 표 구조로 열의 의미와 키보드 조작을 제공한다. */
-export function RecipientTable({ items, selectedIds, onSelectionChange, onHistory, disabled, onEdit, onRemove, includeSentFilter, dense = false }: RecipientTableProps) {
+export function RecipientTable({ items, selectedIds, onSelectionChange, onHistory, disabled, onEdit, onRemove, includeSentFilter, reservedIds, dense = false }: RecipientTableProps) {
   const { allInfo, compact, setAllInfo, fields, rows, sort, toggleSort } = useRecipientTableColumns(items);
   const actions = !!onRemove;
   // 관리 열이 있는 수신자 관리 화면은 기존 간단뷰를 유지한다.
@@ -74,7 +75,13 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
                 <input type="checkbox" aria-label={`${item.name} · ${formatPhone(item.phone)}${item.groupId ? ` · ${item.groupId}` : ''}`} checked={selectedIds.includes(item.id)} disabled={disabled} style={checkbox} onChange={() => onSelectionChange(selectedIds.includes(item.id) ? selectedIds.filter((id) => id !== item.id) : [...selectedIds, item.id])} />
               </td>
               <td style={{ ...cellStyle, ...fixedName }} title={item.name}>
-                {onEdit && !actions ? <button type="button" aria-label={`${item.name} 수정`} disabled={disabled} onClick={() => onEdit(item)} style={linkStyle}>{item.name}</button> : item.name}
+                {/* 예약 표시는 이름 왼쪽에 붙이되 이름의 말줄임 처리를 방해하지 않게 가로로 나눠 놓는다. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                  {reservedIds?.has(item.id) ? <ReservedMark size={oneLine ? 13 : 14} /> : null}
+                  <span style={{ flex: '1 1 auto', minWidth: 0, ...(oneLine ? oneLineText : null) }}>
+                    {onEdit && !actions ? <button type="button" aria-label={`${item.name} 수정`} disabled={disabled} onClick={() => onEdit(item)} style={linkStyle}>{item.name}</button> : item.name}
+                  </span>
+                </div>
               </td>
               <td style={cellStyle}>{formatPhone(item.phone)}</td>
               {oneLine ? null : <td style={cellStyle} title={item.groupId}>{item.groupId || '—'}</td>}

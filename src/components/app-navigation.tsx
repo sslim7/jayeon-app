@@ -4,14 +4,17 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProfileSheet, PasswordChangeSheet } from '@/components/profile-sheet';
 import { useUserStore } from '@/store/user-store';
 import { colors, fonts, radii, spacing, text } from '@/constants/theme';
 
-const destination = { href: '/sms/new', label: '문자 보내기' } as const;
+const destinations = [
+  { href: '/sms/new', label: '문자 보내기', icon: 'message' },
+  { href: '/sms/reserved', label: '예약 문자 보내기', icon: 'reserved' },
+] as const;
 
 // 헤더는 화면 트리 밖에 있으므로 화면이 오른쪽 슬롯을 채울 통로만 둔다. 세터는 안정적이라 화면을 다시 그리지 않는다.
 const HeaderActionsContext = createContext<(actions: ReactNode) => void>(() => {});
@@ -81,12 +84,13 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
     if (drawer) drawer.inert = !open;
     return () => { if (content) content.inert = false; if (drawer) drawer.inert = false; };
   }, [open]);
+  // 메뉴 밖의 화면(발송 상세 등)은 들어온 통로인 첫 항목을 제목으로 쓴다.
+  const current = destinations.find((item) => item.href === pathname) ?? destinations[0];
   const homeStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: progress.value * drawerWidth }, { scale: 1 - 0.08 * progress.value }],
     borderRadius: 24 * progress.value,
   }));
   const dimStyle = useAnimatedStyle(() => ({ opacity: progress.value * 0.28 }));
-  const selected = pathname === destination.href;
 
   return (
     <>
@@ -98,16 +102,19 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
               </View>
             </View>
             <ScrollView contentContainerStyle={styles.items}>
-              <Link href={destination.href} asChild>
-                <Pressable accessibilityRole="link" accessibilityLabel={destination.label} accessibilityState={{ selected }} aria-current={selected ? 'page' : undefined} onPress={() => setOpen(false)} style={StyleSheet.flatten([styles.item, selected && styles.selected])}>
-                  <MenuIcon />
-                  <Text style={[styles.itemLabel, selected && styles.selectedLabel]}>{destination.label}</Text>
-                </Pressable>
-              </Link>
+              {destinations.map((item) => {
+                const selected = pathname === item.href;
+                return <Link key={item.href} href={item.href} asChild>
+                  <Pressable accessibilityRole="link" accessibilityLabel={item.label} accessibilityState={{ selected }} aria-current={selected ? 'page' : undefined} onPress={() => setOpen(false)} style={StyleSheet.flatten([styles.item, selected && styles.selected])}>
+                    <MenuIcon kind={item.icon} />
+                    <Text style={[styles.itemLabel, selected && styles.selectedLabel]}>{item.label}</Text>
+                  </Pressable>
+                </Link>;
+              })}
             </ScrollView>
             <View style={styles.profileFooter}>
               <Pressable accessibilityRole="button" accessibilityLabel={`${profileName} 프로필`} onPress={() => { setSheet('profile'); }} style={styles.profileButton}>
-                <View style={styles.avatar}><MenuIcon profile /></View>
+                <View style={styles.avatar}><MenuIcon kind="profile" /></View>
                 <View style={{ flex: 1, gap: spacing.xs }}><Text style={styles.itemLabel}>{profileName}</Text><Text style={styles.caption}>프로필 보기</Text></View>
               </Pressable>
             </View>
@@ -131,7 +138,7 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
                       <View style={styles.line} />
                     </View>
                   </Pressable>
-                  <Text accessibilityRole="header" numberOfLines={1} style={styles.current}>{destination.label}</Text>
+                  <Text accessibilityRole="header" numberOfLines={1} style={styles.current}>{current.label}</Text>
                   {headerActions ? <View style={styles.headerActions}>{headerActions}</View> : <View style={styles.iconButton} />}
                 </View>
               </SafeAreaView> : null}
@@ -149,9 +156,12 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
   );
 }
 
-function MenuIcon({ profile = false }: { profile?: boolean }) {
-  return <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={colors.greenText} strokeWidth={1.7} aria-hidden={true}>
-    {profile ? <><Circle cx={12} cy={8} r={3.5} /><Path d="M5 21v-2a7 7 0 0 1 14 0v2" /></> : <Path d="M4 4h16v12H9l-5 4V4Zm4 4h8M8 12h5" strokeLinejoin="round" strokeLinecap="round" />}
+function MenuIcon({ kind }: { kind: 'message' | 'reserved' | 'profile' }) {
+  return <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={colors.greenText} strokeWidth={1.7} strokeLinejoin="round" strokeLinecap="round" aria-hidden={true}>
+    {kind === 'profile' ? <><Circle cx={12} cy={8} r={3.5} /><Path d="M5 21v-2a7 7 0 0 1 14 0v2" /></> : null}
+    {kind === 'message' ? <Path d="M4 4h16v12H9l-5 4V4Zm4 4h8M8 12h5" /> : null}
+    {/* 달력 + 체크: 아직 보내지 않고 담아 둔 문자 */}
+    {kind === 'reserved' ? <><Rect x={3} y={5} width={18} height={16} rx={2.5} /><Path d="M8 3v4M16 3v4M3 10h18M9 15l2 2 4-4" /></> : null}
   </Svg>;
 }
 

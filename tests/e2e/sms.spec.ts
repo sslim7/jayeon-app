@@ -72,24 +72,28 @@ async function setup(page: Page, native = false) {
       if (input.recipientIds.some((id: string) => !state.people.some(p => p.id === id))) return route.fulfill({ status: 404, json: { code: 'NOT_FOUND', message: '수신자를 찾을 수 없습니다.' } });
       let campaign = state.campaigns.find(c => c.requestId === input.requestId);
       if (!campaign) {
-        campaign = { ...input, id: 'c1', status: 'READY', recipientCount: input.recipientIds.length, attachments: state.attachments.filter(a => (input.attachmentIds || []).includes(a.id)), createdAt: now };
+        // 예약은 캠페인을 여러 개 만든다. 첫 캠페인만 기존 테스트가 쓰는 c1/cr0 이름을 유지한다.
+        const cid = `c${state.campaigns.length + 1}`;
+        const prefix = state.campaigns.length ? `${cid}r` : 'cr';
+        campaign = { ...input, id: cid, status: 'READY', recipientCount: input.recipientIds.length, attachments: state.attachments.filter(a => (input.attachmentIds || []).includes(a.id)), createdAt: now };
         state.campaigns.push(campaign!);
-        state.targets = input.recipientIds.map((id: string, i: number) => ({ ...state.people.find(p => p.id === id)!, id: `cr${i}`, recipientId: id, campaignId: 'c1', message: input.message, attachments: state.attachments.filter(a => (input.attachmentIds || []).includes(a.id)), status: 'READY' }));
+        state.targets.push(...input.recipientIds.map((id: string, i: number) => ({ ...state.people.find(p => p.id === id)!, id: `${prefix}${i}`, recipientId: id, campaignId: cid, message: input.message, attachments: state.attachments.filter(a => (input.attachmentIds || []).includes(a.id)), status: 'READY' })));
       }
       if (state.failCreate) { state.failCreate = false; return route.abort('failed'); }
       return route.fulfill({ json: campaign });
     }
-    const campaign = state.campaigns[0];
+    const campaign = state.campaigns.find(c => c.id === path.split('/')[3]) ?? state.campaigns[0];
+    const targets = state.targets.filter(r => r.campaignId === campaign.id);
     if (path.endsWith('/start')) { campaign.status = 'SENDING'; return route.fulfill({ json: campaign }); }
     if (path.endsWith('/cancel')) { campaign.status = 'CANCELLED'; return route.fulfill({ json: campaign }); }
-    if (path.endsWith('/recipients')) return route.fulfill({ json: { items: state.targets } });
+    if (path.endsWith('/recipients')) return route.fulfill({ json: { items: targets } });
     if (path.includes('/recipients/')) {
-      const target = state.targets.find(r => r.id === path.split('/').pop())!;
+      const target = targets.find(r => r.id === path.split('/').pop())!;
       const input = request.postDataJSON();
       if (input.status !== 'SENDING' && state.failSave) return route.abort('failed');
       Object.assign(target, input);
       if (input.status === 'SENT') state.results.push(target.id);
-      if (state.targets.every(r => r.status === 'SENT')) campaign.status = 'COMPLETED';
+      if (targets.every(r => r.status === 'SENT')) campaign.status = 'COMPLETED';
       return route.fulfill({ json: { campaign, recipient: target, dispatchAllowed: input.status === 'SENDING' } });
     }
     return route.fulfill({ json: campaign });
@@ -129,7 +133,7 @@ async function prepareCompose(page: Page) {
   await page.goto('/sms/new');
   await page.getByRole('checkbox', { name: /김철수/ }).click();
   await page.getByRole('checkbox', { name: /김영희/ }).click();
-  await page.getByRole('button', { name: '2명에게 발송', exact: true }).click();
+  await page.getByRole('button', { name: '발송하기', exact: true }).click();
   await page.getByRole('button', { name: '직접 작성', exact: true }).click();
 }
 // 폰 폭은 선택 수를 (M/N)로 줄이므로 스크린리더용 이름으로 찾는다.
@@ -309,7 +313,7 @@ test('미발송 기본 조회·발송자 포함·전체 선택·최종 발송 �
   await page.screenshot({ path: `/tmp/nature-recipients-table-${test.info().project.name}.png`, animations: 'disabled' });
   const all = page.getByRole('checkbox', { name: '전체 선택', exact: true });
   await all.click();
-  await expect(page.getByRole('button', { name: '2명에게 발송', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '발송하기', exact: true })).toBeEnabled();
   await expect(selectedCount(page, 2)).toBeVisible();
   if (!isMobile()) {
     const totalBox = (await page.getByText('전체 2명', { exact: true }).boundingBox())!;
@@ -318,7 +322,7 @@ test('미발송 기본 조회·발송자 포함·전체 선택·최종 발송 �
     expect(selectedBox.y).toBeCloseTo(totalBox.y, 0);
   }
   await all.click();
-  await expect(page.getByRole('button', { name: '0명에게 발송', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '발송하기', exact: true })).toBeDisabled();
   await page.getByRole('checkbox', { name: /김영희/ }).click();
   await expect(all).toHaveAttribute('aria-checked', 'mixed');
   await expect(selectedCount(page, 1)).toBeVisible();
@@ -340,7 +344,7 @@ test('이미지 템플릿을 편집하고 이미지 단독 MMS를 모의 발송�
   await expect(page.getByRole('button', { name: '명함 안내 수정', exact: true })).toBeVisible();
   await page.goto('/sms/new');
   await page.getByRole('checkbox', { name: /김영희/ }).click();
-  await page.getByRole('button', { name: '1명에게 발송', exact: true }).click();
+  await page.getByRole('button', { name: '발송하기', exact: true }).click();
   await page.getByRole('button', { name: '명함 안내 템플릿 선택', exact: true }).click();
   await expect(page.getByLabel('메시지', { exact: true })).toHaveValue('제 명함을 보내드립니다.');
   await page.getByRole('button', { name: '명함.png 첨부 삭제', exact: true }).click();
@@ -384,7 +388,7 @@ test('첨부 없는 템플릿의 실제 서버 null 응답을 등록·조회·�
   await expect(page.getByRole('button', { name: '추가', exact: true })).toBeVisible();
   await page.goto('/sms/new');
   await page.getByRole('checkbox', { name: /김철수/ }).click();
-  await page.getByRole('button', { name: '1명에게 발송', exact: true }).click();
+  await page.getByRole('button', { name: '발송하기', exact: true }).click();
   await page.getByRole('button', { name: '첨부 없는 안내 템플릿 선택', exact: true }).click();
   await expect(page.getByLabel('메시지', { exact: true })).toHaveValue(template.message);
   await expect(page.getByText('첨부 이미지 0 / 3', { exact: true })).toBeVisible();
@@ -638,18 +642,127 @@ test('50명은 발송 가능하고 51명은 버튼 안의 빨간 제한 안내�
   await page.getByRole('button', { name: '모든그룹', exact: true }).click();
   await page.getByRole('menuitem', { name: '첫 50명', exact: true }).click();
   await page.getByRole('checkbox', { name: '전체 선택', exact: true }).click();
-  await expect(page.getByRole('button', { name: '50명에게 발송', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '발송하기', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '첫 50명', exact: true }).click();
   await page.getByRole('menuitem', { name: '모든그룹', exact: true }).click();
   await expect(selectedCount(page, 50)).toBeVisible();
   await page.getByRole('checkbox', { name: /대상51/ }).click();
-  const warning = '51명에게 발송 (50명 제한)';
-  await expect(page.getByRole('button', { name: warning, exact: true })).toBeDisabled();
+  const warning = '51명을 선택했어요. 한 번에 50명까지 발송·예약할 수 있어요.';
+  await expect(page.getByRole('button', { name: '발송하기', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '예약하기', exact: true })).toBeDisabled();
+  // 50명을 넘겨도 삭제는 막지 않는다 — 인원 제한은 캠페인 생성 쪽 제약이다.
+  await expect(page.getByRole('button', { name: '삭제', exact: true })).toBeEnabled();
   const rgb = await page.getByText(warning, { exact: true }).evaluate(node => getComputedStyle(node).color.match(/\d+/g)!.map(Number));
   expect(rgb[0]).toBeGreaterThan(rgb[1] * 2);
   expect(rgb[0]).toBeGreaterThan(rgb[2] * 2);
-  await expect(page.getByText('한 캠페인은 50명까지 발송할 수 있어요. 선택 수를 줄여 주세요.', { exact: true })).toHaveCount(0);
   expect(state.campaigns).toHaveLength(0);
   await page.getByRole('checkbox', { name: /대상51/ }).click();
-  await expect(page.getByRole('button', { name: '50명에게 발송', exact: true })).toBeEnabled();
+  await expect(page.getByText(warning, { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '발송하기', exact: true })).toBeEnabled();
+});
+
+const autumn = { id: 't-autumn', name: '가을 안내', message: '가을 모임 안내입니다.', attachments: [], createdAt: now, updatedAt: now };
+async function reserve(page: Page, names: RegExp[]) {
+  await page.goto('/sms/new');
+  for (const name of names) await page.getByRole('checkbox', { name }).click();
+  await page.getByRole('button', { name: '예약하기', exact: true }).click();
+  await page.getByRole('checkbox', { name: '가을 안내', exact: true }).click();
+  await page.getByRole('button', { name: '예약 확인', exact: true }).click();
+}
+
+test('선택한 수신자를 템플릿으로 예약하고 예약함에서 발송으로 넘어간다', async ({ page }) => {
+  const state = await setup(page);
+  state.templates.push({ ...autumn });
+  await page.goto('/sms/new');
+  await page.getByRole('checkbox', { name: /김철수/ }).click();
+  await page.getByRole('button', { name: '예약하기', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '예약하기', exact: true })).toBeVisible();
+  await expect(page.getByText('수신자 1명 선택', { exact: true })).toBeVisible();
+  await page.screenshot({ path: `/tmp/nature-reserve-sheet-${test.info().project.name}.png`, animations: 'disabled' });
+  await page.getByRole('checkbox', { name: '가을 안내', exact: true }).click();
+  await page.getByRole('button', { name: '예약 확인', exact: true }).click();
+  await expect(page.getByText('1명을 「가을 안내」 템플릿으로 예약했어요.', { exact: true })).toBeVisible();
+  expect(state.campaigns).toHaveLength(1);
+  expect(state.campaigns[0].status).toBe('READY');
+  expect(state.results).toHaveLength(0);
+  // 예약한 사람만 목록 이름 왼쪽에 표시가 붙는다.
+  await expect(page.getByRole('img', { name: '예약됨', exact: true })).toHaveCount(1);
+  await page.screenshot({ path: `/tmp/nature-reserve-mark-${test.info().project.name}.png`, animations: 'disabled' });
+  // 이미 예약된 사람만 고르면 새 예약을 만들지 않는다.
+  await page.getByRole('checkbox', { name: /김철수/ }).click();
+  await page.getByRole('button', { name: '예약하기', exact: true }).click();
+  await page.getByRole('checkbox', { name: '가을 안내', exact: true }).click();
+  await page.getByRole('button', { name: '예약 확인', exact: true }).click();
+  await expect(page.getByText('선택한 1명은 이미 예약되어 있어요. 새로 예약하지 않았어요.', { exact: true })).toBeVisible();
+  expect(state.campaigns).toHaveLength(1);
+  // 예약함에서 같은 사람을 확인하고 발송 상세로 넘어간다.
+  await page.getByRole('button', { name: '메뉴 열기', exact: true }).click();
+  await page.getByRole('link', { name: '예약 문자 보내기', exact: true }).click();
+  await expect(page).toHaveURL(/\/sms\/reserved$/);
+  const row = page.getByRole('checkbox', { name: '김철수 · 010-1234-5678 · 가을 안내', exact: true });
+  await expect(row).toBeVisible();
+  await expect(page.getByRole('button', { name: '발송', exact: true })).toBeDisabled();
+  await row.click();
+  await page.screenshot({ path: `/tmp/nature-reserved-screen-${test.info().project.name}.png`, animations: 'disabled' });
+  await page.getByRole('button', { name: '발송', exact: true }).click();
+  await expect(page).toHaveURL(/\/sms\/c1$/);
+  await expect(page.getByRole('heading', { name: '가을 안내', exact: true })).toBeVisible();
+  expect(state.campaigns[0].status).toBe('READY');
+});
+
+test('예약함 삭제는 수신자를 남기고 예약만 취소한다', async ({ page }) => {
+  const state = await setup(page);
+  state.templates.push({ ...autumn });
+  await reserve(page, [/김철수/, /김영희/]);
+  await expect(page.getByText('2명을 「가을 안내」 템플릿으로 예약했어요.', { exact: true })).toBeVisible();
+  await page.goto('/sms/reserved');
+  await page.getByRole('checkbox', { name: /김영희/ }).click();
+  await page.getByRole('button', { name: '삭제', exact: true }).click();
+  await expect(page.getByText('선택한 1명을 예약에서 뺄까요?', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '예약 취소 되돌리기', exact: true }).click();
+  expect(state.campaigns).toHaveLength(1);
+  await page.getByRole('button', { name: '삭제', exact: true }).click();
+  await page.getByRole('button', { name: '예약 취소 확인', exact: true }).click();
+  await expect(page.getByText('1명의 예약을 취소했어요.', { exact: true })).toBeVisible();
+  // 남는 사람으로 새 예약을 먼저 만든 뒤 기존 예약을 취소한다.
+  expect(state.campaigns.map(c => c.status)).toEqual(['CANCELLED', 'READY']);
+  expect(state.campaigns[1]).toMatchObject({ title: '가을 안내', recipientCount: 1 });
+  await expect(page.getByRole('checkbox', { name: /김철수/ })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: /김영희/ })).toHaveCount(0);
+  // 수신자 자체는 그대로 남는다.
+  expect(state.people).toHaveLength(2);
+  // 마지막 한 명까지 빼면 새 예약 없이 캠페인만 취소한다.
+  await page.getByRole('checkbox', { name: /김철수/ }).click();
+  await page.getByRole('button', { name: '삭제', exact: true }).click();
+  await page.getByRole('button', { name: '예약 취소 확인', exact: true }).click();
+  await expect(page.getByText('예약된 문자가 없어요. 「문자 보내기」에서 수신자를 고르고 예약하기를 눌러 주세요.', { exact: true })).toBeVisible();
+  expect(state.campaigns.map(c => c.status)).toEqual(['CANCELLED', 'CANCELLED']);
+  expect(state.people).toHaveLength(2);
+});
+
+test('문자 보내기의 삭제는 확인을 거치고 예약이 남는다는 것을 알린다', async ({ page }) => {
+  const state = await setup(page);
+  state.templates.push({ ...autumn });
+  await page.goto('/sms/new');
+  await page.getByRole('checkbox', { name: /김영희/ }).click();
+  await page.getByRole('button', { name: '삭제', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '수신자 삭제', exact: true })).toBeVisible();
+  await expect(page.getByText('선택한 1명을 영구 삭제할까요? 되돌릴 수 없어요.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '수신자 삭제 취소', exact: true }).click();
+  expect(state.people).toHaveLength(2);
+  // 예약된 사람을 지우면 예약이 남는다는 경고를 함께 준다.
+  await reserve(page, [/김철수/]);
+  await page.getByRole('checkbox', { name: /김철수/ }).click();
+  await page.getByRole('button', { name: '삭제', exact: true }).click();
+  await expect(page.getByText(/이 중 1명은 예약되어 있어요\./)).toBeVisible();
+  await page.getByRole('button', { name: '수신자 삭제 취소', exact: true }).click();
+  // 예약되지 않은 사람만 남기면 경고도 사라진다.
+  await page.getByRole('checkbox', { name: /김철수/ }).click();
+  await page.getByRole('checkbox', { name: /김영희/ }).click();
+  await page.getByRole('button', { name: '삭제', exact: true }).click();
+  await expect(page.getByText(/이 중 1명은 예약되어 있어요\./)).toHaveCount(0);
+  await page.getByRole('button', { name: '수신자 삭제 확인', exact: true }).click();
+  await expect(page.getByText('1명을 삭제했어요.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: /김영희/ })).toHaveCount(0);
+  expect(state.people).toHaveLength(1);
 });
