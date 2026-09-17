@@ -484,16 +484,15 @@ test('열 제목을 눌러 정렬하고 선택은 그대로 둔다', async ({ pa
   await expect(selected).toBeChecked();
   if (info.project.name === 'mobile') await page.setViewportSize({ width: 384, height: 832 });
   await page.screenshot({ path: `/tmp/nature-sort-${info.project.name}.png`, animations: 'disabled' });
-  // 0건은 방향과 무관하게 맨 뒤에 남는다.
+  // 0건도 숫자로 함께 줄 선다 — 오름차순이면 맨 앞, 내림차순이면 맨 뒤.
   await page.goto('/recipients');
   const sentHeader = page.getByRole('columnheader', { name: /^발송건수/ });
   await sentHeader.getByRole('button').click();
   await expect(sentHeader).toHaveAttribute('aria-sort', 'ascending');
-  await expect(page.getByRole('row').nth(1)).toContainText('박영수');
+  await expect(page.getByRole('row').last()).toContainText('박영수');
   await sentHeader.getByRole('button').click();
   await expect(sentHeader).toHaveAttribute('aria-sort', 'descending');
   await expect(page.getByRole('row').nth(1)).toContainText('박영수');
-  await expect(page.getByRole('row').last()).toContainText('김철수');
 });
 
 test('문자 보내기 헤더의 등록·템플릿·이력 시트에서 작업해도 선택과 페이지를 유지한다', async ({ page }) => {

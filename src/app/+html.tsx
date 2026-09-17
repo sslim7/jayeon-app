@@ -83,6 +83,28 @@ export default function Root({ children }: { children: ReactNode }) {
         <link rel="preload" as="image" href="/splash.png" />
 
         {/*
+          홈 화면 설치(PWA)에 필요한 것들. 파일은 전부 `public/` 에 있어 dist 루트로 복사된다.
+
+          아이콘을 `assets/images/icon.png` 그대로 가리키지 않고 따로 구운 이유는 원본이
+          **배경이 투명한 PNG** 라서다. 런처와 설치 배너는 투명한 자리에 제 배경(검정·흰색)을
+          깔아 버려서, 종이색 위에 서야 할 로고가 다른 앱들 사이에서 혼자 검게 나온다.
+
+          🔴 **iOS 는 manifest 를 거의 읽지 않는다.** Safari 의 「홈 화면에 추가」는 아래
+          `apple-*` 태그만 본다 — manifest 만 두면 아이콘 자리에 화면을 축소한 그림이,
+          이름 자리에 `<title>` 이 들어간다. 둘 다 있어야 양쪽에서 같은 모습이 된다.
+
+          `apple-mobile-web-app-status-bar-style` 이 `default` 인 것은 의도다.
+          `black-translucent` 로 두면 상태바 글자가 **흰색으로 고정**되는데, 이 앱의 바탕은
+          종이색이라 시간도 배터리도 보이지 않는다.
+        */}
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Nature" />
+
+        {/*
           폰트를 **JS 번들과 동시에** 받게 하려는 preconnect 다.
 
           CDN 은 두 도메인을 쓴다: CSS 를 주는 `fonts.googleapis.com` 과 실제 woff2 가 있는
