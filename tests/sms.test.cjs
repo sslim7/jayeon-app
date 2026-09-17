@@ -207,3 +207,47 @@ test('정렬은 원본 배열을 바꾸지 않고 같은 값 묶음의 순서를
   assert.deepEqual(names(rows, { key: 'sent', direction: 'asc' }), ['a', 'b', 'c']);
   assert.deepEqual(rows.map(row => row.id), copy);
 });
+
+const reservationModule = { exports: {} };
+const reservationCompiled = ts.transpileModule(fs.readFileSync('src/lib/sms-reservations.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+vm.runInNewContext(`(function(exports){${reservationCompiled}\n})`, { Error, Set, Map, Array })(reservationModule.exports);
+const { readyCampaigns, reservedRows, reservedRecipientIds, excludeReserved, reservedGroups } = reservationModule.exports;
+// vm 밖에서 만든 객체와 비교하려면 realm 을 한 번 벗겨야 한다(프로토타입이 달라 deepEqual 이 막힌다).
+const plain = value => JSON.parse(JSON.stringify(value));
+const campaign = (id, title, status = 'READY') => ({ id, title, message: '안내', status, recipientCount: 0, createdAt: '2026-09-16T00:00:00Z' });
+const target = (id, recipientId, name) => ({ id, recipientId, name, phone: `0100000000${id.slice(-1)}`, campaignId: '', message: '안내', status: 'READY', createdAt: '2026-09-16T00:00:00Z', updatedAt: '2026-09-16T00:00:00Z' });
+
+test('예약은 아직 보내지 않은 캠페인(READY)만이다', () => {
+  const rows = [campaign('c1', '가'), campaign('c2', '나', 'SENDING'), campaign('c3', '다', 'COMPLETED'), campaign('c4', '라', 'CANCELLED'), campaign('c5', '마')];
+  assert.deepEqual(readyCampaigns(rows).map(item => item.id), ['c1', 'c5']);
+});
+test('예약 목록은 캠페인을 가로질러 이름순으로 모으고 같은 사람의 여러 예약을 모두 보여 준다', () => {
+  const rows = reservedRows([
+    { campaign: campaign('c1', '가을 안내'), recipients: [target('r1', 'p2', '김영희'), target('r2', 'p1', '김철수')] },
+    { campaign: campaign('c2', '나들이 안내'), recipients: [target('r3', 'p1', '김철수')] },
+  ]);
+  assert.deepEqual(rows.map(row => [row.name, row.campaignTitle]), [['김영희', '가을 안내'], ['김철수', '가을 안내'], ['김철수', '나들이 안내']]);
+  assert.deepEqual(rows.map(row => row.id), ['c1:r1', 'c1:r2', 'c2:r3']);
+  assert.deepEqual([...reservedRecipientIds(rows)].sort(), ['p1', 'p2']);
+});
+test('예약 대상은 이미 예약된 사람을 빼고 제외 인원을 함께 알려 준다', () => {
+  const reserved = new Set(['p1', 'p3']);
+  assert.deepEqual(plain(excludeReserved(['p1', 'p2', 'p3', 'p4'], reserved)), { targetIds: ['p2', 'p4'], excludedCount: 2 });
+  assert.deepEqual(plain(excludeReserved(['p1', 'p3'], reserved)), { targetIds: [], excludedCount: 2 });
+  assert.deepEqual(plain(excludeReserved(['p2'], new Set())), { targetIds: ['p2'], excludedCount: 0 });
+});
+test('선택한 예약 줄은 캠페인별로 묶여 남는 사람과 빼는 사람이 갈린다', () => {
+  const rows = reservedRows([
+    { campaign: campaign('c1', '가을 안내'), recipients: [target('r1', 'p1', '가'), target('r2', 'p2', '나'), target('r3', 'p3', '다')] },
+    { campaign: campaign('c2', '나들이 안내'), recipients: [target('r4', 'p4', '라')] },
+  ]);
+  const one = reservedGroups(rows, ['c1:r2']);
+  assert.equal(one.length, 1);
+  assert.deepEqual(plain(one[0]), { campaignId: 'c1', campaignTitle: '가을 안내', selectedRowIds: ['c1:r2'], removedRecipientIds: ['p2'], remainingRecipientIds: ['p1', 'p3'], total: 3 });
+  // 캠페인 전체를 고르면 남는 사람이 없어 새 예약을 만들 필요가 없다.
+  const whole = reservedGroups(rows, ['c1:r1', 'c1:r2', 'c1:r3']);
+  assert.deepEqual(plain(whole[0].remainingRecipientIds), []);
+  // 여러 캠페인에 걸친 선택은 묶음이 둘 이상이라 한 번에 발송할 수 없다.
+  assert.deepEqual(reservedGroups(rows, ['c1:r1', 'c2:r4']).map(group => group.campaignId), ['c1', 'c2']);
+  assert.deepEqual(plain(reservedGroups(rows, [])), []);
+});

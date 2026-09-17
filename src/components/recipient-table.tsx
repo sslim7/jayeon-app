@@ -1,4 +1,5 @@
 import { RecipientTableToolbar } from './recipient-table-toolbar';
+import { ReservedMark } from './reserved-mark';
 import { useEffect, useRef, useState } from 'react';
 import { formatPhone } from '@/lib/phone';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -8,7 +9,7 @@ import { recipientSentSummary, useRecipientTableColumns } from './recipient-tabl
 import { customSortKey, sortHeaderLabel, sortIndicator, type RecipientSort } from './recipient-table-sort';
 import type { RecipientTableProps } from './recipient-table-types';
 
-export function RecipientTable({ items, selectedIds, onSelectionChange, onHistory, disabled, onEdit, onRemove, includeSentFilter }: RecipientTableProps) {
+export function RecipientTable({ items, selectedIds, onSelectionChange, onHistory, disabled, onEdit, onRemove, includeSentFilter, reservedIds }: RecipientTableProps) {
   const { allInfo, compact, viewportWidth, setAllInfo, fields, rows, sort, toggleSort } = useRecipientTableColumns(items);
   const actions = !!onRemove;
   const [scrollX] = useState(() => new Animated.Value(0));
@@ -41,7 +42,11 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
         <Animated.View style={[styles.fixedColumns, fixedStyle]}>
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: selectedIds.includes(item.id) ? colors.sageRow : colors.card }]} />
         <Pressable accessibilityRole="checkbox" accessibilityLabel={`${item.name} · ${formatPhone(item.phone)}${item.groupId ? ` · ${item.groupId}` : ''}`} accessibilityState={{ checked: selectedIds.includes(item.id) }} disabled={disabled} style={[styles.check, columns.check]} onPress={() => onSelectionChange(selectedIds.includes(item.id) ? selectedIds.filter((id) => id !== item.id) : [...selectedIds, item.id])}><Text>{selectedIds.includes(item.id) ? '☑' : '☐'}</Text></Pressable>
-        {onEdit && !actions ? <Pressable accessibilityRole="button" accessibilityLabel={`${item.name} 수정`} disabled={disabled} onPress={() => onEdit(item)} style={columns.name}><Text style={[styles.cell, columns.cell, { color: colors.greenText, textDecorationLine: 'underline' }]}>{item.name}</Text></Pressable> : <Text style={[styles.cell, columns.cell, columns.name]}>{item.name}</Text>}
+        {/* 예약 표시는 이름 칸 안에서 이름 왼쪽에 붙인다. */}
+        <View style={[columns.name, styles.nameCell]}>
+          {reservedIds?.has(item.id) ? <ReservedMark size={13} /> : null}
+          {onEdit && !actions ? <Pressable accessibilityRole="button" accessibilityLabel={`${item.name} 수정`} disabled={disabled} onPress={() => onEdit(item)} style={styles.nameFill}><Text numberOfLines={1} style={[styles.cell, columns.cell, { color: colors.greenText, textDecorationLine: 'underline' }]}>{item.name}</Text></Pressable> : <Text numberOfLines={1} style={[styles.cell, columns.cell, styles.nameFill]}>{item.name}</Text>}
+        </View>
         </Animated.View><Text style={[styles.cell, columns.cell, columns.phone]}>{formatPhone(item.phone)}</Text><Text style={[styles.cell, columns.cell, columns.group]}>{item.groupId || '—'}</Text>
         {item.sentCount ? <Pressable accessibilityRole="button" accessibilityLabel={`${item.name} 발송 이력 보기`} style={columns.date} onPress={() => onHistory(item)}><Text style={[styles.cell, columns.cell, { color: colors.greenText, textDecorationLine: 'underline' }]}>{recipientSentSummary(item)}</Text></Pressable> : <View style={columns.date} />}
         {fields.map((name) => <Text key={name} style={[styles.cell, { width: 140 }]}>{item.customFields?.find((field) => field.name === name)?.value || '—'}</Text>)}
@@ -70,6 +75,8 @@ const styles = StyleSheet.create({
   cell: { ...fonts.body, fontSize: text.md, color: colors.ink, padding: 12 },
   check: { width: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center', borderRightWidth: 1, borderRightColor: colors.border },
   heading: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+  nameCell: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  nameFill: { flexShrink: 1, minWidth: 0 },
   headingText: { flexShrink: 1 },
   arrow: { ...fonts.body, fontSize: text.sm, color: colors.greenText, paddingRight: 4 },
   name: { width: 110 }, phone: { width: 155 }, group: { width: 115 }, date: { width: 252 },

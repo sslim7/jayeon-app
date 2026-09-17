@@ -16,6 +16,8 @@ async function mockAuth(page: Page, forced = false) {
   }));
   await page.route('**/auth/refresh', (route) => route.fulfill({ json: tokens }));
   await page.route(/\/recipients\?.*$/, route => route.fulfill({ json: { items: [], nextCursor: null, total: 0 } }));
+  // 문자 보내기 화면은 예약 표시를 위해 캠페인 목록도 부른다. 막지 않으면 실제 서버의 401 로 세션이 끊긴다.
+  await page.route(/\/sms\/campaigns\?.*$/, route => route.fulfill({ json: { items: [], nextCursor: null } }));
 }
 
 async function login(page: Page) {

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet } from 'react-native';
+import { Platform, Pressable, StyleSheet } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { colors, radii } from '@/constants/theme';
@@ -19,7 +19,8 @@ export function SmsHeaderActions({ frozen, onOpen }: { frozen: boolean; onOpen: 
   return <>
     {items.map((item) => {
       const disabled = item.frozenDisables && frozen;
-      return <Pressable key={item.panel} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ disabled }} disabled={disabled} onPress={() => onOpen(item.panel)} style={({ pressed }) => [styles.button, pressed && styles.pressed, disabled && styles.disabled]}>
+      // 아이콘만으로는 뜻이 좁아 웹에서는 같은 문구를 마우스 툴팁으로도 준다.
+      return <Pressable key={item.panel} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ disabled }} disabled={disabled} ref={(node) => { if (Platform.OS === 'web' && node) (node as unknown as HTMLElement).setAttribute('title', item.label); }} onPress={() => onOpen(item.panel)} style={({ pressed }) => [styles.button, pressed && styles.pressed, disabled && styles.disabled]}>
         <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={colors.ink} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden={true}>
           {item.panel === 'register' ? <Circle cx={9} cy={8} r={3.5} /> : null}
           {item.panel === 'history' ? <Circle cx={12} cy={12} r={9} /> : null}
