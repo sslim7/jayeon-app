@@ -20,13 +20,14 @@ test('통화일시는 현지시각을 ISO로 변환하며 형식·존재하지 �
   for (const value of ['2026-02-30 12:00', '2026-13-01 00:00', '2026-09-17 24:00', '0999-01-01 00:00']) assert.throws(() => parseCallTime(value, now), /유효한/);
 });
 
-test('파일 시각은 기본값이 되고, 없거나 미래면 비워 둔다', () => {
+test('파일 시각이 기본값이 되고, 없거나 미래면 현재 시각을 넣는다', () => {
   const now = new Date(2026, 8, 17, 15, 0);
   assert.equal(defaultCallTime(new Date(2026, 8, 17, 14, 20).getTime(), now), '2026-09-17 14:20');
   // 시계 여유 안쪽의 앞선 시각은 기기 시계 오차로 보고 받아 준다.
   assert.equal(defaultCallTime(now.getTime() + 60_000, now), callLocalTime(new Date(now.getTime() + 60_000)));
-  assert.equal(defaultCallTime(now.getTime() + 6 * 60_000, now), '');
-  for (const value of [undefined, null, 0, -1, NaN, Infinity, '2026-09-17']) assert.equal(defaultCallTime(value, now), '');
+  // 미래이거나 읽을 수 없는 값은 빈 칸으로 두지 않는다 — 손으로 다 적게 만들지 않는다.
+  assert.equal(defaultCallTime(now.getTime() + 6 * 60_000, now), '2026-09-17 15:00');
+  for (const value of [undefined, null, 0, -1, NaN, Infinity, '2026-09-17']) assert.equal(defaultCallTime(value, now), '2026-09-17 15:00');
 });
 
 test('datetime-local 입력 값과 화면 값이 서로 오간다', () => {

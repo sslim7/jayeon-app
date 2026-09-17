@@ -20,7 +20,8 @@ export function CallCreate({ onClose, onStarted }: { onClose: () => void; onStar
   const [query, setQuery] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [date, setDate] = useState('');
+  // 파일을 고르기 전에도 통화일시는 채워 둔다(현재 시각). 비워 두면 손으로 다 적어야 한다.
+  const [date, setDate] = useState(() => defaultCallTime(null));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);

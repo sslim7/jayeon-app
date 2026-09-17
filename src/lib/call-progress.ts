@@ -11,7 +11,7 @@ import type { CallLive, CallStageKey, CallStatus, CallTiming } from '@/types/cal
 
 /** 화면에 보이는 네 단계. 내부 status 를 이 넷으로 묶는다. */
 export const CALL_STAGES: CallStageKey[] = ['PREPARE', 'TRANSCRIBE', 'ANALYZE', 'UPLOAD'];
-export const STAGE_LABELS: Record<CallStageKey, string> = { PREPARE: '분석 준비', TRANSCRIBE: '음성 변환', ANALYZE: '통화 분석', UPLOAD: '결과 저장' };
+export const STAGE_LABELS: Record<CallStageKey, string> = { PREPARE: '분석 준비', TRANSCRIBE: '음성 변환', ANALYZE: '요약 생성', UPLOAD: '결과 저장' };
 
 /**
  * status 가 머무는 단계. 성공으로 끝난 상태는 네 단계를 모두 지난 것이라 `4` 다.
@@ -200,7 +200,7 @@ export function diagnosticsLabel(timing: CallTiming | null | undefined): string 
 export function missingAnalysisNotice(record: { status: CallStatus; error?: string | null; timing?: CallTiming | null }, now: number): string {
   if (ACTIVE_STATUSES.includes(record.status)) {
     const elapsed = elapsedLabel(record.timing, now);
-    return `AI 분석이 아직 끝나지 않았습니다. 현재 단계: ${currentStageLabel(record)}${elapsed ? ` · ${elapsed}` : ''}. 완료되면 이 탭에 내용이 나타납니다.`;
+    return `요약이 아직 끝나지 않았습니다. 현재 단계: ${currentStageLabel(record)}${elapsed ? ` · ${elapsed}` : ''}. 완료되면 이 탭에 내용이 나타납니다.`;
   }
   if (FAILURES.includes(record.status)) {
     return `${record.error || '분석을 완료하지 못했습니다.'} 목록에서 다시 시도하면 저장된 통화 원문부터 분석을 이어서 진행합니다.`;

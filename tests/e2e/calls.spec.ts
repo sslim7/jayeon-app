@@ -109,7 +109,7 @@ test('분석 중인 통화는 진행 막대와 경과 시간을 보여 준다', 
   await expect(page.getByText(/^진행 중 · 3분 \d{2}초 경과 · 42%$/)).toBeVisible();
   const bar = page.getByRole('progressbar', { name: '음성 변환 42%' });
   await expect(bar).toHaveAttribute('aria-valuenow', '42');
-  await expect(page.getByText('통화 분석', { exact: true })).toBeVisible();
+  await expect(page.getByText('요약 생성', { exact: true })).toBeVisible();
   await expect(page.getByText('예정', { exact: true }).first()).toBeVisible();
   // 카드가 펴진 행에는 같은 단계·경과 시간을 다시 적는 한 줄 요약이 없다.
   await expect(page.getByText(/^음성 변환 · /)).toHaveCount(0);

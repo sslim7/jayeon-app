@@ -14,7 +14,7 @@ import { formatPhone } from '@/lib/phone';
 import type { CallRecord, CallStatus } from '@/types/calls';
 
 // 진행 중인 단계 이름은 `call-progress.ts` 가 갖는다(화면 넷으로 묶은 단계와 같은 이름이어야 한다).
-const labels: Record<CallStatus, string> = { PENDING: '분석 대기', PREPARING: '분석 준비', TRANSCRIBING: '음성 변환', ANALYZING: '통화 분석', UPLOADING: '결과 저장', COMPLETED: '분석 완료', FAILED: '분석을 완료하지 못했습니다.', TRANSCRIPTION_FAILED: '음성 변환을 완료하지 못했습니다.', ANALYSIS_FAILED: '음성 변환은 완료되었지만 AI 분석을 완료하지 못했습니다.', UPLOAD_FAILED: '분석은 완료되었지만 서버에 저장하지 못했습니다.', UPLOAD_REJECTED: '분석 결과를 서버가 받지 못했습니다. 다시 분석해 주세요.' };
+const labels: Record<CallStatus, string> = { PENDING: '분석 대기', PREPARING: '분석 준비', TRANSCRIBING: '음성 변환', ANALYZING: '요약 생성', UPLOADING: '결과 저장', COMPLETED: '분석 완료', FAILED: '분석을 완료하지 못했습니다.', TRANSCRIPTION_FAILED: '음성 변환을 완료하지 못했습니다.', ANALYSIS_FAILED: '음성 변환은 완료되었지만 요약을 만들지 못했습니다.', UPLOAD_FAILED: '분석은 완료되었지만 서버에 저장하지 못했습니다.', UPLOAD_REJECTED: '분석 결과를 서버가 받지 못했습니다. 다시 분석해 주세요.' };
 /** 멈춘 자리를 함께 보여 줄 상태. 실패는 「어디까지 갔는지」가 유일한 단서다. */
 const STOPPED: CallStatus[] = ['FAILED', 'TRANSCRIPTION_FAILED', 'ANALYSIS_FAILED', 'UPLOAD_FAILED', 'UPLOAD_REJECTED'];
 const retryLabels: Partial<Record<CallStatus, string>> = { FAILED: '다시 시도', TRANSCRIPTION_FAILED: '음성 변환 다시 시도', ANALYSIS_FAILED: '분석 다시 시도', UPLOAD_FAILED: '서버 저장 다시 시도', UPLOAD_REJECTED: '분석 다시 시도' };
