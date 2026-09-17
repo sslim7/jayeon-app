@@ -169,13 +169,15 @@ export function currentStageLabel(record: { status: CallStatus; timing?: CallTim
 }
 
 /**
- * 부분 성공을 **숨기지 않는다.** 한 구간이 끝내 분석되지 않으면 그 구간은 결과에서 빠지는데,
- * 그 사실을 말하지 않으면 사용자는 통화 전체가 정리된 줄 안다.
+ * 부분 성공을 **숨기지 않는다.** 한 구간이 끝내 요약되지 않으면 그 구간의 내용은 요약에서
+ * 빠지는데, 그 사실을 말하지 않으면 사용자는 통화 전체가 정리된 줄 안다.
+ *
+ * 기기가 요약만 만드는 지금은 부분 성공도 이 한 가지다 — 「요약에서 빠진 구간」.
  */
 export function skippedNotice(timing: CallTiming | null | undefined): string {
   const llm = timing?.llm;
   if (!llm?.skipped) return '';
-  return `구간 ${llm.chunks}개 중 ${llm.skipped}개는 분석하지 못해 결과에서 빠졌습니다.`;
+  return `구간 ${llm.chunks}개 중 ${llm.skipped}개는 요약하지 못해 결과에서 빠졌습니다.`;
 }
 
 /** 실패를 짚기 위한 숫자 한 줄. **통화 내용은 담지 않는다**(→ `lib/call-errors.ts`). */
@@ -185,13 +187,12 @@ export function diagnosticsLabel(timing: CallTiming | null | undefined): string 
   const parts = [`AI 호출 ${llm.completions}회`, `생성 ${llm.tokens} 토큰`];
   if (llm.tokens_per_second) parts.push(`${llm.tokens_per_second} 토큰/초`);
   if (llm.stopped_limit) parts.push(`출력 한도 도달 ${llm.stopped_limit}회`);
-  if (llm.summary_only) parts.push(`요약만 추출 ${llm.summary_only}회`);
   if (llm.merge_fallbacks) parts.push(`요약 통합 대체 ${llm.merge_fallbacks}회`);
   return parts.join(' · ');
 }
 
 /**
- * 분석이 없는 통화에서 요약·상세·할 일·상담 분석 탭을 눌렀을 때 보여 줄 안내.
+ * 요약이 없는 통화에서 「통화 요약」 탭을 눌렀을 때 보여 줄 안내.
  *
  * 빈 화면은 「고장 났나?」로 읽힌다. **왜 비었는지**를 말해야 사용자가 다음에 무엇을 할지
  * 안다 — 진행 중이면 어느 단계인지, 실패했으면 이유(+코드)와 다시 시도하는 길이다.
@@ -205,17 +206,6 @@ export function missingAnalysisNotice(record: { status: CallStatus; error?: stri
     return `${record.error || '분석을 완료하지 못했습니다.'} 목록에서 다시 시도하면 저장된 통화 원문부터 분석을 이어서 진행합니다.`;
   }
   return 'AI 분석이 완료되지 않아 아직 보여 드릴 내용이 없습니다. 통화 원문 탭에서 저장된 내용을 확인해 주세요.';
-}
-
-/**
- * 기기 분석이 **만들지 않는** 항목의 안내.
- *
- * 이 버전의 기기 분석은 요약·할 일·결정사항만 만든다(→ `lib/call-analysis.ts`). 상세 내용과
- * 상담 분석 탭을 빈 채로 두면 「고장 났나?」로 읽히므로, 없는 내용을 지어내는 대신 **왜
- * 비었는지**를 적는다.
- */
-export function unavailableSectionNotice(section: string): string {
-  return `${section}은 이 버전의 기기 분석에서 만들지 않습니다. 기기에서는 통화 요약과 할 일, 결정사항만 정리합니다. ${section}은 서버 분석이 준비되면 제공할 예정입니다.`;
 }
 
 /** 실제로 잰 속도만 말한다. 1초가 안 된 구간은 아직 속도라고 부를 값이 없어 null 이다. */

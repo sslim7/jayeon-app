@@ -20,7 +20,9 @@ test.beforeEach(async ({ page }) => {
   await page.getByRole('button', { name: '메뉴 열기' }).click();
   await page.getByRole('link', { name: '통화분석', exact: true }).click();
 });
-test('이름 필터와 저장된 분석 탭을 조회한다', async ({ page }) => {
+// 이 기록에는 상세 내용·할 일·상담 분석이 모두 들어 있다(옛 기기 분석이 만든 기록이자, 서버
+// 분석이 붙은 뒤 받게 될 모양이다). 내용이 있으면 그 탭이 그대로 보여야 한다.
+test('내용이 있는 분석은 상세·할 일·상담 분석 탭까지 보여 준다', async ({ page }) => {
   await expect(page.getByText('김영국', { exact: true })).toBeVisible();
   await page.getByLabel('이름으로 필터링').fill('없는 이름');
   await expect(page.getByText('이름에 해당하는 통화가 없습니다.')).toBeVisible();
@@ -130,39 +132,40 @@ test('실패한 통화는 멈춘 단계와 이유·코드를 보여 준다', asy
   await expect(page.getByText(/코드: INCOMPLETE_ANALYSIS/)).toHaveCount(1);
   await expect(page.getByText(/^멈춤 · 3분 \d{2}초$/)).toBeVisible();
   await expect(page.getByText(/걸렸습니다$/)).toHaveCount(0);
-  await expect(page.getByText('구간 3개 중 3개는 분석하지 못해 결과에서 빠졌습니다.')).toBeVisible();
+  await expect(page.getByText('구간 3개 중 3개는 요약하지 못해 결과에서 빠졌습니다.')).toBeVisible();
   await expect(page.getByRole('button', { name: '분석 다시 시도' })).toBeVisible();
   // 분석이 없는 통화에서도 다른 탭이 빈 화면이 되지 않는다.
   await page.getByRole('button', { name: '저장된 원문 보기' }).click();
   await expect(page.getByText('다음 주에 다시 연락드리겠습니다.', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: '통화 요약', exact: true }).click();
   await expect(page.getByText(/코드: INCOMPLETE_ANALYSIS\) 목록에서 다시 시도하면/)).toBeVisible();
-  await page.getByRole('tab', { name: '할 일' }).click();
-  await expect(page.getByText(/목록에서 다시 시도하면/)).toBeVisible();
+  // 분석이 없으면 요약과 원문 말고 누를 탭이 없다. 빈 탭을 띄워 두고 헛걸음시키지 않는다.
+  await expect(page.getByRole('tab')).toHaveCount(2);
 });
-test('기기에서 만들지 않는 탭은 빈 화면 대신 이유를 보여 준다', async ({ page }) => {
-  // 이 버전의 기기 분석은 요약·할 일·결정사항만 만든다. 나머지 필드는 서버 계약을 맞추려고
-  // 빈 배열로 채워 보내는데, 그 탭이 빈 화면이 되면 「고장 났나?」로 읽힌다.
+test('요약만 만든 기록은 요약과 원문 탭만 보여 준다', async ({ page }) => {
+  // 이 버전의 기기 분석은 요약만 만든다. 나머지 필드는 서버 계약을 맞추려고 빈 배열로 채워
+  // 보내는데, 그 탭을 띄워 두면 누를 것이 없는 탭에 사용자를 헛걸음시킨다. 그래서 걷는다.
   const reduced: CallRecord = {
     call_id: 'call-5', contact: { name: '정요약', phone: '+821033332222' },
     call: { file_name: 'short.m4a', duration: 150, recorded_at: '2026-09-17T01:00:00Z' }, created_at: '2026-09-17T01:05:00Z',
     status: 'COMPLETED', progress: null, summary: '견적 전달을 요청한 통화입니다.',
-    analysis: { schema_version: 1, summary: '견적 전달을 요청한 통화입니다.', details: [], todos: [{ content: '견적서 전달', owner: null, due_date: null, source: '견적 주세요.' }], decisions: ['다음 주에 다시 통화'], consulting: { customer_needs: [], questions: [], concerns: [], objections: [], important_points: [], followups: [] } },
-    timing: { started_at: 'RUNNING', finished_at: 'NOW', llm: { chunks: 1, completions: 1, skipped: 0, tokens: 260, tokens_per_second: 9.4, stopped_limit: 0, merge_fallbacks: 0, summary_only: 0 } },
+    transcript: { text: '견적서를 보내 주세요.', segments: [{ start: 0, end: 4, text: '견적서를 보내 주세요.' }] },
+    analysis: { schema_version: 1, summary: '견적 전달을 요청한 통화입니다.', details: [], todos: [], decisions: [], consulting: { customer_needs: [], questions: [], concerns: [], objections: [], important_points: [], followups: [] } },
+    timing: { started_at: 'RUNNING', finished_at: 'NOW', llm: { chunks: 1, completions: 1, skipped: 0, tokens: 260, tokens_per_second: 9.4, stopped_limit: 0, merge_fallbacks: 0 } },
   };
   await installCallShell(page, [reduced]);
   await page.goto('/calls');
+  // 목록의 요약 한 줄은 그대로다.
   await page.getByRole('button', { name: '정요약 통화 요약 보기' }).click();
-  // 결정사항은 요약 다음으로 중요한 결과다. 상담 분석 탭이 비는 버전에서는 요약 탭에 둔다.
-  await expect(page.getByText('• 다음 주에 다시 통화')).toBeVisible();
-  await page.getByRole('tab', { name: '할 일' }).click();
-  await expect(page.getByText('☐ 견적서 전달')).toBeVisible();
-  await page.getByRole('tab', { name: '상세 내용' }).click();
-  await expect(page.getByText(/^상세 내용은 이 버전의 기기 분석에서 만들지 않습니다\./)).toBeVisible();
-  await page.getByRole('tab', { name: '상담 분석' }).click();
-  await expect(page.getByText(/^상담 분석은 이 버전의 기기 분석에서 만들지 않습니다\./)).toBeVisible();
-  // 빈 화면이 아니라는 뜻은 「왜 비었는지」가 보인다는 뜻이다.
-  await expect(page.getByText(/서버 분석이 준비되면 제공할 예정입니다\./)).toBeVisible();
+  await expect(page.getByRole('tab')).toHaveCount(2);
+  await expect(page.getByRole('tab', { name: '통화 요약', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('견적 전달을 요청한 통화입니다.').first()).toBeVisible();
+  for (const gone of ['상세 내용', '할 일', '상담 분석']) await expect(page.getByRole('tab', { name: gone })).toHaveCount(0);
+  // 진단 숫자는 그대로 남는다 — 다음에 느리거나 실패했을 때 짚을 수 있는 유일한 단서다.
+  await expect(page.getByText('AI 호출 1회 · 생성 260 토큰 · 9.4 토큰/초')).toBeVisible();
+  // 원문은 지금처럼 기기에 남고 서버에도 올라간다.
+  await page.getByRole('tab', { name: '통화 원문' }).click();
+  await expect(page.getByText('견적서를 보내 주세요.', { exact: true })).toBeVisible();
 });
 test('구간 하나를 도는 동안 토큰 수와 속도로 살아 있음을 보여 준다', async ({ page }) => {
   const single: CallRecord = {

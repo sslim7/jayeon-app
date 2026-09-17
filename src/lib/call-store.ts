@@ -1,7 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import * as FS from 'expo-file-system/legacy';
 import type { CallRecord } from '@/types/calls';
-import type { ChunkResult } from './call-analysis';
 import { excludeFromBackup } from './call-models';
 /** 파일 경로는 documentDirectory 기준 상대 경로다. iOS 는 앱 업데이트마다 컨테이너 UUID 가 바뀐다. */
 export interface LocalCall extends CallRecord { local_file_uri?: string; wav_uri?: string | null }
@@ -43,8 +42,8 @@ export async function listCalls(owner: string): Promise<LocalCall[]> {
   const rows = await (await db()).getAllAsync<{ data: string }>('SELECT data FROM calls WHERE owner=?', owner);
   return rows.map(row => JSON.parse(row.data) as LocalCall).sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
-/** 구간 캐시에 넣는 값. 구간 결과(`ChunkResult`)이거나 통합 단계의 요약 한 줄이다. */
-export async function saveChunk(owner: string, id: string, index: string, value: ChunkResult | string) {
+/** 구간 캐시에 넣는 값. 구간 요약 한 줄이거나 통합 단계의 요약 한 줄이다. */
+export async function saveChunk(owner: string, id: string, index: string, value: string) {
   await (await db()).runAsync('INSERT OR REPLACE INTO analysis_chunks(owner,call_id,chunk_index,data) VALUES(?,?,?,?)', owner, id, index, JSON.stringify(value));
 }
 export async function readChunk<T>(owner: string, id: string, index: string): Promise<T | null> {

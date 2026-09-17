@@ -74,7 +74,8 @@ export default function CallsScreen() {
   }
   return <SmsPage title="통화분석" hideTitle wide>
     <TextField label="이름으로 필터링" value={query} onChangeText={(value) => { setQuery(value); setPage(0); }} placeholder="통화 상대 이름" />
-    <Text style={s.meta}>AI 분석은 기기에서 처리됩니다. 요약을 누르면 저장된 분석 내용을 볼 수 있습니다.</Text>
+    {/* 기기가 만드는 것은 요약뿐이다(→ `lib/call-analysis.ts`). 원문은 그대로 서버에 올라간다. */}
+    <Text style={s.meta}>AI 요약은 기기에서 처리됩니다. 요약을 누르면 저장된 통화 요약과 원문을 볼 수 있습니다.</Text>
     {error ? <Notice error message={error} /> : null}{loading ? <Loading /> : null}
     <ScrollView horizontal={!mobile}><View style={!mobile ? styles.table : undefined}>
       {!mobile ? <View style={[styles.row, styles.heading]}>{['이름', '전화번호', '통화일시', '요약 한 줄'].map((label, i) => <Text key={label} style={[s.meta, styles.cell, i === 3 && styles.summary]}>{label}</Text>)}</View> : null}

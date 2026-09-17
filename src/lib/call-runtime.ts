@@ -7,7 +7,7 @@ import { getSessionVersion } from '@/lib/auth-tokens';
 import { api, ApiError } from '@/lib/api';
 import { ENV } from '@/config/env';
 import type { CallAnalysis, CallContact, CallDevice, CallFile, CallLive, CallRecord, CallStageKey, CallStartInput, CallStatus, CallTiming } from '@/types/calls';
-import { ANALYSIS_CTX, CHUNK_PREDICT, CONTEXT_MARGIN, MERGE_PREDICT, SUMMARY_PREDICT, capSummary, chunkInstruction, chunkTranscript, mergeAnalyses, mergeInstruction, parseAnalysis, parseChunkResult, parseSummary, sanitizeTranscript, summaryInstruction, type ChunkResult } from './call-analysis';
+import { ANALYSIS_CTX, CONTEXT_MARGIN, MERGE_PREDICT, SUMMARY_PREDICT, capSummary, chunkTranscript, mergeInstruction, parseAnalysis, parseSummary, sanitizeTranscript, summaryAnalysis, summaryInstruction } from './call-analysis';
 import { failureCode, failureText, httpCode } from './call-errors';
 import { inferenceThreads } from './call-threads';
 import { MERGE_FAN, analysisProgress, mergeSteps, tokensPerSecond, transcribeProgress } from './call-progress';
@@ -167,16 +167,16 @@ async function processCall(owner: string, id: string) {
       try {
         cancelInference = () => llama.stopCompletion();
         // 실패를 다음에 짚을 수 있도록 **숫자만** 남긴다(생성 토큰, 속도, 한도에 닿은 횟수).
-        const stats = timing.llm ??= { chunks: 0, completions: 0, skipped: 0, tokens: 0, tokens_per_second: null, stopped_limit: 0, merge_fallbacks: 0, summary_only: 0 };
+        const stats = timing.llm ??= { chunks: 0, completions: 0, skipped: 0, tokens: 0, tokens_per_second: null, stopped_limit: 0, merge_fallbacks: 0 };
         /**
          * 한 번의 생성. **JSON schema grammar 를 쓰지 않는다** — 151k vocab 을 token 마다 훑는
          * 비용이 0.6B 모델의 forward 보다 크고, 배열을 이어 붙이다 한도에 닿으면 구간 전체를
          * 잃었다. 대신 줄 단위 텍스트를 받아 읽는다(→ `call-analysis.ts`).
          *
-         * `truncated` 는 출력 한도에 닿았다는 뜻이다. 이제 실패가 아니라 **마지막 줄만 버리는**
-         * 신호다.
+         * 출력 한도에 닿아도(`stopped_limit`) 실패가 아니다. 요약은 한 줄이라 앞부분이 그대로
+         * 살아남는다 — 숫자로만 남겨 두고 받은 만큼을 쓴다.
          */
-        async function complete(source: string, instruction: string, predict: number): Promise<{ text: string; truncated: boolean }> {
+        async function complete(source: string, instruction: string, predict: number): Promise<string> {
           guard();
           // Tokenize with the actual selected model; reserve chat-template and output space.
           const tokens = await llama.tokenize(instruction + '\n' + source);
@@ -194,52 +194,42 @@ async function processCall(owner: string, id: string) {
           if (typeof speed === 'number' && Number.isFinite(speed)) stats.tokens_per_second = Math.round(speed * 10) / 10;
           if (result.stopped_limit) stats.stopped_limit++;
           if (!result.text.trim()) throw new Error('INCOMPLETE_ANALYSIS');
-          return { text: result.text.trim(), truncated: !!result.stopped_limit };
+          return result.text.trim();
         }
         const chunks = chunkTranscript(call.transcript!.segments);
         // 이어서 도는 실행도 모든 구간을 다시 훑는다(끝난 구간은 캐시로 즉시 통과). 그래서
         // 「빠진 구간」은 **이번 실행 기준**으로 다시 센다 — 지난 실행에서 빠진 구간이 이번에
         // 성공했는데도 빠졌다고 남으면 거짓말이 된다.
-        stats.chunks = chunks.length; stats.skipped = 0; stats.merge_fallbacks = 0; stats.summary_only = 0;
-        const parts: ChunkResult[] = [];
+        stats.chunks = chunks.length; stats.skipped = 0; stats.merge_fallbacks = 0;
+        // 구간마다 **요약 한 줄**이다. 예전에는 여기에 할 일·결정사항이 함께 붙었다.
+        const parts: string[] = [];
         let failure: unknown = null;
         // chunk 하나와 요약 통합 한 번이 각각 한 몫이다(→ `call-progress.ts`).
         let done = 0;
         for (let index = 0; index < chunks.length; index++) {
           guard();
-          // 캐시 키는 `chunk2` 다. 예전 버전이 남긴 `chunk:` 캐시는 모양이 다른 JSON 이라
-          // 읽으면 안 된다 — 키를 바꿔 자연히 무시하고, 완료 때 함께 지운다.
-          const cached = await readChunk<ChunkResult>(owner, id, `chunk2:${index}`);
+          // 캐시 키는 `chunk3` 다. 예전 버전이 남긴 `chunk:`/`chunk2:` 캐시는 모양이 다른 JSON
+          // (객체)이라 읽으면 안 된다 — 키를 바꿔 자연히 무시하고, 완료 때 함께 지운다.
+          const cached = await readChunk<string>(owner, id, `chunk3:${index}`);
           const source = chunks[index].map(s => `[${s.start.toFixed(1)}] ${s.text}`).join('\n');
           liveAnalysis.set(liveKey, { chunk: index + 1, chunks: chunks.length, tokens: 0, started: Date.now() });
-          let value = cached ?? null;
+          let value = typeof cached === 'string' ? cached : null;
           if (!value) {
             // 한 구간이 끝내 안 되더라도 나머지는 살린다. 대신 **빠진 구간 수를 숨기지 않는다**.
-            try { const result = await complete(source, chunkInstruction, CHUNK_PREDICT); value = parseChunkResult(result.text, result.truncated); }
-            catch (error) {
-              if (interruption(error)) throw error;
-              failure = error;
-              // 요약이 가장 중요하다. 형식이 깨졌으면 **요약만** 다시 받는다(그 구간의 할 일·
-              // 결정사항은 포기한다). 지어내지 않고 건질 수 있는 것만 건진다.
-              try {
-                const retry = await complete(source, summaryInstruction, SUMMARY_PREDICT);
-                value = { summary: parseSummary(retry.text), todos: [], decisions: [] };
-                stats.summary_only = (stats.summary_only ?? 0) + 1;
-              }
-              catch (retry) { if (interruption(retry)) throw retry; failure = retry; value = null; }
-            }
+            try { value = parseSummary(await complete(source, summaryInstruction, SUMMARY_PREDICT)); }
+            catch (error) { if (interruption(error)) throw error; failure = error; value = null; }
           }
           if (!value) { stats.skipped++; done++; call.progress = analysisProgress(done, chunks.length); await saveCall(owner, call); continue; }
           // 상한을 넘긴 요약은 통합 단계에서 계속 실패한다. 캐시에 넣기 전에 자른다.
-          value = { ...value, summary: capSummary(value.summary) };
-          if (!cached) await saveChunk(owner, id, `chunk2:${index}`, value);
+          value = capSummary(value);
+          if (cached == null) await saveChunk(owner, id, `chunk3:${index}`, value);
           parts.push(value);
           done++; call.progress = analysisProgress(done, chunks.length);
           await saveCall(owner, call);
         }
         // 한 구간도 살아남지 못했으면 지어낼 것이 없다. 마지막 실패 이유를 그대로 올린다.
         if (!parts.length) throw failure ?? new Error('INCOMPLETE_ANALYSIS');
-        let summaries = parts.map(p => capSummary(p.summary));
+        let summaries = parts;
         // 여기서부터 통합 횟수가 확정된다(빠진 구간만큼 줄어든다).
         const merges = mergeSteps(parts.length);
         let level = 0;
@@ -259,7 +249,7 @@ async function processCall(owner: string, id: string) {
             let merged = cached;
             if (merged == null) {
               // 통합에 실패하면 요약들을 이어 붙인다. 없는 내용을 지어내지 않고, 있는 내용도 버리지 않는다.
-              try { merged = parseSummary((await complete(group.join('\n\n'), mergeInstruction, MERGE_PREDICT)).text); }
+              try { merged = parseSummary(await complete(group.join('\n\n'), mergeInstruction, MERGE_PREDICT)); }
               catch (error) { if (interruption(error)) throw error; stats.merge_fallbacks++; merged = group.join(' '); }
             }
             const summary = capSummary(merged);
@@ -273,7 +263,8 @@ async function processCall(owner: string, id: string) {
         // 통합까지 끝나면 분석 단계는 100% 다. 통합이 한 번도 없었던 경우(구간 하나, 또는 빠진
         // 구간 때문에 하나만 남은 경우)에도 마지막 값이 어긋나지 않게 여기서 한 번 맞춘다.
         call.progress = analysisProgress(done, chunks.length, merges);
-        const analysis = mergeAnalyses(parts, summaries[0]);
+        // 기기가 만드는 것은 요약뿐이다. 나머지 항목은 빈 배열로 두고 서버 분석을 기다린다.
+        const analysis = summaryAnalysis(summaries[0]);
         validateUploadSize(analysis);
         call.analysis = analysis;
         call.summary = call.analysis.summary.replace(/\s+/g, ' ').slice(0, 200);

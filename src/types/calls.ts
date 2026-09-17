@@ -1,6 +1,14 @@
 export type CallStatus = 'PENDING' | 'PREPARING' | 'TRANSCRIBING' | 'ANALYZING' | 'UPLOADING' | 'COMPLETED' | 'FAILED' | 'TRANSCRIPTION_FAILED' | 'ANALYSIS_FAILED' | 'UPLOAD_FAILED' | 'UPLOAD_REJECTED';
 export interface CallContact { name: string; phone: string; recipient_id?: string | null }
 export interface TranscriptSegment { start: number; end: number; text: string; speaker?: string }
+/**
+ * 저장·업로드하는 분석 한 덩어리. **서버 계약과 같은 모양**이다(`internal/calls/model.go`).
+ *
+ * 🔧 이 버전의 기기 분석은 `summary` 만 채우고 나머지는 빈 배열이다(→ `lib/call-analysis.ts`).
+ * 나머지 필드는 **서버 분석이 붙는 자리**로 남겨 둔다 — 지우면 옛 기록을 읽을 수 없고, 서버가
+ * 상세 분석을 돌려줄 때 `schema_version` 을 올려야 한다. 채워 넣기만 하면 화면의 탭이
+ * 되살아난다(→ `components/call-detail.tsx`).
+ */
 export interface CallAnalysis {
   schema_version: 1;
   summary: string;
@@ -21,12 +29,10 @@ export interface CallStageTiming { started_at?: string | null; ms?: number | nul
  */
 /**
  * 실패를 다음에 짚기 위한 **숫자만** 담는다. 통화 내용은 절대 담지 않는다.
- * `stopped_limit` 은 출력 한도에 닿아 끊긴 횟수, `skipped` 는 끝내 분석하지 못해 뺀 구간 수,
- * `summary_only` 는 형식이 깨져 요약만 건진 구간 수다(할 일·결정사항을 포기한 구간).
- *
- * `summary_only` 는 **없을 수 있다** — 이 값을 세기 전에 분석한 기록이 그대로 남아 있다.
+ * `stopped_limit` 은 출력 한도에 닿아 끊긴 횟수, `skipped` 는 끝내 요약하지 못해 뺀 구간 수,
+ * `merge_fallbacks` 는 요약 통합에 실패해 구간 요약을 이어 붙인 횟수다.
  */
-export interface CallLlmStats { chunks: number; completions: number; skipped: number; tokens: number; tokens_per_second: number | null; stopped_limit: number; merge_fallbacks: number; summary_only?: number }
+export interface CallLlmStats { chunks: number; completions: number; skipped: number; tokens: number; tokens_per_second: number | null; stopped_limit: number; merge_fallbacks: number }
 /**
  * 진행 중인 구간의 실시간 상태. **메모리에만 있고 저장·업로드하지 않는다**(토큰마다 DB 를
  * 쓰면 SQLite 가 종일 돈다). 목록·상세를 읽을 때 그 순간 값을 붙여 준다.

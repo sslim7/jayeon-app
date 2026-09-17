@@ -17,8 +17,8 @@ const errorsModule = { exports: {} };
 vm.runInNewContext(`(function(exports){${compile('src/lib/call-errors.ts')}\n})`, { ...realms, RegExp })(errorsModule.exports);
 const threadsModule = { exports: {} };
 vm.runInNewContext(`(function(exports){${compile('src/lib/call-threads.ts')}\n})`, { ...realms })(threadsModule.exports);
-// 모델이 내놓는 줄 단위 출력. JSON schema grammar 를 걷어 낸 뒤의 실제 모양이다.
-const OUTPUT = ['요약: 견적 전달을 요청한 통화입니다.', '할일: 견적서 전달 | 근거: 견적 주세요.', '결정: 다음 주에 다시 통화'].join('\n');
+// 모델이 내놓는 출력. 이 버전이 요청하는 것은 **요약 한 줄**뿐이다.
+const OUTPUT = '요약: 견적 전달을 요청한 통화입니다.';
 class ApiError extends Error {
   constructor(status) { super(`API error ${status}`); this.status = status; this.name = 'ApiError'; }
 }
@@ -96,8 +96,8 @@ test('LLM 실패 뒤에는 저장된 transcript부터 재개한다', async () =>
   const h = setup(); h.failures.llm = true; const call = await h.start(); await h.settled(call.call_id, 'ANALYSIS_FAILED');
   assert.ok(h.rows.get(`a:${call.call_id}`).transcript); assert.equal(h.calls.upload, 0);
   h.failures.llm = false; await h.device.retry(call.call_id); await h.settled(call.call_id, 'COMPLETED');
-  // 실패한 chunk 는 상한이 있는 스키마로 한 번 더 시도한다(1+1), 재시도에서 한 번 더 돈다.
-  assert.equal(h.calls.stt, 1); assert.equal(h.calls.llm, 3);
+  // 구간마다 요약을 한 번만 부른다. 실패한 구간을 다른 지시문으로 다시 부르는 경로는 없다.
+  assert.equal(h.calls.stt, 1); assert.equal(h.calls.llm, 2);
 });
 test('분석 도중 계정 전환은 이전 계정 결과 업로드와 다른 계정 조회를 차단한다', async () => {
   const h = setup(); h.setDuringLlm(async () => h.switchOwner()); const call = await h.start();
@@ -218,49 +218,51 @@ test('실패는 멈춘 단계에서 시간을 닫는다', async () => {
   assert.ok(!timing.stages.UPLOAD);
 });
 
-test('한 구간을 끝내 분석하지 못해도 나머지로 결과를 만들고 뺀 구간 수를 남긴다', async () => {
-  const h = setup({ chunkCount: 2 }); h.failures.llmUntil = 2;
+test('한 구간을 끝내 요약하지 못해도 나머지로 결과를 만들고 뺀 구간 수를 남긴다', async () => {
+  const h = setup({ chunkCount: 2 }); h.failures.llmUntil = 1;
   const call = await h.start(); await h.settled(call.call_id, 'COMPLETED');
   const saved = h.rows.get(`a:${call.call_id}`);
   assert.ok(saved.analysis);
-  // 첫 구간은 두 번(기본·상한 스키마) 실패해 빠지고, 둘째 구간이 결과를 만든다.
+  // 첫 구간은 실패해 빠지고, 둘째 구간의 요약이 결과가 된다. 부분 성공은 이 한 가지뿐이다.
   assert.equal(saved.timing.llm.skipped, 1);
   assert.equal(saved.timing.llm.chunks, 2);
   assert.equal(saved.timing.llm.tokens, 120);
   assert.equal(saved.timing.llm.tokens_per_second, 2.5);
-  // 첫 구간은 기본 형식과 요약만 받기로 두 번 시도한다(2회) — 그 뒤 둘째 구간이 한 번에 된다.
-  assert.equal(h.calls.llm, 3);
+  // 구간마다 한 번씩만 부른다(2회). 실패한 구간을 다시 부르지 않는다.
+  assert.equal(h.calls.llm, 2);
   assert.ok(h.calls.payload.analysis);
   // 살아남은 구간이 하나면 통합이 없다. 그래도 분석 단계는 100% 로 닫힌다.
   assert.ok(h.calls.progress.includes('ANALYZING:100'), h.calls.progress.join(','));
 });
-test('구간 결과는 줄 단위 출력에서 만들고, 만들지 않는 항목은 빈 배열로 보낸다', async () => {
+test('기기는 요약만 만들고 나머지 항목은 빈 배열로 보낸다', async () => {
   const h = setup();
   const call = await h.start(); await h.settled(call.call_id, 'COMPLETED');
   const analysis = h.calls.payload.analysis;
   assert.equal(analysis.schema_version, 1);
   assert.equal(analysis.summary, '견적 전달을 요청한 통화입니다.');
-  assert.equal(analysis.todos.length, 1);
-  assert.equal(analysis.todos[0].content, '견적서 전달');
-  assert.equal(analysis.todos[0].source, '견적 주세요.');
-  assert.equal(analysis.decisions.join('|'), '다음 주에 다시 통화');
-  // 서버는 이 필드들이 `null` 이면 400 으로 거부한다. 기기에서 만들지 않는 대신 빈 배열을 채운다.
+  // 🔴 할 일·결정사항·상세 내용·상담 분석은 기기에서 만들지 않는다. 서버는 이 필드들이
+  // `null` 이면 400 으로 거부하므로 빈 배열을 채워 보낸다(→ `internal/calls/model.go`).
+  assert.equal(analysis.todos.length, 0);
+  assert.equal(analysis.decisions.length, 0);
   assert.equal(analysis.details.length, 0);
   assert.equal(Object.values(analysis.consulting).every(list => list.length === 0), true);
+  // 원문은 지금처럼 그대로 올라간다 — 서버 분석이 붙을 입력이다.
+  assert.ok(h.calls.payload.transcript.segments.length);
   // 목록에 보이는 한 줄 요약도 같은 요약에서 나온다.
   assert.equal(h.rows.get(`a:${call.call_id}`).summary, '견적 전달을 요청한 통화입니다.');
 });
-test('생성 설정은 grammar 없이 좁은 출력 한도와 줄어든 context 로 돈다', async () => {
+test('생성 설정은 grammar 없이 요약에 맞춘 출력 한도와 줄어든 context 로 돈다', async () => {
   const h = setup();
   const call = await h.start(); await h.settled(call.call_id, 'COMPLETED');
   // JSON schema grammar 는 151k vocab 을 token 마다 훑어 샘플링을 느리게 만든다. 쓰지 않는다.
   assert.ok(h.calls.params.every(params => !('response_format' in params)), 'grammar 를 넘기지 않는다');
-  assert.ok(h.calls.params.every(params => params.n_predict <= 400), JSON.stringify(h.calls.params.map(p => p.n_predict)));
+  // 요약만 만드는 지금은 직전 버전(400)의 절반이면 된다. 생성량이 곧 대기 시간이다.
+  assert.ok(h.calls.params.every(params => params.n_predict <= 224), JSON.stringify(h.calls.params.map(p => p.n_predict)));
   // 짧은 통화에 8,192 context 는 과하다(KV 캐시만 약 900MB).
   assert.equal(h.calls.init.n_ctx, 4096);
   assert.equal(h.calls.init.n_batch, 512);
 });
-test('출력 한도에 닿아도 구간을 버리지 않고 받은 줄로 결과를 만든다', async () => {
+test('출력 한도에 닿아도 구간을 버리지 않고 받은 요약을 쓴다', async () => {
   const h = setup({ stoppedLimit: true });
   const call = await h.start(); await h.settled(call.call_id, 'COMPLETED');
   const saved = h.rows.get(`a:${call.call_id}`);
@@ -268,19 +270,14 @@ test('출력 한도에 닿아도 구간을 버리지 않고 받은 줄로 결과
   assert.equal(saved.timing.llm.stopped_limit, 1);
   assert.equal(saved.timing.llm.skipped, 0);
   assert.equal(saved.analysis.summary, '견적 전달을 요청한 통화입니다.');
-  // 잘린 마지막 줄(결정)은 버린다. 앞줄은 그대로 살린다.
-  assert.equal(saved.analysis.decisions.length, 0);
-  assert.equal(saved.analysis.todos.length, 1);
   assert.equal(h.calls.llm, 1);
 });
-test('형식이 깨진 구간은 요약만 다시 받아 건지고 그 사실을 남긴다', async () => {
+test('라벨을 잊은 출력도 요약으로 받고 다시 부르지 않는다', async () => {
   const h = setup({ output: '무슨 말인지 모르겠습니다.' });
   const call = await h.start(); await h.settled(call.call_id, 'COMPLETED');
   const saved = h.rows.get(`a:${call.call_id}`);
-  // 라벨이 없어도 앞머리 문장을 요약으로 받는다 — 한 번 더 부르지 않는다.
   assert.equal(h.calls.llm, 1);
   assert.equal(saved.analysis.summary, '무슨 말인지 모르겠습니다.');
-  assert.equal(saved.analysis.todos.length, 0);
 });
 test('구간이 여럿이면 요약을 4개씩 묶어 한 번에 통합한다', async () => {
   const h = setup({ chunkCount: 5 });
@@ -289,13 +286,15 @@ test('구간이 여럿이면 요약을 4개씩 묶어 한 번에 통합한다', 
   assert.equal(h.calls.llm, 7);
   assert.equal(h.rows.get(`a:${call.call_id}`).timing.llm.completions, 7);
   assert.ok(h.calls.progress.includes('ANALYZING:100'), h.calls.progress.join(','));
-  // 캐시 키는 구간·통합 모두 새 이름이다. 예전 버전이 남긴 `chunk:`/`summary:` 캐시는 모양이
+  // 캐시 키는 구간·통합 모두 새 이름이다. 예전 버전이 남긴 `chunk:`/`chunk2:` 캐시는 모양이
   // 달라 그대로 읽으면 안 된다(완료 뒤에는 지우므로 업로드가 막힌 상태에서 확인한다).
   const kept = setup({ chunkCount: 5 }); kept.failures.upload = true;
   const second = await kept.start(); await kept.settled(second.call_id, 'UPLOAD_FAILED');
   const keys = [...kept.chunks.keys()].join(',');
-  assert.ok(keys.includes(':chunk2:0'), keys);
+  assert.ok(keys.includes(':chunk3:0'), keys);
   assert.ok(keys.includes(':merge:0:0'), keys);
+  // 요약 한 줄을 담는 지금의 캐시는 옛 객체 캐시(`chunk:`/`chunk2:`)와 모양이 다르다.
+  assert.ok(!keys.includes(':chunk2:'), keys);
   assert.ok(!keys.includes(':chunk:'), keys);
 });
 test('실패 이유는 정해진 코드로만 남기고 내부 오류 문구를 흘리지 않는다', async () => {
