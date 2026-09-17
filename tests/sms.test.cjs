@@ -211,15 +211,17 @@ test('정렬은 원본 배열을 바꾸지 않고 같은 값 묶음의 순서를
 const reservationModule = { exports: {} };
 const reservationCompiled = ts.transpileModule(fs.readFileSync('src/lib/sms-reservations.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 vm.runInNewContext(`(function(exports){${reservationCompiled}\n})`, { Error, Set, Map, Array })(reservationModule.exports);
-const { readyCampaigns, reservedRows, reservedRecipientIds, excludeReserved, reservedGroups } = reservationModule.exports;
+const { reservedCampaigns, reservedRows, reservedRecipientIds, excludeReserved, reservedGroups, mergeReservation, MAX_RESERVATION_SIZE } = reservationModule.exports;
 // vm 밖에서 만든 객체와 비교하려면 realm 을 한 번 벗겨야 한다(프로토타입이 달라 deepEqual 이 막힌다).
 const plain = value => JSON.parse(JSON.stringify(value));
-const campaign = (id, title, status = 'READY') => ({ id, title, message: '안내', status, recipientCount: 0, createdAt: '2026-09-16T00:00:00Z' });
+const campaign = (id, title, status = 'READY', reserved = true) => ({ id, title, message: '안내', status, reserved, recipientCount: 0, createdAt: '2026-09-16T00:00:00Z' });
 const target = (id, recipientId, name) => ({ id, recipientId, name, phone: `0100000000${id.slice(-1)}`, campaignId: '', message: '안내', status: 'READY', createdAt: '2026-09-16T00:00:00Z', updatedAt: '2026-09-16T00:00:00Z' });
 
-test('예약은 아직 보내지 않은 캠페인(READY)만이다', () => {
+test('예약은 아직 보내지 않았고 예약으로 표시된 것만이다', () => {
   const rows = [campaign('c1', '가'), campaign('c2', '나', 'SENDING'), campaign('c3', '다', 'COMPLETED'), campaign('c4', '라', 'CANCELLED'), campaign('c5', '마')];
-  assert.deepEqual(readyCampaigns(rows).map(item => item.id), ['c1', 'c5']);
+  // 발송 준비만 해 두고 보내지 않은 문자(reserved=false)는 예약이 아니다.
+  rows.push(campaign('c6', '바', 'READY', false));
+  assert.deepEqual(reservedCampaigns(rows).map(item => item.id), ['c1', 'c5']);
 });
 test('예약 목록은 캠페인을 가로질러 이름순으로 모으고 같은 사람의 여러 예약을 모두 보여 준다', () => {
   const rows = reservedRows([
@@ -250,4 +252,45 @@ test('선택한 예약 줄은 캠페인별로 묶여 남는 사람과 빼는 사
   // 여러 캠페인에 걸친 선택은 묶음이 둘 이상이라 한 번에 발송할 수 없다.
   assert.deepEqual(reservedGroups(rows, ['c1:r1', 'c2:r4']).map(group => group.campaignId), ['c1', 'c2']);
   assert.deepEqual(plain(reservedGroups(rows, [])), []);
+});
+test('템플릿 태그는 인원수 많은 순으로, 같으면 이름순으로 줄 선다', () => {
+  const { reservedTags } = reservationModule.exports;
+  const rows = reservedRows([
+    { campaign: campaign('c1', '나중 안내'), recipients: [target('r1', 'p1', '가')] },
+    { campaign: campaign('c2', '많은 안내'), recipients: [target('r2', 'p2', '나'), target('r3', 'p3', '다')] },
+    { campaign: campaign('c3', '가나 안내'), recipients: [target('r4', 'p4', '라')] },
+    // 같은 템플릿명으로 나뉜 예약은 한 태그로 합쳐 센다.
+    { campaign: campaign('c4', '많은 안내'), recipients: [target('r5', 'p5', '마')] },
+  ]);
+  assert.deepEqual(plain(reservedTags(rows)), [{ title: '많은 안내', count: 3 }, { title: '가나 안내', count: 1 }, { title: '나중 안내', count: 1 }]);
+  assert.deepEqual(plain(reservedTags([])), []);
+});
+
+test('같은 제목의 예약은 하나로 합치고 없으면 새로 만든다', () => {
+  const reservations = [
+    { campaign: campaign('c1', '가을 안내'), recipients: [target('r1', 'p1', '가'), target('r2', 'p2', '나')] },
+    { campaign: campaign('c2', '가을 안내'), recipients: [target('r3', 'p3', '다')] },
+    { campaign: campaign('c3', '회비 안내'), recipients: [target('r4', 'p4', '라')] },
+  ];
+  const merged = mergeReservation(reservations, '가을 안내', ['p9']);
+  assert.deepEqual(merged.replaced.map(item => item.campaign.id), ['c1', 'c2']);
+  assert.deepEqual(plain(merged.chunks), [['p1', 'p2', 'p3', 'p9']]);
+  assert.equal(merged.mergedCount, 3);
+  const fresh = mergeReservation(reservations, '새 안내', ['p9']);
+  assert.deepEqual(plain(fresh.replaced), []);
+  assert.deepEqual(plain(fresh.chunks), [['p9']]);
+  assert.equal(fresh.mergedCount, 0);
+});
+test('합친 명단은 중복을 걸러 50명씩 나눈다', () => {
+  assert.equal(MAX_RESERVATION_SIZE, 50);
+  const many = Array.from({ length: 48 }, (_, i) => target(`r${i}`, `p${i}`, `사람${i}`));
+  const merged = mergeReservation([{ campaign: campaign('c1', '가을 안내'), recipients: many }], '가을 안내', Array.from({ length: 7 }, (_, i) => `n${i}`));
+  assert.deepEqual(plain(merged.chunks.map(chunk => chunk.length)), [50, 5]);
+  assert.equal(merged.mergedCount, 48);
+  // 같은 사람이 두 건에 들어 있어도 한 번만 남는다(서버가 한 건 안의 중복을 거절한다).
+  const twice = mergeReservation([
+    { campaign: campaign('c1', '가을 안내'), recipients: [target('r1', 'p1', '가')] },
+    { campaign: campaign('c2', '가을 안내'), recipients: [target('r2', 'p1', '가')] },
+  ], '가을 안내', []);
+  assert.deepEqual(plain(twice.chunks), [['p1']]);
 });

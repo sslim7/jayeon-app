@@ -75,7 +75,8 @@ async function setup(page: Page, native = false) {
         // 예약은 캠페인을 여러 개 만든다. 첫 캠페인만 기존 테스트가 쓰는 c1/cr0 이름을 유지한다.
         const cid = `c${state.campaigns.length + 1}`;
         const prefix = state.campaigns.length ? `${cid}r` : 'cr';
-        campaign = { ...input, id: cid, status: 'READY', recipientCount: input.recipientIds.length, attachments: state.attachments.filter(a => (input.attachmentIds || []).includes(a.id)), createdAt: now };
+        // 서버 계약: 예약으로 만든 것만 reserved=true, 나머지는 false 로 응답한다.
+        campaign = { ...input, id: cid, status: 'READY', reserved: input.reserved === true, recipientCount: input.recipientIds.length, attachments: state.attachments.filter(a => (input.attachmentIds || []).includes(a.id)), createdAt: now };
         state.campaigns.push(campaign!);
         state.targets.push(...input.recipientIds.map((id: string, i: number) => ({ ...state.people.find(p => p.id === id)!, id: `${prefix}${i}`, recipientId: id, campaignId: cid, message: input.message, attachments: state.attachments.filter(a => (input.attachmentIds || []).includes(a.id)), status: 'READY' })));
       }
@@ -166,7 +167,7 @@ test('수신자 번호 정규화·수정·삭제', async ({ page }) => {
   await page.getByRole('button', { name: '삭제 확인', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: /박영수/ })).toHaveCount(0);
 });
-test('웹은 캠페인을 만들고 조회하지만 SMS를 발송하지 않는다', async ({ page }) => {
+test('웹은 문자를 준비하고 조회하지만 SMS를 발송하지 않는다', async ({ page }) => {
   const state = await setup(page); await compose(page);
   await expect(page.getByRole('heading', { name: '9월 모임 안내' })).toBeVisible();
   await expect(page.getByText(/이 기능은 Android 앱에서/)).toBeVisible();
@@ -175,11 +176,11 @@ test('웹은 캠페인을 만들고 조회하지만 SMS를 발송하지 않는�
   await expect(page.getByRole('button', { name: '닫기', exact: true })).toBeVisible();
   expect(state.targets.every(r => r.status === 'READY')).toBeTruthy();
 });
-test('생성 응답 유실과 새로고침에도 같은 캠페인을 확인한다', async ({ page }) => {
+test('생성 응답 유실과 새로고침에도 같은 문자를 확인한다', async ({ page }) => {
   const state = await setup(page); state.failCreate = true; await compose(page);
-  await expect(page.getByRole('button', { name: '같은 캠페인 생성 요청 다시 확인' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '같은 요청 다시 확인' })).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: '같은 캠페인 생성 요청 다시 확인' }).click();
+  await page.getByRole('button', { name: '같은 요청 다시 확인' }).click();
   await expect(page.getByRole('heading', { name: '9월 모임 안내' })).toBeVisible();
   expect(state.campaigns).toHaveLength(1);
 });
@@ -662,11 +663,11 @@ test('50명은 발송 가능하고 51명은 버튼 안의 빨간 제한 안내�
 });
 
 const autumn = { id: 't-autumn', name: '가을 안내', message: '가을 모임 안내입니다.', attachments: [], createdAt: now, updatedAt: now };
-async function reserve(page: Page, names: RegExp[]) {
+async function reserve(page: Page, names: RegExp[], template = '가을 안내') {
   await page.goto('/sms/new');
   for (const name of names) await page.getByRole('checkbox', { name }).click();
   await page.getByRole('button', { name: '예약하기', exact: true }).click();
-  await page.getByRole('checkbox', { name: '가을 안내', exact: true }).click();
+  await page.getByRole('checkbox', { name: template, exact: true }).click();
   await page.getByRole('button', { name: '예약 확인', exact: true }).click();
 }
 
@@ -699,7 +700,10 @@ test('선택한 수신자를 템플릿으로 예약하고 예약함에서 발송
   await page.getByRole('button', { name: '메뉴 열기', exact: true }).click();
   await page.getByRole('link', { name: '예약 문자 보내기', exact: true }).click();
   await expect(page).toHaveURL(/\/sms\/reserved$/);
-  const row = page.getByRole('checkbox', { name: '김철수 · 010-1234-5678 · 가을 안내', exact: true });
+  // 템플릿 태그가 하나면 그 태그가 자동으로 골라져 있고 목록은 그 템플릿만 보여 준다.
+  await expect(page.getByRole('button', { name: '가을 안내 예약 1명', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('columnheader', { name: '템플릿명' })).toHaveCount(0);
+  const row = page.getByRole('checkbox', { name: '김철수 · 010-1234-5678', exact: true });
   await expect(row).toBeVisible();
   await expect(page.getByRole('button', { name: '발송', exact: true })).toBeDisabled();
   await row.click();
@@ -712,32 +716,78 @@ test('선택한 수신자를 템플릿으로 예약하고 예약함에서 발송
 
 test('예약함 삭제는 수신자를 남기고 예약만 취소한다', async ({ page }) => {
   const state = await setup(page);
+  state.people.push({ id: 'p3', name: '박영수', phone: '+821011112222', groupId: '모임', createdAt: now, updatedAt: now });
   state.templates.push({ ...autumn });
+  state.templates.push({ ...autumn, id: 't-fee', name: '회비 안내', message: '회비 안내드립니다.' });
   await reserve(page, [/김철수/, /김영희/]);
   await expect(page.getByText('2명을 「가을 안내」 템플릿으로 예약했어요.', { exact: true })).toBeVisible();
+  await reserve(page, [/박영수/], '회비 안내');
   await page.goto('/sms/reserved');
+  // 인원수가 많은 태그가 먼저 오고 자동으로 골라진다. 다른 템플릿의 예약은 보이지 않는다.
+  const autumnTag = page.getByRole('button', { name: '가을 안내 예약 2명', exact: true });
+  const feeTag = page.getByRole('button', { name: '회비 안내 예약 1명', exact: true });
+  await expect(autumnTag).toHaveAttribute('aria-pressed', 'true');
+  await expect(feeTag).toHaveAttribute('aria-pressed', 'false');
+  expect((await autumnTag.boundingBox())!.x).toBeLessThan((await feeTag.boundingBox())!.x);
+  await expect(page.getByRole('checkbox', { name: /박영수/ })).toHaveCount(0);
+  // 태그를 바꾸면 목록도 선택도 바뀐다.
+  await page.getByRole('checkbox', { name: /김영희/ }).click();
+  await feeTag.click();
+  await expect(feeTag).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('checkbox', { name: /박영수/ })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: /김영희/ })).toHaveCount(0);
+  await expect(page.getByText('회비 안내 1명 · 선택 0명', { exact: true })).toBeVisible();
+  await autumnTag.click();
+  await expect(page.getByRole('checkbox', { name: /김영희/ })).not.toBeChecked();
   await page.getByRole('checkbox', { name: /김영희/ }).click();
   await page.getByRole('button', { name: '삭제', exact: true }).click();
   await expect(page.getByText('선택한 1명을 예약에서 뺄까요?', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '예약 취소 되돌리기', exact: true }).click();
-  expect(state.campaigns).toHaveLength(1);
+  expect(state.campaigns).toHaveLength(2);
   await page.getByRole('button', { name: '삭제', exact: true }).click();
   await page.getByRole('button', { name: '예약 취소 확인', exact: true }).click();
   await expect(page.getByText('1명의 예약을 취소했어요.', { exact: true })).toBeVisible();
-  // 남는 사람으로 새 예약을 먼저 만든 뒤 기존 예약을 취소한다.
-  expect(state.campaigns.map(c => c.status)).toEqual(['CANCELLED', 'READY']);
-  expect(state.campaigns[1]).toMatchObject({ title: '가을 안내', recipientCount: 1 });
+  // 남는 사람으로 새 예약을 먼저 만든 뒤 기존 예약을 취소한다(가을 c1 → c3, 회비 c2 는 그대로).
+  expect(state.campaigns.map(c => c.status)).toEqual(['CANCELLED', 'READY', 'READY']);
+  expect(state.campaigns[2]).toMatchObject({ title: '가을 안내', recipientCount: 1 });
   await expect(page.getByRole('checkbox', { name: /김철수/ })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toHaveCount(0);
   // 수신자 자체는 그대로 남는다.
-  expect(state.people).toHaveLength(2);
-  // 마지막 한 명까지 빼면 새 예약 없이 캠페인만 취소한다.
+  expect(state.people).toHaveLength(3);
+  // 마지막 한 명까지 빼면 새 예약 없이 기존 예약만 취소한다.
   await page.getByRole('checkbox', { name: /김철수/ }).click();
   await page.getByRole('button', { name: '삭제', exact: true }).click();
   await page.getByRole('button', { name: '예약 취소 확인', exact: true }).click();
+  // 「가을 안내」 태그가 사라지면 남은 태그로 넘어간다.
+  await expect(feeTag).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('checkbox', { name: /박영수/ })).toBeVisible();
+  await page.getByRole('checkbox', { name: /박영수/ }).click();
+  await page.getByRole('button', { name: '삭제', exact: true }).click();
+  await page.getByRole('button', { name: '예약 취소 확인', exact: true }).click();
+  // 예약이 하나도 없으면 태그 줄도 조작도 없이 빈 상태 문구만 남는다.
   await expect(page.getByText('예약된 문자가 없어요. 「문자 보내기」에서 수신자를 고르고 예약하기를 눌러 주세요.', { exact: true })).toBeVisible();
-  expect(state.campaigns.map(c => c.status)).toEqual(['CANCELLED', 'CANCELLED']);
-  expect(state.people).toHaveLength(2);
+  await expect(feeTag).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '발송', exact: true })).toHaveCount(0);
+  expect(state.campaigns.map(c => c.status)).toEqual(['CANCELLED', 'CANCELLED', 'CANCELLED']);
+  expect(state.people).toHaveLength(3);
+});
+
+test('헤더 아이콘은 마우스를 올리면 이름 말풍선을 띄운다', async ({ page }) => {
+  // 터치 기기에는 hover 가 없어 말풍선도 뜨지 않는 것이 맞다.
+  test.skip(isMobile(), 'hover 가 없는 기기');
+  await setup(page);
+  await page.setViewportSize({ width: 384, height: 832 });
+  const button = page.getByRole('button', { name: '발송 이력', exact: true });
+  await expect(button).toBeVisible();
+  const tooltip = page.getByText('발송 이력', { exact: true });
+  await expect(tooltip).toHaveCount(0);
+  await button.hover();
+  await expect(tooltip).toBeVisible();
+  // 브라우저 기본 툴팁(title)은 뜨는 데 1초 넘게 걸려 쓰지 않는다.
+  await expect(button).not.toHaveAttribute('title', /./);
+  await page.screenshot({ path: `/tmp/nature-header-tooltip-${test.info().project.name}.png`, animations: 'disabled' });
+  await page.mouse.move(5, 400);
+  await expect(tooltip).toHaveCount(0);
 });
 
 test('문자 보내기의 삭제는 확인을 거치고 예약이 남는다는 것을 알린다', async ({ page }) => {
@@ -765,4 +815,45 @@ test('문자 보내기의 삭제는 확인을 거치고 예약이 남는다는 �
   await expect(page.getByText('1명을 삭제했어요.', { exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toHaveCount(0);
   expect(state.people).toHaveLength(1);
+});
+
+test('같은 템플릿으로 다시 예약하면 기존 예약과 합치고 50명이 넘으면 나눈다', async ({ page }) => {
+  const state = await setup(page);
+  state.templates.push({ ...autumn });
+  state.people.splice(0, state.people.length, ...Array.from({ length: 55 }, (_, i) => ({ id: `m${i}`, name: `대상${String(i + 1).padStart(2, '0')}`, phone: `010${String(i).padStart(8, '0')}`, groupId: i < 50 ? '앞50' : '뒤5', createdAt: now, updatedAt: now, customFields: [] })));
+  async function reserveGroup(from: string, to: string) {
+    await page.getByRole('button', { name: from, exact: true }).click();
+    await page.getByRole('menuitem', { name: to, exact: true }).click();
+    await page.getByRole('checkbox', { name: '전체 선택', exact: true }).click();
+    await page.getByRole('button', { name: '예약하기', exact: true }).click();
+    await page.getByRole('checkbox', { name: '가을 안내', exact: true }).click();
+    await page.getByRole('button', { name: '예약 확인', exact: true }).click();
+  }
+  await page.goto('/sms/new');
+  await reserveGroup('모든그룹', '앞50');
+  await expect(page.getByText('50명을 「가을 안내」 템플릿으로 예약했어요.', { exact: true })).toBeVisible();
+  expect(state.campaigns).toHaveLength(1);
+  expect(state.campaigns[0]).toMatchObject({ reserved: true, recipientCount: 50 });
+  // 같은 템플릿으로 5명을 더 예약하면 기존 건을 흡수해 50 + 5 두 건으로 다시 만든다.
+  await reserveGroup('앞50', '뒤5');
+  await expect(page.getByText('5명을 「가을 안내」 템플릿으로 예약했어요. 이미 예약돼 있던 50명과 합쳤어요. 한 건은 50명까지라 50명씩 2건으로 나눠 예약했어요.', { exact: true })).toBeVisible();
+  expect(state.campaigns.map(c => c.status)).toEqual(['CANCELLED', 'READY', 'READY']);
+  expect(state.campaigns.slice(1).map(c => c.recipientCount)).toEqual([50, 5]);
+  // 예약함에서는 태그 하나로 55명이 모여 보이고, 보내기만 건별로 한다.
+  await page.goto('/sms/reserved');
+  await expect(page.getByRole('button', { name: '가을 안내 예약 55명', exact: true })).toBeVisible();
+  await page.getByRole('checkbox', { name: '전체 선택', exact: true }).click();
+  await expect(page.getByText('「가을 안내」 예약은 인원이 많아 2건으로 나뉘어 있어요. 보내기는 한 건씩 하면 되니 한 건 안에서 골라 주세요.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '발송', exact: true })).toBeDisabled();
+});
+
+test('발송 준비만 해 둔 문자는 예약으로 보지 않는다', async ({ page }) => {
+  const state = await setup(page);
+  await compose(page);
+  expect(state.campaigns[0]).toMatchObject({ status: 'READY', reserved: false });
+  await page.goto('/sms/reserved');
+  await expect(page.getByText('예약된 문자가 없어요. 「문자 보내기」에서 수신자를 고르고 예약하기를 눌러 주세요.', { exact: true })).toBeVisible();
+  await page.goto('/sms/new');
+  await expect(page.getByRole('checkbox', { name: /김철수/ })).toBeVisible();
+  await expect(page.getByRole('img', { name: '예약됨', exact: true })).toHaveCount(0);
 });
