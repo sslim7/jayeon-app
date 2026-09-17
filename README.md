@@ -332,3 +332,5 @@ SENT 상태는 계속 재발송에서 제외하며, 결과가 불확실한 SENDI
 
 Android App Links 운영 검증에는 실제 릴리스 서명 지문의 `assetlinks.json` 등록이 필요하다.
 자세한 전환·운영 식별자는 [배포 안내](docs/deploy.md)를 따른다.
+
+통화분석 구현·모델·빌드·검증 안내: [docs/call-analysis.md](docs/call-analysis.md)

@@ -14,6 +14,7 @@ import { colors, fonts, radii, spacing, text } from '@/constants/theme';
 const destinations = [
   { href: '/sms/new', label: '문자 보내기', icon: 'message' },
   { href: '/sms/reserved', label: '예약 문자 보내기', icon: 'reserved' },
+  { href: '/calls', label: '통화분석', icon: 'calls' },
 ] as const;
 
 // 헤더는 화면 트리 밖에 있으므로 화면이 오른쪽 슬롯을 채울 통로만 둔다. 세터는 안정적이라 화면을 다시 그리지 않는다.
@@ -156,8 +157,9 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
   );
 }
 
-function MenuIcon({ kind }: { kind: 'message' | 'reserved' | 'profile' }) {
+function MenuIcon({ kind }: { kind: 'message' | 'reserved' | 'profile' | 'calls' }) {
   return <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={colors.greenText} strokeWidth={1.7} strokeLinejoin="round" strokeLinecap="round" aria-hidden={true}>
+    {kind === 'calls' ? <><Rect x={4} y={3} width={16} height={18} rx={2} /><Path d="M8 8h8M8 12h8M8 16h5" /></> : null}
     {kind === 'profile' ? <><Circle cx={12} cy={8} r={3.5} /><Path d="M5 21v-2a7 7 0 0 1 14 0v2" /></> : null}
     {kind === 'message' ? <Path d="M4 4h16v12H9l-5 4V4Zm4 4h8M8 12h5" /> : null}
     {/* 달력 + 체크: 아직 보내지 않고 담아 둔 문자 */}
