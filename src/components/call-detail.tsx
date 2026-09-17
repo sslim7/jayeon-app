@@ -1,19 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Loading, Notice, s } from '@/components/sms-ui';
 import { callApi } from '@/lib/call-api';
 import { callDevice } from '@/lib/call-device';
 import { CallStages } from '@/components/call-stages';
-import { diagnosticsLabel, missingAnalysisNotice, skippedNotice, totalDurationLabel, unavailableSectionNotice } from '@/lib/call-progress';
+import { diagnosticsLabel, missingAnalysisNotice, skippedNotice, totalDurationLabel } from '@/lib/call-progress';
 import { formatPhone } from '@/lib/phone';
-import type { CallRecord } from '@/types/calls';
+import type { CallAnalysis, CallRecord } from '@/types/calls';
 
-const tabs = ['통화 요약', '상세 내용', '할 일', '상담 분석', '통화 원문'] as const;
 const sections = { customer_needs: '고객 요구사항', questions: '질문', concerns: '우려사항', objections: '반대 / 거절 요소', important_points: '중요 발언', followups: '후속 조치' } as const;
+/**
+ * 펼 탭을 정한다. 「통화 요약」과 「통화 원문」은 늘 있고, 나머지는 **내용이 있을 때만** 편다.
+ *
+ * 🔧 이 버전의 기기 분석은 요약만 만든다(→ `lib/call-analysis.ts`). 비어 있을 탭을 띄워 두고
+ * 「이 버전에서는 제공하지 않습니다」를 적느니 탭 자체를 걷는다 — 누를 것이 없는 탭은 사용자를
+ * 두 번 헛걸음시킨다. 대신 **내용이 있으면 탭이 저절로 돌아온다**: 상세 분석을 만들던 옛
+ * 기록에도, 서버 분석이 붙어 상세 항목이 채워진 뒤에도 이 함수가 그 탭을 다시 펴 준다.
+ * 서버 분석을 붙일 때 이 화면에서 고칠 것은 없다.
+ */
+function tabsFor(analysis: CallAnalysis | undefined): string[] {
+  const extra: string[] = [];
+  if (analysis?.details.length) extra.push('상세 내용');
+  if (analysis?.todos.length) extra.push('할 일');
+  if (analysis && Object.values(analysis.consulting).some((list) => list.length)) extra.push('상담 분석');
+  return ['통화 요약', ...extra, '통화 원문'];
+}
 const time = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 export function CallDetail({ item, onClose }: { item: CallRecord; onClose: () => void }) {
-  const [tab, setTab] = useState<typeof tabs[number]>((item.transcript || item.status === 'ANALYSIS_FAILED') && !item.analysis && item.status !== 'COMPLETED' ? '통화 원문' : '통화 요약');
+  const [tab, setTab] = useState<string>((item.transcript || item.status === 'ANALYSIS_FAILED') && !item.analysis && item.status !== 'COMPLETED' ? '통화 원문' : '통화 요약');
   const [record, setRecord] = useState(item);
   const [loading, setLoading] = useState(!item.analysis);
   const [error, setError] = useState('');
@@ -32,9 +47,7 @@ export function CallDetail({ item, onClose }: { item: CallRecord; onClose: () =>
     return () => { live = false; };
   }, [item.call_id]);
   const analysis = record.analysis;
-  // 이 버전의 기기 분석은 상세 내용과 상담 분석을 만들지 않는다(→ `lib/call-analysis.ts`).
-  // 예전 버전이 만들어 둔 기록에는 남아 있으므로, **있으면 보여 주고 없으면 이유를 말한다.**
-  const consulting = analysis ? Object.values(analysis.consulting).some((list) => list.length) : false;
+  const tabs = useMemo(() => tabsFor(analysis), [analysis]);
   // 분석 시간은 기기에만 남는다. 서버에서 받은 기록에는 없으므로 목록이 넘겨준 값도 함께 본다.
   const timing = record.timing ?? item.timing;
   const total = totalDurationLabel(timing);
@@ -50,12 +63,12 @@ export function CallDetail({ item, onClose }: { item: CallRecord; onClose: () =>
     {record.error ? <Notice error message={record.error} /> : null}
     <View style={s.row}>{tabs.map((label) => <Pressable key={label} accessibilityRole="tab" aria-selected={label === tab} accessibilityState={{ selected: label === tab }} onPress={() => setTab(label)} style={[s.choice, label === tab && s.secondary]}><Text style={label === tab ? s.link : s.body}>{label}</Text></Pressable>)}</View>
     {loading ? <Loading /> : null}{error ? <Notice error message={error} /> : null}
-    {/* 결정사항은 요약 다음으로 중요한 결과다. 상담 분석 탭이 비는 버전에서는 여기 둔다. */}
-    {analysis && tab === '통화 요약' ? <><Text selectable style={s.body}>{analysis.summary}</Text><Items title="결정사항" items={analysis.decisions} />{analysis.consulting.important_points.length ? <Items title="중요 포인트" items={analysis.consulting.important_points} /> : null}</> : null}
-    {analysis && tab === '상세 내용' ? analysis.details.length ? analysis.details.map((detail, i) => <View key={i} style={s.card}><Text style={s.subtitle}>{detail.title}</Text><Text selectable style={s.body}>{detail.content}</Text></View>) : <Notice message={unavailableSectionNotice('상세 내용')} /> : null}
-    {analysis && tab === '할 일' ? analysis.todos.length ? analysis.todos.map((todo, i) => <View key={i} style={s.card}><Text selectable style={s.body}>☐ {todo.content}</Text><Text style={s.meta}>담당: {todo.owner || '확인되지 않음'} · 기한: {todo.due_date || '확인되지 않음'}</Text><Text selectable style={s.meta}>근거: {todo.source}</Text></View>) : <Notice message="통화에서 확인된 할 일이 없습니다." /> : null}
-    {analysis && tab === '상담 분석' ? consulting ? <>{Object.entries(sections).map(([key, label]) => <Items key={key} title={label} items={analysis.consulting[key as keyof typeof sections]} />)}</> : <Notice message={unavailableSectionNotice('상담 분석')} /> : null}
-    {/* 분석이 없는 통화에서 다른 탭을 누르면 빈 화면이 된다. 왜 비었는지를 말해 준다. */}
+    {/* 옛 기록의 결정사항·중요 포인트는 탭을 따로 두지 않고 요약 아래에 붙인다. */}
+    {analysis && tab === '통화 요약' ? <><Text selectable style={s.body}>{analysis.summary}</Text>{analysis.decisions.length ? <Items title="결정사항" items={analysis.decisions} /> : null}</> : null}
+    {analysis && tab === '상세 내용' ? analysis.details.map((detail, i) => <View key={i} style={s.card}><Text style={s.subtitle}>{detail.title}</Text><Text selectable style={s.body}>{detail.content}</Text></View>) : null}
+    {analysis && tab === '할 일' ? analysis.todos.map((todo, i) => <View key={i} style={s.card}><Text selectable style={s.body}>☐ {todo.content}</Text><Text style={s.meta}>담당: {todo.owner || '확인되지 않음'} · 기한: {todo.due_date || '확인되지 않음'}</Text><Text selectable style={s.meta}>근거: {todo.source}</Text></View>) : null}
+    {analysis && tab === '상담 분석' ? Object.entries(sections).map(([key, label]) => <Items key={key} title={label} items={analysis.consulting[key as keyof typeof sections]} />) : null}
+    {/* 요약이 없는 통화의 요약 탭이 빈 화면이 되지 않게 왜 비었는지를 말해 준다. */}
     {!analysis && !loading && tab !== '통화 원문' ? <Notice message={missingAnalysisNotice(state, now)} /> : null}
     {tab === '통화 원문' ? record.transcript ? record.transcript.segments.length ? record.transcript.segments.map((segment, i) => <View key={i} style={s.card}><Text style={s.meta}>{time(segment.start)}{segment.speaker ? ` · ${segment.speaker}` : ''}</Text><Text selectable style={s.body}>{segment.text}</Text></View>) : <Text selectable style={s.body}>{record.transcript.text}</Text> : <Notice message="저장된 통화 원문이 없습니다." /> : null}
   </BottomSheet>;

@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const mod = { exports: {} };
 const source = ts.transpileModule(fs.readFileSync('src/lib/call-progress.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 vm.runInNewContext(`(function(exports){${source}\n})`, { Date, Number, Math, String })(mod.exports);
-const { transcribeProgress, analysisProgress, mergeSteps, unavailableSectionNotice, elapsedMs, formatDuration, elapsedLabel, totalDurationLabel, callStageViews, stageMs, currentStageLabel, skippedNotice, diagnosticsLabel, missingAnalysisNotice, tokensPerSecond, liveAnalysisText } = mod.exports;
+const { transcribeProgress, analysisProgress, mergeSteps, elapsedMs, formatDuration, elapsedLabel, totalDurationLabel, callStageViews, stageMs, currentStageLabel, skippedNotice, diagnosticsLabel, missingAnalysisNotice, tokensPerSecond, liveAnalysisText } = mod.exports;
 
 test('음성 변환 진행률은 whisper 가 준 값만 쓰고 범위를 벗어난 값은 다듬거나 버린다', () => {
   assert.equal(transcribeProgress(0), 0);
@@ -117,25 +117,16 @@ test('실패는 멈춘 단계를 가리키고, 끝난 기록의 시간은 더 �
 
 test('부분 성공과 진단 숫자를 숨기지 않고 보여 준다', () => {
   const llm = { chunks: 5, completions: 7, skipped: 2, tokens: 4210, tokens_per_second: 2.4, stopped_limit: 3, merge_fallbacks: 1 };
-  assert.equal(skippedNotice({ started_at: 'x', llm }), '구간 5개 중 2개는 분석하지 못해 결과에서 빠졌습니다.');
+  assert.equal(skippedNotice({ started_at: 'x', llm }), '구간 5개 중 2개는 요약하지 못해 결과에서 빠졌습니다.');
   assert.equal(skippedNotice({ started_at: 'x', llm: { ...llm, skipped: 0 } }), '');
   assert.equal(skippedNotice(null), '');
   assert.equal(diagnosticsLabel({ started_at: 'x', llm }), 'AI 호출 7회 · 생성 4210 토큰 · 2.4 토큰/초 · 출력 한도 도달 3회 · 요약 통합 대체 1회');
-  // 요약만 건진 구간도 숨기지 않는다 — 그 구간의 할 일·결정사항은 결과에 없다.
-  assert.equal(diagnosticsLabel({ started_at: 'x', llm: { ...llm, summary_only: 2 } }), 'AI 호출 7회 · 생성 4210 토큰 · 2.4 토큰/초 · 출력 한도 도달 3회 · 요약만 추출 2회 · 요약 통합 대체 1회');
+  // 출력 한도에 닿는 것은 실패가 아니다(요약은 앞부분이 살아남는다). 그래도 숫자는 남긴다.
+  assert.equal(diagnosticsLabel({ started_at: 'x', llm: { ...llm, stopped_limit: 0, merge_fallbacks: 0 } }), 'AI 호출 7회 · 생성 4210 토큰 · 2.4 토큰/초');
   assert.equal(diagnosticsLabel({ started_at: 'x' }), '');
 });
 
-test('기기에서 만들지 않는 항목은 빈 화면 대신 이유를 말한다', () => {
-  const notice = unavailableSectionNotice('상세 내용');
-  assert.match(notice, /^상세 내용은 이 버전의 기기 분석에서 만들지 않습니다\./);
-  // 기기가 무엇을 만드는지, 이 항목은 언제 오는지까지 말한다.
-  assert.match(notice, /통화 요약과 할 일, 결정사항/);
-  assert.match(notice, /서버 분석이 준비되면/);
-  assert.match(unavailableSectionNotice('상담 분석'), /^상담 분석은/);
-});
-
-test('분석이 없는 탭에는 왜 비었는지 안내한다', () => {
+test('요약이 없는 통화의 요약 탭에는 왜 비었는지 안내한다', () => {
   const started = new Date(2026, 8, 17, 14, 0, 0);
   const now = started.getTime() + 192_000;
   const running = { status: 'ANALYZING', timing: { started_at: started.toISOString() } };

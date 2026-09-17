@@ -50,35 +50,39 @@ const ASSUMED = {
   charsPerMinute: flag('chars-per-minute', 300),
   tokensPerChar: flag('tokens-per-char', 0.8),
   instructionTokens: flag('instruction-tokens', 220),
-  /** 구간 하나가 실제로 쓰는 양(한도에 닿기 전에 멈추는 경우). 기본값 + 원문 길이 비례. */
+  /** 요약·할 일·결정사항을 함께 만들던 구간의 출력량. 기본값 + 원문 길이 비례. */
   outputBase: flag('output-base', 120),
   outputPerChar: flag('output-per-char', 0.08),
+  /**
+   * 요약만 만드는 구간의 출력 상한. 지시문이 200자 이내를 요구한다(200 × 0.85 ≈ 170 token).
+   *
+   * 원문이 길어져도 이 값을 넘지 않는다 — 출력 길이를 정하는 것은 원문이 아니라 지시문이다.
+   */
+  summaryTokens: flag('summary-tokens', 170),
+  /** 짧은 원문의 요약은 상한에 닿지 않는다. 원문 token 의 이 비율까지만 쓴다고 본다. */
+  summaryRatio: flag('summary-ratio', 0.4),
 };
 
 /** 바꾸기 전 설정. `git show HEAD:src/lib/call-analysis.ts` 로 확인할 수 있다. */
 const BEFORE = {
-  label: '이전 (JSON schema grammar)',
-  chunkChars: 1800,
-  chunkPredict: 2300,
-  mergePredict: 2300,
-  ctx: 8192,
-  /** 둘씩 짝지어 올라가므로 통합은 구간 수 - 1 번이다. */
-  merges: chunks => Math.max(0, chunks - 1),
-  /**
-   * grammar 가 배열을 이어 붙이게 두어 **출력 한도까지 채웠다.** 실기기 기록의
-   * `stopped_limit` 이 호출 수와 같았던 이유다.
-   */
-  generated: (config) => config.chunkPredict,
+  label: '이전 (요약·할 일·결정사항, n_predict 400)',
+  chunkChars: 2000,
+  chunkPredict: 400,
+  mergePredict: 320,
+  ctx: 4096,
+  merges: chunks => progress.mergeSteps(chunks),
+  /** 항목 수를 정해 두었으므로 한도에 닿기 전에 멈춘다. 출력은 원문 길이를 따라 늘었다. */
+  generated: (config, chars) => Math.min(config.chunkPredict, ASSUMED.outputBase + ASSUMED.outputPerChar * chars),
 };
 const AFTER = {
-  label: '이후 (줄 단위 출력, grammar 없음)',
+  label: '이후 (요약만)',
   chunkChars: analysis.CHUNK_CHARS,
-  chunkPredict: analysis.CHUNK_PREDICT,
+  chunkPredict: analysis.SUMMARY_PREDICT,
   mergePredict: analysis.MERGE_PREDICT,
   ctx: analysis.ANALYSIS_CTX,
   merges: chunks => progress.mergeSteps(chunks),
-  /** 항목 수를 정해 두었으므로 한도에 닿기 전에 멈춘다. 한도는 상한일 뿐이다. */
-  generated: (config, chars) => Math.min(config.chunkPredict, ASSUMED.outputBase + ASSUMED.outputPerChar * chars),
+  /** 요약 한 줄은 지시문 상한(200자)에서 멈춘다. 짧은 원문은 그보다도 짧다. */
+  generated: (config, chars) => Math.min(config.chunkPredict, ASSUMED.summaryTokens, chars * ASSUMED.tokensPerChar * ASSUMED.summaryRatio),
 };
 
 function estimate(config, transcriptChars) {
@@ -110,7 +114,7 @@ console.log(`  생성 속도      ${ASSUMED.decode} token/초   ← 실기기 �
 console.log(`  프롬프트 처리  ${ASSUMED.prefill} token/초    ← 가정`);
 console.log(`  통화 1분당     ${ASSUMED.charsPerMinute}자        ← 가정`);
 console.log(`  글자당 token   ${ASSUMED.tokensPerChar}         ← 가정 (Qwen3 tokenizer, 한국어)`);
-console.log(`  구간 출력량    ${ASSUMED.outputBase} + ${ASSUMED.outputPerChar}×글자  ← 가정 (한도에 닿기 전에 멈추는 양)`);
+console.log(`  구간 출력량    이전 ${ASSUMED.outputBase} + ${ASSUMED.outputPerChar}×글자 · 이후 min(${ASSUMED.summaryTokens}, 원문×${ASSUMED.summaryRatio})  ← 가정`);
 console.log('');
 console.log('설정:');
 for (const config of [BEFORE, AFTER]) {
@@ -126,10 +130,11 @@ for (const minutes of [1, 2, 5, 10, 30, 60]) {
   console.log(`| ${pad(minutes + '분', 9)} | ${pad(chars + '자', 6)} | ${pad(`${before.chunks}→${after.chunks}`, 5)} | ${pad(before.calls + '회', 9)} | ${pad(before.decode, 9)} | ${pad(duration(before.seconds), 8)} | ${pad(after.calls + '회', 9)} | ${pad(after.decode, 9)} | ${pad(duration(after.seconds), 8)} |`);
 }
 console.log('');
-console.log('「이전」은 구간마다 **한 번만** 부른 경우다. 실기기에서 실패한 샘플 통화는 기본 스키마가 출력 한도에');
-console.log('닿아 상한 스키마로 한 번 더 돌았고(호출 2회 × 2,300 token), 25분 뒤 `INCOMPLETE_ANALYSIS` 로 끝났다.');
+console.log('「이전」은 요약과 함께 할 일·결정사항을 만들던 직전 버전이다. 실기기(갤럭시 S21)에서 짧은 샘플이');
+console.log('1분 32초에 끝났지만 할 일·결정사항의 품질이 쓸 수 없는 수준이었다. 기기는 요약만 만들고 상세 분석은');
+console.log('원문을 받은 서버가 맡는다 — 호출 수는 그대로이고 **구간마다 생성하는 양**이 줄어든다.');
 console.log('');
-console.log('생성 속도를 달리 두면(grammar 를 걷어 낸 효과는 아직 미측정이다):');
+console.log('생성 속도를 달리 두면(실기기 속도는 화면의 진단 한 줄에서 읽어 `--decode` 로 넣는다):');
 console.log('');
 console.log('| 생성 속도 |     1분 통화 |     5분 통화 |    30분 통화 |');
 console.log('|-----------|--------------|--------------|--------------|');
