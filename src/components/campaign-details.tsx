@@ -261,7 +261,7 @@ export function CampaignDetails({ id }: { id: string }) {
                 <Notice message="이미 Android에 전달한 문자는 취소할 수 없습니다. 현재 결과 저장 후 멈춥니다." />
               </>
             ) : (
-              <Notice message="다른 캠페인을 발송 중입니다. 완료 또는 중단 후 발송할 수 있어요." />
+              <Notice message="다른 문자를 발송 중입니다. 완료 또는 중단 후 발송할 수 있어요." />
             )
           ) : (
             <>

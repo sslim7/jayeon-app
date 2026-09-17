@@ -22,7 +22,7 @@ import { clearSmsDraft, readSmsDraft, writeSmsDraft } from '@/lib/sms-draft';
 import { newSmsRequestId } from '@/lib/sms-dispatch';
 import { utf8Length } from '@/lib/phone';
 import { attachmentApi, recipientApi, smsApi, templateApi } from '@/lib/sms-api';
-import { excludeReserved } from '@/lib/sms-reservations';
+import { excludeReserved, mergeReservation, reservedRecipientIds, reservedRows, MAX_RESERVATION_SIZE } from '@/lib/sms-reservations';
 import { useReservations } from '@/hooks/use-reservations';
 import type { Attachment, CreateCampaignInput, MessageTemplate, Recipient } from '@/types/sms';
 export default function NewCampaignScreen() {
@@ -168,29 +168,61 @@ export default function NewCampaignScreen() {
   }
   /** 예약 = 캠페인을 만들되 발송을 시작하지 않는 것. 이미 예약된 사람은 같은 내용을 두 번 받지 않게 뺀다. */
   async function reserve(template: MessageTemplate) {
-    const { targetIds, excludedCount } = excludeReserved(selected, reservations.recipientIds);
+    setActionBusy(true);
+    setError('');
+    // 화면에 떠 있는 동안 다른 곳에서 예약이 늘었을 수 있으므로 만들기 직전에 다시 읽어 판정한다.
+    const fresh = await reservations.reload();
+    if (!fresh) {
+      setActionBusy(false);
+      setError('예약 현황을 확인하지 못해 예약하지 않았어요. 연결을 확인하고 다시 시도해 주세요.');
+      return;
+    }
+    const { targetIds, excludedCount } = excludeReserved(selected, reservedRecipientIds(reservedRows(fresh)));
     if (!targetIds.length) {
       setSheet(null);
+      setActionBusy(false);
       setNotice(`선택한 ${selected.length}명은 이미 예약되어 있어요. 새로 예약하지 않았어요.`);
       return;
     }
-    setActionBusy(true);
-    setError('');
+    // 같은 템플릿 예약이 여러 건으로 쪼개지지 않게 기존 예약을 흡수해 다시 만든다.
+    const { replaced, chunks, mergedCount } = mergeReservation(fresh, template.name, targetIds);
+    const created: string[] = [];
     try {
-      await smsApi.create({
-        requestId: newSmsRequestId(),
-        title: template.name,
-        message: template.message,
-        recipientIds: targetIds,
-        attachmentIds: template.attachments.map((item) => item.id),
-      });
-      setSheet(null);
-      setSelected([]);
-      // 템플릿 이름의 끝소리에 따라 조사가 갈리지 않게 「템플릿으로」를 사이에 둔다.
-      setNotice(`${targetIds.length}명을 「${template.name}」 템플릿으로 예약했어요.${excludedCount ? ` 이미 예약된 ${excludedCount}명은 제외했어요.` : ''}`);
-      await reservations.reload();
+      for (const recipientIds of chunks) {
+        const campaign = await smsApi.create({
+          requestId: newSmsRequestId(),
+          title: template.name,
+          message: template.message,
+          recipientIds,
+          attachmentIds: template.attachments.map((item) => item.id),
+          reserved: true,
+        });
+        created.push(campaign.id);
+      }
     } catch (e) {
-      setError(smsError(e));
+      // 새 예약을 다 만들지 못했으면 기존 예약은 그대로 두고 방금 만든 것만 되돌린다.
+      for (const id of created) await smsApi.setStatus(id, 'CANCELLED').catch(() => undefined);
+      setError(`${smsError(e)} 기존 예약은 그대로 두었어요.`);
+      setActionBusy(false);
+      return;
+    }
+    // 새 명단이 모두 생긴 다음에 지운다 — 순서를 뒤집으면 중간 실패가 예약 유실이 된다.
+    let stale = 0;
+    for (const item of replaced) {
+      try { await smsApi.setStatus(item.campaign.id, 'CANCELLED'); } catch { stale += 1; }
+    }
+    setSheet(null);
+    setSelected([]);
+    // 템플릿 이름의 끝소리에 따라 조사가 갈리지 않게 「템플릿으로」를 사이에 둔다.
+    setNotice([
+      `${targetIds.length}명을 「${template.name}」 템플릿으로 예약했어요.`,
+      mergedCount ? `이미 예약돼 있던 ${mergedCount}명과 합쳤어요.` : '',
+      chunks.length > 1 ? `한 건은 ${MAX_RESERVATION_SIZE}명까지라 ${MAX_RESERVATION_SIZE}명씩 ${chunks.length}건으로 나눠 예약했어요.` : '',
+      excludedCount ? `다른 템플릿으로 이미 예약된 ${excludedCount}명은 제외했어요.` : '',
+      stale ? `기존 예약 ${stale}건을 정리하지 못했어요. 예약 문자 보내기 화면을 확인해 주세요.` : '',
+    ].filter(Boolean).join(' '));
+    try {
+      await reservations.reload();
     } finally {
       setActionBusy(false);
     }
@@ -257,7 +289,9 @@ export default function NewCampaignScreen() {
         <RecipientTable includeSentFilter={{ selected: includeSent, disabled: frozen || loading, onPress: () => { setSelected([]); setIncludeSent(!includeSent); } }} items={visible} selectedIds={selected} onSelectionChange={setSelected} onHistory={setHistory} onEdit={setEditingRecipient} reservedIds={reservations.recipientIds} disabled={frozen || loading} dense={phone} />
         {listFooter ? null : sendButton}
       </> : <>
-        <Notice message="템플릿을 가져오거나 직접 작성하세요. 캠페인을 만든 다음 Android 앱에서 최종 전송합니다." />
+        <Notice message="템플릿을 가져오거나 직접 작성하세요. 문자를 준비한 다음 Android 앱에서 최종 전송합니다." />
+        {/* 지금 보내기는 예약과 별개다 — 예약된 사람에게 한 번 더 가는 상황을 미리 알린다. */}
+        {reservedSelected ? <Notice error message={`선택한 ${reservedSelected}명은 이미 예약되어 있어요. 지금 보내면 예약한 문자와 별개로 한 번 더 갑니다.`} /> : null}
         <Text style={s.subtitle}>수신자 {selected.length}명 선택</Text>
         {!pending ? <SmsButton label="수신자 선택으로 돌아가기" secondary disabled={busy || uploading} onPress={() => setStage('recipients')} /> : null}
         <SmsButton label="템플릿 가져오기" secondary disabled={frozen || uploading} onPress={() => void openTemplates()} />
@@ -267,7 +301,7 @@ export default function NewCampaignScreen() {
         <Text selectable style={s.meta}>{Array.from(message).length} / 2,000자 · UTF-8 {utf8Length(message)} bytes</Text>
         <Notice message="짧은 문자는 SMS, 장문은 LMS, 이미지 첨부는 MMS로 자동 발송합니다. 표시된 byte 수는 참고용이며 실제 발송 유형은 Android에서 결정합니다." />
         <AttachmentEditor value={attachments} onChange={setAttachments} disabled={frozen} onBusy={setUploading} />
-        <SmsButton label={busy ? '캠페인 확인 중…' : pending ? '같은 캠페인 생성 요청 다시 확인' : `${selected.length}명 발송 준비`} disabled={busy || uploading || loading || !draftLoaded || !selected.length || selected.length > 50} onPress={() => void create()} />
+        <SmsButton label={busy ? '확인 중…' : pending ? '같은 요청 다시 확인' : `${selected.length}명 발송 준비`} disabled={busy || uploading || loading || !draftLoaded || !selected.length || selected.length > 50} onPress={() => void create()} />
         {pending ? <Notice message="요청 결과가 확인될 때까지 내용은 고정됩니다. 같은 요청으로 생성 여부를 확인하며 자동으로 문자를 발송하지 않습니다." /> : null}
       </>}
       <BottomSheet title="템플릿 가져오기" visible={templateOpen} onClose={() => setTemplateOpen(false)}>

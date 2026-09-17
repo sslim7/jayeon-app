@@ -65,7 +65,7 @@ export function TemplateManager({ onClose }: { onClose?: () => void }) {
         <SmsButton label="수정" accessibilityLabel={`${item.name} 수정`} secondary disabled={busy || uploading} onPress={() => { setEditing(item.id); setName(item.name); setMessage(item.message); setAttachments(item.attachments); setError(''); }} />
         <SmsButton label="삭제" accessibilityLabel={`${item.name} 삭제`} secondary danger disabled={busy || uploading} onPress={() => setDeleting(item.id)} />
       </View>
-      {deleting === item.id ? <><Notice message="템플릿을 삭제할까요? 이미 생성된 캠페인은 유지됩니다." /><SmsButton label="템플릿 삭제 확인" danger secondary disabled={busy} onPress={() => void remove(item.id)} /><SmsButton label="템플릿 삭제 취소" secondary disabled={busy} onPress={() => setDeleting(null)} /></> : null}
+      {deleting === item.id ? <><Notice message="템플릿을 삭제할까요? 이미 준비한 문자는 그대로 남습니다." /><SmsButton label="템플릿 삭제 확인" danger secondary disabled={busy} onPress={() => void remove(item.id)} /><SmsButton label="템플릿 삭제 취소" secondary disabled={busy} onPress={() => setDeleting(null)} /></> : null}
     </View>)}
   </View>;
   return onClose ? <BottomSheet title="템플릿" visible headerActions={add} onClose={() => { if (!busy && !uploading) onClose(); }}>{content}</BottomSheet> : <SmsPage title="문자 템플릿" actions={add}>{content}</SmsPage>;

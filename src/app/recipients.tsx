@@ -69,7 +69,7 @@ export default function RecipientsScreen() {
         <SmsButton label="모든 그룹" secondary={!!group} onPress={() => setGroup('')} />
         {groups.map((g) => <SmsButton key={g} label={g} secondary={group !== g} onPress={() => setGroup(g)} />)}
       </View>
-      <Notice message="전체 수신자를 조회합니다. 한 캠페인의 발송 대상은 50명까지 선택해 준비할 수 있어요." />
+      <Notice message="전체 수신자를 조회합니다. 한 번에 50명까지 선택해 보낼 수 있어요." />
       <View style={s.row}>
         <SmsButton label="수신자 등록" secondary disabled={busy} onPress={() => { setEditing(null); setForm(empty); setError(''); }} />
         <SmsButton label="엑셀 등록" secondary disabled={busy} onPress={() => setImportOpen(!importOpen)} />
@@ -87,7 +87,7 @@ export default function RecipientsScreen() {
       </View> : null}
       {error ? <Notice error message={error} /> : null}
       <Text style={s.subtitle}>발송 최대 50명</Text>
-      {selected.length > 50 ? <Notice error message="한 캠페인은 50명까지 발송할 수 있어요. 선택 수를 줄여 주세요." /> : null}
+      {selected.length > 50 ? <Notice error message="한 번에 50명까지 보낼 수 있어요. 선택 수를 줄여 주세요." /> : null}
       {selected.length ? <View style={s.row}>
         <SmsButton label={`${selected.length}명에게 문자 작성`} disabled={selected.length > 50} onPress={() => router.push({ pathname: '/sms/new', params: { ids: selected.join(',') } })} />
         <SmsButton label="선택 해제" secondary onPress={() => setSelected([])} />

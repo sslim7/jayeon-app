@@ -28,8 +28,17 @@ export type ReservedGroup = {
   total: number;
 };
 
-export function readyCampaigns(campaigns: Campaign[]): Campaign[] {
-  return campaigns.filter((item) => item.status === 'READY');
+/** 한 건에 담을 수 있는 최대 인원(서버 제약). */
+export const MAX_RESERVATION_SIZE = 50;
+
+/**
+ * 예약으로 볼 캠페인.
+ *
+ * 발송 준비만 해 두고 보내지 않은 문자도 READY 로 남기 때문에 상태만으로는 예약과 구분되지
+ * 않는다. 「예약하기」로 만든 것만 `reserved` 가 true 다.
+ */
+export function reservedCampaigns(campaigns: Campaign[]): Campaign[] {
+  return campaigns.filter((item) => item.status === 'READY' && item.reserved);
 }
 
 export function reservedRows(reservations: Reservation[]): ReservedRow[] {
@@ -46,6 +55,16 @@ export function reservedRows(reservations: Reservation[]): ReservedRow[] {
     )
     // 사람 기준으로 찾는 목록이라 이름순으로 두고, 같은 이름은 템플릿명으로 갈라 붙인다.
     .sort((a, b) => a.name.localeCompare(b.name, 'ko') || a.campaignTitle.localeCompare(b.campaignTitle, 'ko') || a.id.localeCompare(b.id));
+}
+
+/**
+ * 템플릿명(= 예약을 만든 제목)별 인원수. 예약함은 이 태그로 한 템플릿씩만 보여 준다.
+ * 많이 남은 쪽을 먼저 처리하게 인원수 내림차순으로 두고, 같으면 이름순으로 고정한다.
+ */
+export function reservedTags(rows: ReservedRow[]): { title: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) counts.set(row.campaignTitle, (counts.get(row.campaignTitle) ?? 0) + 1);
+  return Array.from(counts, ([title, count]) => ({ title, count })).sort((a, b) => b.count - a.count || a.title.localeCompare(b.title, 'ko'));
 }
 
 /** 목록의 예약 아이콘 판정용. 어느 예약이든 들어 있으면 예약된 사람이다. */
@@ -82,4 +101,29 @@ export function reservedGroups(rows: ReservedRow[], selectedRowIds: string[]): R
     } else group.remainingRecipientIds.push(row.recipientId);
   }
   return Array.from(groups.values()).filter((group) => group.selectedRowIds.length > 0);
+}
+
+/**
+ * 같은 템플릿의 예약을 하나로 합친 명단.
+ *
+ * 같은 템플릿인지는 **예약 제목**으로 본다 — 서버 캠페인에는 템플릿 id 가 남지 않고, 예약은
+ * 언제나 템플릿 이름을 제목으로 만들기 때문이다(화면의 템플릿 태그도 같은 기준이라 태그 하나가
+ * 늘 예약 한 건에 대응한다). 합친 뒤에는 **현재 템플릿의 본문·첨부**로 다시 만들어지므로,
+ * 템플릿을 고친 뒤 합치면 기존 예약자도 새 내용을 받는다.
+ *
+ * 한 건은 50명까지라 넘치면 50명씩 나눈다.
+ */
+export function mergeReservation(reservations: Reservation[], title: string, targetIds: string[]): {
+  /** 합치면서 취소할 기존 예약 */
+  replaced: Reservation[];
+  /** 새로 만들 예약들의 수신자 명단 */
+  chunks: string[][];
+  /** 기존 예약에서 끌어온 인원수 */
+  mergedCount: number;
+} {
+  const replaced = reservations.filter((item) => item.campaign.title === title);
+  const ids = Array.from(new Set([...replaced.flatMap(({ recipients }) => recipients.map((item) => item.recipientId)), ...targetIds]));
+  const chunks: string[][] = [];
+  for (let start = 0; start < ids.length; start += MAX_RESERVATION_SIZE) chunks.push(ids.slice(start, start + MAX_RESERVATION_SIZE));
+  return { replaced, chunks, mergedCount: ids.length - targetIds.length };
 }

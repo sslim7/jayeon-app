@@ -32,6 +32,10 @@ function withAttachments<T extends { attachments?: Attachment[] }>(value: T): T 
   if (attachments.some((item) => !item || typeof item !== 'object' || typeof item.id !== 'string' || typeof item.name !== 'string')) throw invalidResponse();
   return { ...value, attachments };
 }
+function normalizeCampaign(value: Campaign): Campaign {
+  // 예약 여부를 주지 않는 서버(구버전)에서는 예약이 아닌 것으로 읽는다 — 예약함이 비어 보일 뿐 화면은 그대로 돈다.
+  return { ...withAttachments(value), reserved: record(value).reserved === true };
+}
 function customFields(value: unknown): RecipientCustomField[] {
   const fields = nullableArray<RecipientCustomField>(value);
   if (fields.some((field) => !field || typeof field.name !== 'string' || typeof field.value !== 'string')) throw invalidResponse();
@@ -50,7 +54,7 @@ function normalizeImport(value: RecipientImport): RecipientImport {
 }
 function normalizeDispatch(value: DispatchResponse): DispatchResponse {
   record(value);
-  return { ...value, campaign: withAttachments(value.campaign), recipient: withAttachments(value.recipient) };
+  return { ...value, campaign: normalizeCampaign(value.campaign), recipient: withAttachments(value.recipient) };
 }
 async function allPages<T>(path: string, normalize: (value: T) => T = (value) => value): Promise<T[]> {
   const items: T[] = [];
@@ -92,16 +96,16 @@ const path = (id: string) => `/sms/campaigns/${segment(id)}`;
 export const smsApi = {
   history: (q = ''): Promise<RecipientHistory[]> => allPages<RecipientHistory>(`/sms/history?q=${segment(q)}`, withAttachments),
   attachmentContent: (id: string) => api.get<Attachment & { dataBase64: string }>(`/sms/attachments/${segment(id)}/content`),
-  list: (): Promise<Campaign[]> => allPages<Campaign>('/sms/campaigns', withAttachments),
-  get: (id: string) => api.get<Campaign>(path(id)).then(withAttachments),
+  list: (): Promise<Campaign[]> => allPages<Campaign>('/sms/campaigns', normalizeCampaign),
+  get: (id: string) => api.get<Campaign>(path(id)).then(normalizeCampaign),
   async recipients(id: string): Promise<CampaignRecipient[]> {
     const page = await api.get<{ items: CampaignRecipient[] }>(`${path(id)}/recipients`);
     record(page);
     return nullableArray<CampaignRecipient>(page.items).map(withAttachments);
   },
-  create: (input: CreateCampaignInput) => api.post<Campaign>('/sms/campaigns', input).then(withAttachments),
+  create: (input: CreateCampaignInput) => api.post<Campaign>('/sms/campaigns', input).then(normalizeCampaign),
   setStatus: (id: string, status: 'SENDING' | 'CANCELLED') =>
-    api.post<Campaign>(`${path(id)}/${status === 'SENDING' ? 'start' : 'cancel'}`).then(withAttachments),
+    api.post<Campaign>(`${path(id)}/${status === 'SENDING' ? 'start' : 'cancel'}`).then(normalizeCampaign),
   claim: (cid: string, rid: string, input: { attemptId: string }) =>
     api.patch<DispatchResponse>(`${path(cid)}/recipients/${segment(rid)}`, {
       status: 'SENDING',

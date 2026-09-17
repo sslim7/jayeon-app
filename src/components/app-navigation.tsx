@@ -170,7 +170,8 @@ const styles = StyleSheet.create({
   main: { flex: 1, overflow: 'hidden', backgroundColor: colors.bg },
   content: { flex: 1 },
   dim: { backgroundColor: colors.ink },
-  headerSafe: { backgroundColor: colors.bg, borderBottomWidth: 1, borderBottomColor: colors.borderPill },
+  // 헤더가 본문 위에 쌓여야 아이콘 툴팁 말풍선이 본문에 가려지지 않는다.
+  headerSafe: { backgroundColor: colors.bg, borderBottomWidth: 1, borderBottomColor: colors.borderPill, zIndex: 3 },
   header: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   iconButton: { width: 48, height: 48, borderRadius: radii.button, alignItems: 'center', justifyContent: 'center' },

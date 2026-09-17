@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { smsError } from '@/components/sms-ui';
 import { smsApi } from '@/lib/sms-api';
-import { readyCampaigns, reservedRecipientIds, reservedRows, type Reservation } from '@/lib/sms-reservations';
+import { reservedCampaigns, reservedRecipientIds, reservedRows, type Reservation } from '@/lib/sms-reservations';
 
 /**
  * 예약(READY 캠페인)에 들어 있는 수신자를 모은다.
@@ -15,14 +15,18 @@ export function useReservations() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const reload = useCallback(async () => {
+  // 방금 읽은 값을 그대로 돌려준다 — 예약 직전 중복 판정은 state 갱신을 기다리지 않고 이 값으로 해야 한다.
+  const reload = useCallback(async (): Promise<Reservation[] | null> => {
     setLoading(true);
     try {
-      const ready = readyCampaigns(await smsApi.list());
-      setReservations(await Promise.all(ready.map(async (campaign) => ({ campaign, recipients: await smsApi.recipients(campaign.id) }))));
+      const ready = reservedCampaigns(await smsApi.list());
+      const next = await Promise.all(ready.map(async (campaign) => ({ campaign, recipients: await smsApi.recipients(campaign.id) })));
+      setReservations(next);
       setError('');
+      return next;
     } catch (e) {
       setError(smsError(e));
+      return null;
     } finally {
       setLoading(false);
     }

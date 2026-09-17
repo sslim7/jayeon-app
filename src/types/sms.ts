@@ -8,6 +8,8 @@ export type Campaign = {
   title: string;
   message: string;
   status: CampaignStatus;
+  /** 「예약하기」로 만든 것만 true. 발송 준비로 만들어 두고 보내지 않은 문자와 구분한다(서버가 주기 전에는 false). */
+  reserved: boolean;
   recipientCount: number;
   attachments?: Attachment[];
   createdAt: string;
@@ -38,6 +40,8 @@ export type CreateCampaignInput = {
   recipientIds: string[];
   requestId: string;
   attachmentIds?: string[];
+  /** 생략하면 서버가 false 로 본다. 예약으로 저장할 때만 true 를 보낸다. */
+  reserved?: boolean;
 };
 export type RecipientResultInput = {
   status: 'SENT' | 'FAILED';
