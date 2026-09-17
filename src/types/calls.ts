@@ -9,6 +9,22 @@ export interface CallAnalysis {
   decisions: string[];
   consulting: { customer_needs: string[]; questions: string[]; concerns: string[]; objections: string[]; important_points: string[]; followups: string[] };
 }
+/** 화면에 보이는 네 단계. 내부 status 를 이 넷으로 묶는다(→ `lib/call-progress.ts`). */
+export type CallStageKey = 'PREPARE' | 'TRANSCRIBE' | 'ANALYZE' | 'UPLOAD';
+/** `started_at` 이 남아 있으면 그 단계가 도는 중이고, `ms` 는 **끝난 구간의 합**이다. */
+export interface CallStageTiming { started_at?: string | null; ms?: number | null }
+/**
+ * 기기에서 잰 분석 시간. **서버로 보내지 않는다** — 업로드 payload 에서 빼고 보낸다
+ * (→ `call-runtime.ts`). 서버는 모르는 필드를 400 으로 거부한다.
+ *
+ * 단계 시간은 재개·재시도를 거치며 **합산**된다. 시작 시각은 마지막으로 분석을 시작한 때다.
+ */
+/**
+ * 실패를 다음에 짚기 위한 **숫자만** 담는다. 통화 내용은 절대 담지 않는다.
+ * `stopped_limit` 은 출력 한도에 닿아 끊긴 횟수, `skipped` 는 끝내 분석하지 못해 뺀 구간 수다.
+ */
+export interface CallLlmStats { chunks: number; completions: number; skipped: number; tokens: number; tokens_per_second: number | null; stopped_limit: number; merge_fallbacks: number }
+export interface CallTiming { started_at: string; llm?: CallLlmStats; finished_at?: string | null; stages?: { [K in CallStageKey]?: CallStageTiming } }
 export interface CallRecord {
   call_id: string;
   contact: CallContact;
@@ -21,8 +37,10 @@ export interface CallRecord {
   analysis?: CallAnalysis;
   ai?: { model: string; model_version: string; processed_on_device: true };
   error?: string | null;
+  timing?: CallTiming | null;
 }
-export interface CallFile { token: string; name: string; size: number }
+/** `modified_at` 은 고른 파일의 시각(ms). 통화일시 기본값으로만 쓰고, 없으면 사용자가 고른다. */
+export interface CallFile { token: string; name: string; size: number; modified_at?: number | null }
 export interface CallStartInput { file: CallFile; contact: CallContact; recorded_at: string }
 /** `notice` 는 오류가 아닌 상태(일시정지 등)를 담는다. 오류 배너와 구분해서 보여 준다. */
 export interface CallModelState { supported: boolean; installed: boolean; downloading: boolean; downloaded_bytes: number; total_bytes: number; error?: string | null; notice?: string | null }

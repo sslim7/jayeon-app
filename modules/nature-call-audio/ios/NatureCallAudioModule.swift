@@ -17,6 +17,8 @@ public class NatureCallAudioModule: Module {
   }
   public func definition() -> ModuleDefinition {
     Name("NatureCallAudio")
+    // 추론 스레드 수를 정하려면 코어 수가 필요하다. JS 에는 이 값을 주는 API 가 없다.
+    Function("cpuCount") { ProcessInfo.processInfo.activeProcessorCount }
     // 통화 원본 사본·WAV·모델 파일은 iCloud 백업 대상에서 뺀다.
     AsyncFunction("excludeFromBackup") { (uri: String) in
       var url = try self.privateURL(uri)

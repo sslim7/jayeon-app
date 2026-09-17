@@ -5,7 +5,7 @@ Nature 네이티브 껍데기가 파일 선택, 다운로드, 오디오 변환, 
 ## 엔진과 모델
 
 - [whisper.rn 0.7.4](https://github.com/mybigday/whisper.rn): multilingual Whisper base, 한국어(`ko`) 고정. 원문 구간은 Whisper 10ms tick에서 초로 변환한다.
-- [llama.rn 0.12.3](https://github.com/mybigday/llama.rn): Qwen3-0.6B Q8_0, 8,192 context, temperature 0, JSON schema grammar. Android CPU 2 threads, iOS Metal 99 layers. 더 큰 모델을 자동 선택하지 않는다.
+- [llama.rn 0.12.3](https://github.com/mybigday/llama.rn): Qwen3-0.6B Q8_0, 8,192 context, temperature 0, JSON schema grammar. CPU 스레드는 코어 수의 절반(2~4), iOS Metal 99 layers. 더 큰 모델을 자동 선택하지 않는다.
 - [Whisper 모델](https://huggingface.co/ggerganov/whisper.cpp/blob/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.bin): 147,951,465 bytes.
 - [Qwen 모델](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/blob/23749fefcc72300e3a2ad315e1317431b06b590a/Qwen3-0.6B-Q8_0.gguf): 639,446,688 bytes.
 - 합계 787,398,153 bytes(약 787MB). 배포 제공자의 고정 revision과 LFS SHA-256을 `call-models.ts`에 고정했다. 설치 버튼을 누를 때만 다운로드하며 파일 전체를 JS 메모리로 읽지 않고 native streaming SHA-256으로 검증한다.
@@ -58,6 +58,20 @@ iOS의 `documentDirectory`는 기본 iCloud 백업 대상이다. 통화 원본 �
 
 로그아웃/계정전환은 실행 generation을 무효화하고 이전 계정 결과를 새 계정으로 업로드하거나 브리지에 반환하지 않는다. 이 버전은 앱 데이터 삭제/개별 통화 삭제 UI를 추가하지 않는다.
 
+## 진행 표시와 통화일시
+
+통화일시는 파일을 고르면 **그 파일의 시각**으로 채운다. `expo-document-picker` 의 `lastModified` 는 사본이 아니라 **원본** 기준이다(Android `DocumentsContract.COLUMN_LAST_MODIFIED`, iOS `contentModificationDate`). 값이 없거나 기기 시각 +5분을 넘으면 채우지 않고 사용자가 고르게 둔다. 사용자가 한 번 고친 값은 파일을 다시 골라도 덮어쓰지 않는다. 입력은 웹에서 `<input type="datetime-local">`(기기 기본 달력·시간 선택기)이고 네이티브 경로에는 기존 타이핑 입력을 남긴다. 파일 시각은 복사·전달로 바뀌므로 실제 통화 시각이라는 보장이 없고, 화면 안내가 그 점을 밝힌다.
+
+분석은 화면에서 네 단계로 묶어 보여 준다: 분석 준비(PENDING·PREPARING), 음성 변환(TRANSCRIBING), 통화 분석(ANALYZING), 결과 저장(UPLOADING). 각 단계의 시작·종료 시각을 로컬 DB(`calls.data`)의 `timing` 에 저장해 앱을 다시 켜도 이어진다. `timing` 은 **업로드 payload 에서 뺀다**(서버는 unknown field 를 400 으로 거부한다).
+
+진행률은 실제로 센 값만 쓴다. 음성 변환은 whisper.rn 의 `onProgress`(0~100), 통화 분석은 `끝난 chunk + 끝난 요약 통합 / (2n-1)` 이다. 진행률을 낼 수 없는 단계(파일 준비, 결과 저장)는 막대 없이 단계 이름과 경과 시간만 보인다. 경과 시간은 분석 시작부터의 벽시계 시간이라 앱을 내려 둔 시간도 포함한다.
+
+추론 스레드는 코어 수의 절반을 쓰되 2~4 로 묶는다(네이티브 `cpuCount`). big.LITTLE 기기에서 전체 코어를 태우면 느린 코어를 기다리고 발열로 클럭이 내려간다. 코어 수를 알 수 없는 옛 껍데기에서는 2 로 둔다.
+
+실패는 **정해진 코드로만** 이유를 남긴다(`call-errors.ts`). 네이티브 예외 문구에는 경로가, 파싱 오류에는 통화 원문 조각이 섞일 수 있어 원문을 그대로 저장·표시하지 않는다. 화면에는 「무엇이 실패했는지 + 이유 + (코드: X)」가 남고, LLM 진단 숫자(호출 수, 생성 토큰, 토큰/초, 출력 한도 도달 횟수)도 함께 저장한다. 분석이 없는 통화의 요약·상세·할 일·상담 분석 탭에는 왜 비어 있는지(진행 중 단계 또는 실패 이유)를 안내한다.
+
+chunk 하나가 실패하면 **항목 수 상한이 있는 스키마와 좁은 출력 한도로 한 번 더 시도**하고, 그래도 안 되면 그 구간을 빼고 나머지로 결과를 만든다. 빠진 구간 수는 숨기지 않고 목록과 상세에 표시한다. 한 구간도 남지 않으면 지금처럼 실패로 끝난다. 요약 통합이 실패하면 두 요약을 이어 붙인다(없는 내용을 만들지 않는다).
+
 ## 검증
 
-`npm run test:calls`는 JSON 계약/날짜/길이/중복 제거, 업로드 전 원문 정리(공백 세그먼트·비감소 start·상한), 업로드만 재시도, LLM 실패 후 STT 재사용, 분석 중 계정전환 차단, 400의 영구 실패 분류와 재분석 경로, 401의 재시도 유지, 업로드 백오프, contact 화이트리스트, 기기 시계 여유, 앱 재시작 후 `ANALYZING` 재개, 완료 후 정리를 검증한다. 타입 검사와 웹 빌드 검증을 별도로 수행한다. 실제 모델 다운로드·실기기 inference·한국어 평가 데이터 품질·RAM/열/배터리·장시간 실제 오디오·iOS 전체 native 빌드는 실기기 출시 전 확인해야 한다. 테스트용 가짜 분석 결과를 운영 코드에서 반환하지 않는다.
+`npm run test:calls`는 통화일시 파싱·기본값·미래 거절, 단계별 진행률·경과 시간, 실패 코드 화이트리스트와 스레드 수 결정, 부분 성공(구간 건너뛰기), JSON 계약/날짜/길이/중복 제거, 업로드 전 원문 정리(공백 세그먼트·비감소 start·상한), 업로드만 재시도, LLM 실패 후 STT 재사용, 분석 중 계정전환 차단, 400의 영구 실패 분류와 재분석 경로, 401의 재시도 유지, 업로드 백오프, contact 화이트리스트, 기기 시계 여유, 앱 재시작 후 `ANALYZING` 재개, 완료 후 정리를 검증한다. 타입 검사와 웹 빌드 검증을 별도로 수행한다. 실제 모델 다운로드·실기기 inference·한국어 평가 데이터 품질·RAM/열/배터리·장시간 실제 오디오·iOS 전체 native 빌드는 실기기 출시 전 확인해야 한다. 테스트용 가짜 분석 결과를 운영 코드에서 반환하지 않는다.
