@@ -33,6 +33,9 @@ import { colors, fonts, radii, text } from '@/constants/theme';
 import { PASSWORD_CHANGED_NOTICE, useUserStore } from '@/store/user-store';
 import { getStoredTokens, isStoredTokens, saveTokens, type StoredTokens } from '@/lib/auth-tokens';
 import { handleSmsRequest, type SmsShellRequest } from '@/lib/sms-shell-handler';
+import { handleCallRequest, type CallShellRequest } from '@/lib/call-shell-handler';
+import { startCallService } from '@/lib/call-runtime';
+import { getSessionVersion } from '@/lib/auth-tokens';
 
 /**
  * 웹이 토큰을 읽는 localStorage 키. `@/lib/auth-tokens` 의 `KEY` 와 **같은 값이어야 한다.**
@@ -138,6 +141,7 @@ function linkToPath(url: string): string | null {
 /** 웹이 껍데기에 보내는 말. `native-bridge.web.ts` 의 `OutboundMessage` 와 1:1 이다. */
 type ShellMessage =
   | SmsShellRequest
+  | CallShellRequest
   | { type: 'ready' }
   | { type: 'tokens'; tokens: StoredTokens | null; reason?: 'password-changed' };
 
@@ -151,7 +155,7 @@ type ShellMessage =
  * 여기서는 전역과 localStorage 만 건드린다.
  */
 function buildInjectedScript(tokens: StoredTokens | null): string {
-  const nativeInfo = JSON.stringify({ platform: Platform.OS, appVersion: APP_VERSION, smsApiVersion: 1 });
+  const nativeInfo = JSON.stringify({ platform: Platform.OS, appVersion: APP_VERSION, smsApiVersion: 1, callApiVersion: 1 });
 
   /*
    * **`JSON.stringify` 를 두 번 쓴다.** 한 번은 토큰셋 → JSON 문자열(웹이 그대로 저장해 읽을
@@ -203,6 +207,7 @@ true;`;
 
 export function WebShell() {
   const insets = useSafeAreaInsets();
+  useEffect(() => { startCallService(); }, []);
   const ref = useRef<WebView>(null);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -308,6 +313,11 @@ export function WebShell() {
 
   function handleMessage(raw: string) {
     let message: ShellMessage;
+    // 웹이 보낸 원문에 상한을 둔다. 브리지 입력은 그대로 파싱되므로 크기를 재지 않으면 메모리를 그만큼 먹는다.
+    if (typeof raw !== 'string' || raw.length > 64 * 1024) {
+      console.warn('[web-shell] 웹 메시지 크기 초과');
+      return;
+    }
     try {
       message = JSON.parse(raw) as ShellMessage;
     } catch {
@@ -315,6 +325,16 @@ export function WebShell() {
       return;
     }
     switch (message?.type) {
+      case 'call': {
+        const owner = useUserStore.getState().profile?.userId;
+        const version = getSessionVersion();
+        if (!owner || useUserStore.getState().stage !== 'authed') return;
+        void handleCallRequest(message).then(reply => {
+          if (getSessionVersion() !== version || useUserStore.getState().profile?.userId !== owner || useUserStore.getState().stage !== 'authed') return;
+          ref.current?.injectJavaScript(`window.__NATURE_CALL_BRIDGE__?.receive(${JSON.stringify(reply)}); true;`);
+        });
+        return;
+      }
       case 'sms':
         void handleSmsRequest(message).then((reply) => {
           ref.current?.injectJavaScript(`(window.__NATURE_SMS_BRIDGE__ || window.__JAYEON_SMS_BRIDGE__)?.receive(${JSON.stringify(reply)}); true;`);
@@ -365,7 +385,9 @@ export function WebShell() {
         applicationNameForUserAgent={'NatureApp/' + APP_VERSION}
         // 메모리 압박으로 웹 콘텐츠 프로세스가 죽으면 하얀 화면만 남는다. 조용히 다시 띄운다.
         onContentProcessDidTerminate={() => ref.current?.reload()}
-        onMessage={(event) => handleMessage(event.nativeEvent.data)}
+        onMessage={(event) => {
+          if (isShellOrigin(event.nativeEvent.url)) handleMessage(event.nativeEvent.data);
+        }}
         // 뒤로가기 판단용(→ 위 `hardwareBackPress` 설명). pushState 이동에서도 불린다.
         onNavigationStateChange={(navState) => {
           canGoBackRef.current = navState.canGoBack;

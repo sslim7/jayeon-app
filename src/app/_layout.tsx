@@ -166,6 +166,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="shell" />
           <Stack.Screen name="recipients" />
+          <Stack.Screen name="calls" />
           <Stack.Screen name="sms" />
           <Stack.Screen name="templates" />
         </Stack.Protected>
