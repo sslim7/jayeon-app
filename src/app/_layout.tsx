@@ -169,6 +169,11 @@ export default function RootLayout() {
           <Stack.Screen name="calls" />
           <Stack.Screen name="sms" />
           <Stack.Screen name="templates" />
+          {/*
+            받아쓰기 속도 측정용 임시 화면. 🔴 **측정이 끝나면 이 줄과 화면 파일을 지운다**
+            (→ `components/asr-bench.tsx`). 통화분석 흐름과는 이어져 있지 않다.
+          */}
+          <Stack.Screen name="asr-bench" />
         </Stack.Protected>
 
         <Stack.Protected guard={stage !== 'anonymous'}>

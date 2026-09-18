@@ -51,7 +51,15 @@ declare global {
  */
 type OutboundMessage =
   | { type: 'tokens'; tokens: StoredTokens | null; reason?: 'password-changed' }
-  | { type: 'ready' };
+  | { type: 'ready' }
+  // 🔧 **측정이 끝나면 이 줄과 openNativeScreen 을 함께 지운다**(→ `components/asr-bench.tsx`).
+  // 받아쓰기는 네이티브 모듈이라 웹뷰 안에서 돌지 않는데, 사용자가 보는 메뉴는 웹이 그린다.
+  // 그래서 웹 메뉴가 껍데기에게 「네이티브 화면을 열어라」고 말하는 통로가 필요하다.
+  //
+  // ⚠️ 위 머리말의 경고가 그대로 적용된다 — **옛 껍데기는 이 말을 모르고 조용히 버린다.**
+  // 지금은 껍데기를 함께 새로 설치해 쓰는 측정용이라 그 상태를 감수한다. 실사용 기능을
+  // 이 통로에 걸지 마라.
+  | { type: 'navigate'; path: string };
 
 // ──────────────────────────────────────────────────────────────
 // 웹 → 껍데기
@@ -110,6 +118,15 @@ export function postTokensToNative(tokens: StoredTokens | null, reason?: 'passwo
 }
 
 /** 첫 화면을 보여도 된다고 알린다. 껍데기가 덮고 있던 로딩 판을 내린다. */
+/**
+ * 껍데기에게 네이티브 화면을 열어 달라고 한다. 브라우저에서는 아무 일도 하지 않는다.
+ *
+ * 🔧 측정용이다(위 `navigate` 주석). 끝나면 지운다.
+ */
+export function openNativeScreen(path: string): void {
+  post({ type: 'navigate', path });
+}
+
 export function postReadyToNative(): void {
   post({ type: 'ready' });
 }

@@ -41,6 +41,9 @@ export function postTokensToNative(
   // 껍데기 밖이다 — 토큰은 이미 이 앱의 SecureStore 에 있다.
 }
 
+/** 🔧 측정용. 껍데기 자신은 부를 일이 없다 — 짝을 맞추기 위한 빈 구현이다. */
+export function openNativeScreen(_path: string): void {}
+
 export function postReadyToNative(): void {
   // 껍데기 밖이다 — 내릴 로딩 덮개가 없다.
 }

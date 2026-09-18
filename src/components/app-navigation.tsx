@@ -1,7 +1,7 @@
 import { Link, useFocusEffect, usePathname } from 'expo-router';
 import { Image } from 'expo-image';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
@@ -10,12 +10,29 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProfileSheet, PasswordChangeSheet } from '@/components/profile-sheet';
 import { useUserStore } from '@/store/user-store';
 import { colors, fonts, radii, spacing, text } from '@/constants/theme';
+// 🔧 측정용(→ `components/asr-bench.tsx`). 끝나면 이 import 와 아래 갈래를 함께 지운다.
+import { isNativeShell, openNativeScreen } from '@/lib/native-bridge';
 
-const destinations = [
+type MenuIconKind = 'message' | 'reserved' | 'profile' | 'calls' | 'bench';
+type Destination = { href: '/sms/new' | '/sms/reserved' | '/calls' | '/asr-bench'; label: string; icon: MenuIconKind };
+
+/**
+ * ⚠️ **「받아쓰기 시험」은 임시 항목이다.** 폰에서 whisper 가 얼마나 걸리는지만 재는 화면이고
+ * (→ `components/asr-bench.tsx`), 측정이 끝나면 화면과 함께 이 줄도 지운다.
+ *
+ * 🔴 **웹에는 넣지 않는다.** 웹에서는 받아쓰기를 돌릴 수 없어 열어 봐야 「폰에서 하세요」
+ * 한 줄뿐인데, 그 죽은 메뉴는 로그인 이후 화면이 전부 웹인 이 앱의 주 무대에 남는다.
+ */
+const destinations: readonly Destination[] = [
   { href: '/sms/new', label: '문자 보내기', icon: 'message' },
   { href: '/sms/reserved', label: '예약 문자 보내기', icon: 'reserved' },
   { href: '/calls', label: '통화분석', icon: 'calls' },
-] as const;
+  // 🔧 **웹에서도 보여야 한다.** 로그인 이후 화면은 전부 웹이라 사용자가 보는 ☰ 는 웹이
+  // 그린 것이고, 네이티브 메뉴는 화면에 나타나지 않는다. 대신 누르면 껍데기에게 네이티브
+  // 화면을 열어 달라고 말한다(→ `lib/native-bridge.web.ts` 의 openNativeScreen).
+  // 브라우저에서는 열 껍데기가 없으므로 아래 렌더에서 항목 자체를 걷는다.
+  { href: '/asr-bench', label: '받아쓰기 시험', icon: 'bench' } as Destination,
+];
 
 // 헤더는 화면 트리 밖에 있으므로 화면이 오른쪽 슬롯을 채울 통로만 둔다. 세터는 안정적이라 화면을 다시 그리지 않는다.
 const HeaderActionsContext = createContext<(actions: ReactNode) => void>(() => {});
@@ -105,10 +122,26 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
             <ScrollView contentContainerStyle={styles.items}>
               {destinations.map((item) => {
                 const selected = pathname === item.href;
+                const body = <>
+                  <MenuIcon kind={item.icon} />
+                  <Text style={[styles.itemLabel, selected && styles.selectedLabel]}>{item.label}</Text>
+                </>;
+                // 🔧 측정용 갈래(→ `components/asr-bench.tsx`). 끝나면 이 블록을 통째로 지운다.
+                //
+                // 받아쓰기 화면은 네이티브 모듈을 쓰므로 웹뷰 안에서 열 수 없다. 웹에서는
+                // Link 로 이동시키면 **빈 화면으로 가 버리므로**, 껍데기에게 열어 달라고
+                // 말하고 여기서는 이동하지 않는다.
+                // 🔴 브라우저(껍데기 없음)에서는 항목 자체를 그리지 않는다 — 눌러도 아무
+                // 일도 일어나지 않는 메뉴가 남으면 고장으로 읽힌다.
+                if (item.href === '/asr-bench' && Platform.OS === 'web') {
+                  if (!isNativeShell()) return null;
+                  return <Pressable key={item.href} accessibilityRole="button" accessibilityLabel={item.label} onPress={() => { setOpen(false); openNativeScreen(item.href); }} style={StyleSheet.flatten([styles.item])}>
+                    {body}
+                  </Pressable>;
+                }
                 return <Link key={item.href} href={item.href} asChild>
                   <Pressable accessibilityRole="link" accessibilityLabel={item.label} accessibilityState={{ selected }} aria-current={selected ? 'page' : undefined} onPress={() => setOpen(false)} style={StyleSheet.flatten([styles.item, selected && styles.selected])}>
-                    <MenuIcon kind={item.icon} />
-                    <Text style={[styles.itemLabel, selected && styles.selectedLabel]}>{item.label}</Text>
+                    {body}
                   </Pressable>
                 </Link>;
               })}
@@ -157,11 +190,13 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
   );
 }
 
-function MenuIcon({ kind }: { kind: 'message' | 'reserved' | 'profile' | 'calls' }) {
+function MenuIcon({ kind }: { kind: MenuIconKind }) {
   return <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={colors.greenText} strokeWidth={1.7} strokeLinejoin="round" strokeLinecap="round" aria-hidden={true}>
     {kind === 'calls' ? <><Rect x={4} y={3} width={16} height={18} rx={2} /><Path d="M8 8h8M8 12h8M8 16h5" /></> : null}
     {kind === 'profile' ? <><Circle cx={12} cy={8} r={3.5} /><Path d="M5 21v-2a7 7 0 0 1 14 0v2" /></> : null}
     {kind === 'message' ? <Path d="M4 4h16v12H9l-5 4V4Zm4 4h8M8 12h5" /> : null}
+    {/* 스톱워치: 「얼마나 걸리나」를 재는 임시 화면 */}
+    {kind === 'bench' ? <><Circle cx={12} cy={13} r={7.5} /><Path d="M12 9.5V13l2.5 1.5M9.5 2.5h5" /></> : null}
     {/* 달력 + 체크: 아직 보내지 않고 담아 둔 문자 */}
     {kind === 'reserved' ? <><Rect x={3} y={5} width={18} height={16} rx={2.5} /><Path d="M8 3v4M16 3v4M3 10h18M9 15l2 2 4-4" /></> : null}
   </Svg>;
