@@ -341,6 +341,51 @@ test('분석이 실패한 통화는 이유·코드를 보이고 재분석을 부
   expect(state.seen).toContain('reanalyze:call-3');
 });
 
+/**
+ * 🔴 **다시 눌러도 같은 실패에는 버튼을 세우지 않는다.**
+ *
+ * 서버 v0.1.4 는 종료 상태에서 왜 멈췄는지를 코드로 말한다(§`internal/calls/pipeline.go` 의
+ * `userCode`). 그중 `BUDGET_TOO_SMALL` 은 **우리가 고쳐야 하는 실패**라 사용자가 몇 번을
+ * 눌러도 같은 자리에서 멈춘다 — 「분석 다시 시도」를 세워 두면 요금만 나가고 결과는 같다.
+ * 반대로 `RETRIES_EXHAUSTED` 는 서버가 자동 시도를 다 쓴 것뿐이라 사람이 한 번 더 돌릴
+ * 길은 남아 있어야 한다. 이 둘이 같은 화면에서 다르게 보이는 것을 여기서 고정한다.
+ */
+test('서버가 고쳐야 할 실패에는 다시 시도 버튼이 서지 않고, 시도를 다 쓴 실패에는 선다', async ({ page }) => {
+  const base = {
+    contact: { name: '박예산', phone: '+821033334444' },
+    call: { file_name: 'long.m4a', duration: 1500, recorded_at: '2026-09-17T01:00:00Z' }, created_at: '2026-09-17T01:30:00Z',
+    status: 'ANALYSIS_FAILED' as const, progress: 0.8, job_state: 'ANALYSIS_FAILED', stage: '내용 정리에 실패했어요', has_audio: true,
+    transcript: { text: '이번 달 안에 결정하겠습니다.', segments: [{ start: 0, end: 3, text: '이번 달 안에 결정하겠습니다.' }] },
+  };
+  const state = server([
+    { ...base, call_id: 'call-budget', error: 'BUDGET_TOO_SMALL' },
+    { ...base, call_id: 'call-exhausted', contact: { name: '이소진', phone: '+821033335555' }, error: 'RETRIES_EXHAUSTED' },
+  ]);
+  await installCalls(page, state);
+  await login(page);
+
+  await briefRow(page, '박예산').click();
+  // 무엇이 잘못됐는지와 **고칠 사람이 우리라는 것**을 말한다. 기다리라는 말은 하지 않는다.
+  await expect(page.getByText(/서버에 정해 둔 시간이 모자랍니다\. 다시 시도해도 같으니 저희가 고쳐야 합니다\. \(코드: BUDGET_TOO_SMALL\)/)).toBeVisible();
+  await expect(page.getByRole('button', { name: '분석 다시 시도' })).toHaveCount(0);
+  // ⚠️ 버튼이 없다고 원문까지 잠그지는 않는다 — 받아쓰기는 끝난 통화다.
+  await expect(page.getByRole('button', { name: '저장된 원문 보기' })).toBeVisible();
+  // 상세의 요약 탭도 있지도 않은 버튼을 찾아가라고 말하지 않는다.
+  await page.getByRole('button', { name: '저장된 원문 보기' }).click();
+  await page.getByRole('tab', { name: '통화 요약', exact: true }).click();
+  await expect(page.getByText(/\(코드: BUDGET_TOO_SMALL\)/).first()).toBeVisible();
+  await expect(page.getByText(/목록에서 다시 시도하면/)).toHaveCount(0);
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+
+  // 한 줄에 하나만 펴진다 — 이 줄을 펴면 위 통화는 저절로 접힌다.
+  await briefRow(page, '이소진').click();
+  await expect(page.getByText(/서버가 여러 번 다시 시도했지만 끝내 실패했습니다\. \(코드: RETRIES_EXHAUSTED\)/)).toBeVisible();
+  // 자동 재시도를 다 쓴 뒤 사람이 판단해 다시 돌리는 길은 남는다.
+  await page.getByRole('button', { name: '분석 다시 시도' }).click();
+  await expect(page.getByText('내용 정리하는 중', { exact: true })).toBeVisible();
+  expect(state.seen).toContain('reanalyze:call-exhausted');
+});
+
 // 받아쓰기가 실패한 통화에는 다시 분석할 원문이 없다. 서버가 409 로 거절할 버튼을 세워 두지 않는다.
 test('받아쓰기가 실패한 통화는 다시 등록하라고만 말한다', async ({ page }) => {
   await installCalls(page, server([{

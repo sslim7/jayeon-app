@@ -128,13 +128,20 @@ export function elapsedLabel(record: { status: CallStatus; created_at?: string |
  * 빈 화면은 「고장 났나?」로 읽힌다. **왜 비었는지**를 말해야 사용자가 다음에 무엇을 할지
  * 안다 — 진행 중이면 어느 단계인지, 실패했으면 이유와 다시 시도하는 길이다.
  */
-export function missingAnalysisNotice(record: { status: CallStatus; stage?: string | null; error?: string | null; created_at?: string | null }, now: number, reason = ''): string {
+export function missingAnalysisNotice(record: { status: CallStatus; stage?: string | null; error?: string | null; created_at?: string | null }, now: number, reason = '', retryable = true): string {
   if (isActive(record.status)) {
     const elapsed = elapsedLabel(record, now);
     return `분석이 아직 끝나지 않았습니다. 현재 단계: ${stageText(record)}${elapsed ? ` · ${elapsed}` : ''}. 완료되면 이 탭에 내용이 나타납니다.`;
   }
   if (isFailed(record.status)) {
-    return `${reason || '분석을 완료하지 못했습니다.'} 목록에서 다시 시도하면 저장된 통화 원문으로 분석만 다시 진행합니다.`;
+    /*
+      🔴 **다시 시도하는 길은 목록에 버튼이 설 때만 안내한다.** 버튼이 서지 않는 실패에
+      「목록에서 다시 시도하면」을 적으면, 사용자는 있지도 않은 버튼을 찾아 목록을 뒤진다.
+      설지 말지는 실패 코드가 정하므로 호출부가 판단해 넘긴다(§`lib/call-errors.ts` 의
+      `callRetryable` — 이 파일은 코드 해석을 알지 못한다).
+    */
+    const base = reason || '분석을 완료하지 못했습니다.';
+    return retryable ? `${base} 목록에서 다시 시도하면 저장된 통화 원문으로 분석만 다시 진행합니다.` : base;
   }
   return '분석이 완료되지 않아 아직 보여 드릴 내용이 없습니다. 통화 원문 탭에서 저장된 내용을 확인해 주세요.';
 }
