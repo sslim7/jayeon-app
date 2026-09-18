@@ -71,8 +71,7 @@
           }
         }
       ],
-      "expo-secure-store",
-      "./plugins/with-call-ai.cjs"
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

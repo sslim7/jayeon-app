@@ -3,9 +3,9 @@ import { Pressable, Text, View } from 'react-native';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Loading, Notice, s } from '@/components/sms-ui';
 import { callApi } from '@/lib/call-api';
-import { callDevice } from '@/lib/call-device';
 import { CallStages } from '@/components/call-stages';
-import { diagnosticsLabel, missingAnalysisNotice, skippedNotice, totalDurationLabel } from '@/lib/call-progress';
+import { callFailureText } from '@/lib/call-errors';
+import { isActive, isFailed, missingAnalysisNotice } from '@/lib/call-progress';
 import { formatPhone } from '@/lib/phone';
 import type { CallAnalysis, CallRecord } from '@/types/calls';
 
@@ -13,11 +13,9 @@ const sections = { customer_needs: '고객 요구사항', questions: '질문', c
 /**
  * 펼 탭을 정한다. 「통화 요약」과 「통화 원문」은 늘 있고, 나머지는 **내용이 있을 때만** 편다.
  *
- * 🔧 이 버전의 기기 분석은 요약만 만든다(→ `lib/call-analysis.ts`). 비어 있을 탭을 띄워 두고
- * 「이 버전에서는 제공하지 않습니다」를 적느니 탭 자체를 걷는다 — 누를 것이 없는 탭은 사용자를
- * 두 번 헛걸음시킨다. 대신 **내용이 있으면 탭이 저절로 돌아온다**: 상세 분석을 만들던 옛
- * 기록에도, 서버 분석이 붙어 상세 항목이 채워진 뒤에도 이 함수가 그 탭을 다시 펴 준다.
- * 서버 분석을 붙일 때 이 화면에서 고칠 것은 없다.
+ * 비어 있을 탭을 띄워 두고 「이 버전에서는 제공하지 않습니다」를 적느니 탭 자체를 걷는다 —
+ * 누를 것이 없는 탭은 사용자를 두 번 헛걸음시킨다. 대신 **내용이 있으면 탭이 저절로 돌아온다**:
+ * 요약만 만들던 옛 기기 기록에도, 상세 항목까지 채우는 서버 분석에도 같은 함수가 쓰인다.
  */
 function tabsFor(analysis: CallAnalysis | undefined): string[] {
   const extra: string[] = [];
@@ -27,40 +25,39 @@ function tabsFor(analysis: CallAnalysis | undefined): string[] {
   return ['통화 요약', ...extra, '통화 원문'];
 }
 const time = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
+
+/**
+ * 통화 한 건의 내용.
+ *
+ * 🔴 **목록이 준 값으로는 부족하다.** 목록 응답에는 원문·분석이 실리지 않는다(30건마다 수 MB 를
+ * 내려보내지 않기 위해서다, §`internal/calls/model.go` 의 `listRecord`). 그래서 열릴 때 상세를
+ * 한 번 물어본다 — 서버 단계(`stage`)와 재생 주소도 그 응답에만 온다.
+ */
 export function CallDetail({ item, onClose }: { item: CallRecord; onClose: () => void }) {
-  const [tab, setTab] = useState<string>((item.transcript || item.status === 'ANALYSIS_FAILED') && !item.analysis && item.status !== 'COMPLETED' ? '통화 원문' : '통화 요약');
   const [record, setRecord] = useState(item);
-  const [loading, setLoading] = useState(!item.analysis);
+  const [tab, setTab] = useState<string>(item.status === 'ANALYSIS_FAILED' ? '통화 원문' : '통화 요약');
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   // 끝난 기록은 시각이 멈춰 있어 한 번만 읽으면 된다. 렌더 중에 시계를 읽지 않는다.
   const [now] = useState(() => Date.now());
   useEffect(() => {
     let live = true;
-    void (async () => {
-      try {
-        const local = await callDevice.get(item.call_id);
-        const result = (local?.analysis || local?.transcript) ? local : await callApi.get(item.call_id);
-        if (live) setRecord(result);
-      } catch { if (live) setError('통화 내용을 불러오지 못했습니다. 닫은 후 다시 시도해 주세요.'); }
-      finally { if (live) setLoading(false); }
-    })();
+    void callApi.get(item.call_id)
+      .then((found) => { if (live && found) setRecord(found); })
+      .catch(() => { if (live) setError('통화 내용을 불러오지 못했습니다. 닫은 후 다시 시도해 주세요.'); })
+      .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
   }, [item.call_id]);
   const analysis = record.analysis;
   const tabs = useMemo(() => tabsFor(analysis), [analysis]);
-  // 분석 시간은 기기에만 남는다. 서버에서 받은 기록에는 없으므로 목록이 넘겨준 값도 함께 본다.
-  const timing = record.timing ?? item.timing;
-  const total = totalDurationLabel(timing);
-  // 서버 사본에는 기기에서 잰 값이 없다. 목록이 넘겨준 기록으로 채운다.
-  const state = { status: record.status, error: record.error ?? item.error, timing };
+  const failure = isFailed(record.status) ? callFailureText(record) : '';
   return <BottomSheet title={`${record.contact.name} 통화분석`} visible onClose={onClose}>
     <Text style={s.meta}>{formatPhone(record.contact.phone)} · {new Date(record.call.recorded_at).toLocaleString('ko-KR')}{record.call.duration !== null ? ` · ${time(record.call.duration)}` : ''}</Text>
-    {total ? <Text style={s.meta}>분석 {total}</Text> : null}
-    {timing?.stages ? <CallStages item={{ ...record, timing }} now={now} /> : null}
-    {skippedNotice(timing) ? <Notice message={skippedNotice(timing)} /> : null}
-    {/* 실패를 다음에 짚을 수 있는 숫자들. 통화 내용은 들어가지 않는다. */}
-    {diagnosticsLabel(timing) ? <Text style={s.meta}>{diagnosticsLabel(timing)}</Text> : null}
-    {record.error ? <Notice error message={record.error} /> : null}
+    {/* 아직 도는 통화와 멈춘 통화만 단계를 편다. 끝난 통화에 네 칸을 세울 이유가 없다. */}
+    {isActive(record.status) || isFailed(record.status) ? <CallStages item={record} now={now} /> : null}
+    {failure ? <Notice error message={failure} /> : null}
+    {/* 어떤 AI 가 만들었는지는 결과를 의심할 때 첫 단서다. 서버가 알려 줄 때만 적는다. */}
+    {record.ai?.provider || record.ai?.model ? <Text style={s.meta}>분석: {[record.ai.provider, record.ai.model].filter(Boolean).join(' · ')}</Text> : null}
     <View style={s.row}>{tabs.map((label) => <Pressable key={label} accessibilityRole="tab" aria-selected={label === tab} accessibilityState={{ selected: label === tab }} onPress={() => setTab(label)} style={[s.choice, label === tab && s.secondary]}><Text style={label === tab ? s.link : s.body}>{label}</Text></Pressable>)}</View>
     {loading ? <Loading /> : null}{error ? <Notice error message={error} /> : null}
     {/* 옛 기록의 결정사항·중요 포인트는 탭을 따로 두지 않고 요약 아래에 붙인다. */}
@@ -69,7 +66,7 @@ export function CallDetail({ item, onClose }: { item: CallRecord; onClose: () =>
     {analysis && tab === '할 일' ? analysis.todos.map((todo, i) => <View key={i} style={s.card}><Text selectable style={s.body}>☐ {todo.content}</Text><Text style={s.meta}>담당: {todo.owner || '확인되지 않음'} · 기한: {todo.due_date || '확인되지 않음'}</Text><Text selectable style={s.meta}>근거: {todo.source}</Text></View>) : null}
     {analysis && tab === '상담 분석' ? Object.entries(sections).map(([key, label]) => <Items key={key} title={label} items={analysis.consulting[key as keyof typeof sections]} />) : null}
     {/* 요약이 없는 통화의 요약 탭이 빈 화면이 되지 않게 왜 비었는지를 말해 준다. */}
-    {!analysis && !loading && tab !== '통화 원문' ? <Notice message={missingAnalysisNotice(state, now)} /> : null}
+    {!analysis && !loading && tab !== '통화 원문' ? <Notice message={missingAnalysisNotice(record, now, failure)} /> : null}
     {tab === '통화 원문' ? record.transcript ? record.transcript.segments.length ? record.transcript.segments.map((segment, i) => <View key={i} style={s.card}><Text style={s.meta}>{time(segment.start)}{segment.speaker ? ` · ${segment.speaker}` : ''}</Text><Text selectable style={s.body}>{segment.text}</Text></View>) : <Text selectable style={s.body}>{record.transcript.text}</Text> : <Notice message="저장된 통화 원문이 없습니다." /> : null}
   </BottomSheet>;
 }

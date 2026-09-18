@@ -1,13 +1,33 @@
-export type CallStatus = 'PENDING' | 'PREPARING' | 'TRANSCRIBING' | 'ANALYZING' | 'UPLOADING' | 'COMPLETED' | 'FAILED' | 'TRANSCRIPTION_FAILED' | 'ANALYSIS_FAILED' | 'UPLOAD_FAILED' | 'UPLOAD_REJECTED';
+/**
+ * 통화분석 계약 — **서버가 정본이다.**
+ *
+ * 앱은 이제 녹음 파일을 올리고 상태를 조회하기만 한다. 전사·분석은 서버 파이프라인이 한다
+ * (§`jayeon-was/internal/calls`). 여기 있는 모양은 그 응답과 1:1 이어야 한다.
+ */
+
+/**
+ * 화면이 아는 상태 어휘.
+ *
+ * 서버는 내부 작업 상태(`job_state`)를 **이 닫힌 집합으로 사상해서** 준다(§`model.go` 의
+ * `appStatus`). 서버가 쓰는 값은 앞의 일곱 개다.
+ *
+ * 🔧 `UPLOADING`/`UPLOAD_FAILED`/`UPLOAD_REJECTED`/`FAILED` 는 **기기 분석 시절의 값**이다.
+ * 등록 시트가 업로드 중인 상태(`UPLOADING`)에 계속 쓰고, 네이티브 껍데기에 남아 있는 옛
+ * 로컬 기록도 이 값을 들고 있다(→ `lib/call-runtime.ts`). 지우면 그 기록을 읽을 수 없다.
+ */
+export type CallStatus =
+  | 'PENDING' | 'PREPARING' | 'TRANSCRIBING' | 'ANALYZING' | 'COMPLETED'
+  | 'TRANSCRIPTION_FAILED' | 'ANALYSIS_FAILED'
+  | 'UPLOADING' | 'UPLOAD_FAILED' | 'UPLOAD_REJECTED' | 'FAILED';
+
 export interface CallContact { name: string; phone: string; recipient_id?: string | null }
 export interface TranscriptSegment { start: number; end: number; text: string; speaker?: string }
+
 /**
- * 저장·업로드하는 분석 한 덩어리. **서버 계약과 같은 모양**이다(`internal/calls/model.go`).
+ * 분석 한 덩어리. **서버 계약과 같은 모양**이다(`internal/calls/model.go`).
  *
- * 🔧 이 버전의 기기 분석은 `summary` 만 채우고 나머지는 빈 배열이다(→ `lib/call-analysis.ts`).
- * 나머지 필드는 **서버 분석이 붙는 자리**로 남겨 둔다 — 지우면 옛 기록을 읽을 수 없고, 서버가
- * 상세 분석을 돌려줄 때 `schema_version` 을 올려야 한다. 채워 넣기만 하면 화면의 탭이
- * 되살아난다(→ `components/call-detail.tsx`).
+ * 항목이 비어 있을 수 있다 — 기기 분석이 만든 옛 기록은 `summary` 만 채웠다. 화면은 내용이
+ * 있는 항목의 탭만 편다(→ `components/call-detail.tsx`).
  */
 export interface CallAnalysis {
   schema_version: 1;
@@ -17,62 +37,65 @@ export interface CallAnalysis {
   decisions: string[];
   consulting: { customer_needs: string[]; questions: string[]; concerns: string[]; objections: string[]; important_points: string[]; followups: string[] };
 }
-/** 화면에 보이는 네 단계. 내부 status 를 이 넷으로 묶는다(→ `lib/call-progress.ts`). */
-export type CallStageKey = 'PREPARE' | 'TRANSCRIBE' | 'ANALYZE' | 'UPLOAD';
-/** `started_at` 이 남아 있으면 그 단계가 도는 중이고, `ms` 는 **끝난 구간의 합**이다. */
-export interface CallStageTiming { started_at?: string | null; ms?: number | null }
-/**
- * 기기에서 잰 분석 시간. **서버로 보내지 않는다** — 업로드 payload 에서 빼고 보낸다
- * (→ `call-runtime.ts`). 서버는 모르는 필드를 400 으로 거부한다.
- *
- * 단계 시간은 재개·재시도를 거치며 **합산**된다. 시작 시각은 마지막으로 분석을 시작한 때다.
- */
-/**
- * 실패를 다음에 짚기 위한 **숫자만** 담는다. 통화 내용은 절대 담지 않는다.
- * `stopped_limit` 은 출력 한도에 닿아 끊긴 횟수, `skipped` 는 끝내 요약하지 못해 뺀 구간 수,
- * `merge_fallbacks` 는 요약 통합에 실패해 구간 요약을 이어 붙인 횟수다.
- */
-export interface CallLlmStats { chunks: number; completions: number; skipped: number; tokens: number; tokens_per_second: number | null; stopped_limit: number; merge_fallbacks: number }
-/**
- * 진행 중인 구간의 실시간 상태. **메모리에만 있고 저장·업로드하지 않는다**(토큰마다 DB 를
- * 쓰면 SQLite 가 종일 돈다). 목록·상세를 읽을 때 그 순간 값을 붙여 준다.
- * `chunk: 0` 은 요약 통합 단계다.
- */
-export interface CallLive { chunk: number; chunks: number; tokens: number; tokens_per_second: number | null }
-export interface CallTiming { started_at: string; llm?: CallLlmStats; finished_at?: string | null; stages?: { [K in CallStageKey]?: CallStageTiming } }
+
+/** 화면에 보이는 네 단계. 서버 status 를 이 넷으로 묶는다(→ `lib/call-progress.ts`). */
+export type CallStageKey = 'UPLOAD' | 'TRANSCRIBE' | 'ANALYZE' | 'DONE';
+
+/** 무엇이 분석했는지. `provider` 는 서버 파이프라인만, `processed_on_device` 는 옛 기기 기록만 채운다. */
+export interface CallAI { model: string; model_version: string; processed_on_device?: boolean; provider?: string }
+
 export interface CallRecord {
   call_id: string;
   contact: CallContact;
   call: { file_name: string; duration: number | null; recorded_at: string };
   created_at: string;
   status: CallStatus;
+  /**
+   * 진행률 — 🔴 **0~1 실수다.** 서버가 단계별 고정값으로 준다(§`job.go` 의 `progressOf`).
+   *
+   * 기기 분석 시절에는 0~100 정수였다. 두 가지 뜻이 한 필드에 섞이면 막대가 1% 에서 멈춘
+   * 것처럼 보이므로, 앱 안에서도 **언제나 0~1** 로만 다루고 화면에 그릴 때만 백분율로 바꾼다
+   * (→ `lib/call-progress.ts` 의 `percentOf`). 업로드 중 진행률도 같은 단위로 넣는다.
+   */
   progress: number | null;
   summary?: string;
   transcript?: { text: string; segments: TranscriptSegment[] };
   analysis?: CallAnalysis;
-  ai?: { model: string; model_version: string; processed_on_device: true };
+  ai?: CallAI;
+  /** 서버 파이프라인의 내부 작업 상태 원문(`QUEUED`·`ASR_POLLING`…). 기기 경로 기록에는 없다. */
+  job_state?: string | null;
+  /** 사람이 그대로 읽을 한 줄(「받아쓰는 중」). 서버가 만든다 — 앱이 지어내지 않는다. */
+  stage?: string | null;
+  /** 원본 녹음이 아직 서버에 있나. **목록에서 재생 버튼을 열지 정하는 유일한 근거다.** */
+  has_audio?: boolean;
   /**
-   * 녹음 파일을 들을 수 있는 주소.
+   * 녹음을 들을 수 있는 서명 주소. **15분이면 만료되고 상세를 조회할 때마다 새로 발급된다.**
    *
-   * 🔧 **서버 업로드가 붙기 전에는 아무도 채우지 않는다.** 화면은 값이 없으면 재생 버튼을
-   * 잠그고 이유를 말한다(→ `lib/call-audio.ts`). 보관 기간이 지난 녹음도 같은 길로 걸러진다.
+   * 🔴 목록(`GET /calls`)에는 오지 않는다 — 재생하려면 상세를 한 번 물어봐야 한다
+   * (→ `components/call-playback.tsx`).
    */
   audio_url?: string | null;
+  /** 실패 코드. 사람이 읽을 문구는 앱이 만든다(→ `lib/call-errors.ts`). */
   error?: string | null;
-  timing?: CallTiming | null;
-  live?: CallLive | null;
 }
+
+/**
+ * 고른 녹음 파일의 **손잡이**. 바이트를 들고 있지 않다.
+ *
+ * 🔴 base64 로 바꾸지 않는다. 28MB 통화 하나를 문자열로 만들면 그 순간 메모리에 40MB 가
+ * 올라가고, 네이티브 껍데기의 브리지는 64KB 에서 끊긴다. 웹은 `File` 을 그대로 XHR 바디로,
+ * 네이티브는 `file://` URI 를 업로드 태스크로 넘긴다(→ `lib/call-put.ts`).
+ */
+export type CallFileSource = { kind: 'web'; file: Blob } | { kind: 'native'; uri: string };
+
 /** `modified_at` 은 고른 파일의 시각(ms). 통화일시 기본값으로만 쓰고, 없으면 사용자가 고른다. */
-export interface CallFile { token: string; name: string; size: number; modified_at?: number | null }
-export interface CallStartInput { file: CallFile; contact: CallContact; recorded_at: string }
-/** `notice` 는 오류가 아닌 상태(일시정지 등)를 담는다. 오류 배너와 구분해서 보여 준다. */
-export interface CallModelState { supported: boolean; installed: boolean; downloading: boolean; downloaded_bytes: number; total_bytes: number; error?: string | null; notice?: string | null }
-export interface CallDevice {
-  models(): Promise<CallModelState>;
-  install(): Promise<void>;
-  pickFile(): Promise<CallFile | null>;
-  start(input: CallStartInput): Promise<CallRecord>;
-  list(): Promise<CallRecord[]>;
-  get(id: string): Promise<CallRecord | null>;
-  retry(id: string): Promise<void>;
+export interface CallFile {
+  name: string;
+  size: number;
+  /** 서버 화이트리스트 안의 MIME. **서명에 들어가는 값**이라 업로드 헤더와 한 글자도 달라선 안 된다. */
+  content_type: string;
+  modified_at?: number | null;
+  source: CallFileSource;
 }
+
+export interface CallStartInput { file: CallFile; contact: CallContact; recorded_at: string }

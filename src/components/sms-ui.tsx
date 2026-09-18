@@ -9,13 +9,23 @@ export function smsError(error: unknown): string {
   if (error instanceof Error && error.name === 'Error') return error.message;
   return readApiErrorMessage(error, {}, '처리하지 못했어요. 연결을 확인하고 다시 시도해 주세요.');
 }
-export function SmsPage({ title, children, wide = false, actions, hideTitle = false, compact = false, footer, fab }: PropsWithChildren<{ title: string; wide?: boolean; actions?: ReactNode; hideTitle?: boolean; compact?: boolean; footer?: ReactNode; fab?: ReactNode }>) {
+export function SmsPage({ title, children, wide = false, actions, hideTitle = false, compact = false, footer, fab, onEndReached }: PropsWithChildren<{ title: string; wide?: boolean; actions?: ReactNode; hideTitle?: boolean; compact?: boolean; footer?: ReactNode; fab?: ReactNode; onEndReached?: () => void }>) {
   return (
     <SafeAreaView style={s.root}>
       <Stack.Screen options={{ title }} />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
+        /*
+          바닥이 가까워지면 알린다(끝없이 이어 붙이는 목록용). 한 화면 못 미친 자리에서 미리
+          부르는 이유는, 바닥에 닿은 뒤에 요청하면 스크롤이 **눈에 보이게 멈추기** 때문이다.
+          중복 호출은 부르는 쪽이 「이미 받는 중인가」로 막는다.
+        */
+        onScroll={onEndReached ? ({ nativeEvent }) => {
+          const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+          if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 320) onEndReached();
+        } : undefined}
+        scrollEventThrottle={200}
         // 제목을 앱 헤더가 대신 보여 주면 헤더 제목↔구분선 간격(약 12)과 같게 붙인다.
         // footer 가 있으면 본문이 남은 높이를 채워 목록이 그 안에서 스크롤할 수 있게 한다.
         // fab 이 있으면 그 원(60)과 아래 여백만큼 본문을 더 비운다 — 안 비우면 목록 마지막 줄이 버튼에 가린다.

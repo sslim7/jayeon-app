@@ -2,51 +2,50 @@ import { ActivityIndicator, Text, View, StyleSheet } from 'react-native';
 
 import { ProgressBar, s } from '@/components/sms-ui';
 import { colors, fonts, radii, spacing, text } from '@/constants/theme';
-import { callStageViews, formatDuration, liveAnalysisText, type StageView } from '@/lib/call-progress';
+import { callStageViews, elapsedLabel, stageText, type StageView } from '@/lib/call-progress';
 import type { CallRecord } from '@/types/calls';
 
 /**
- * 분석의 네 단계를 세로로 세워 「어디까지 왔는지」를 한눈에 보인다.
+ * 네 단계를 세로로 세워 「어디까지 왔는지」를 한눈에 보인다.
  *
- * 실기기에서 통화 분석 단계만 20분을 넘긴다. 그 동안 화면에 아무 변화가 없으면 사용자는
- * **멈춘 것과 도는 것을 구분할 수 없다** — 그래서 지나간 단계는 바탕색으로 구분하고, 도는
- * 단계는 걸린 시간을 1초마다 새로 그린다(시각은 부르는 쪽이 `now` 로 넘긴다. 렌더 중에
- * 시계를 읽으면 결과가 불안정해진다).
+ * 서버 전사·분석은 몇 분씩 걸린다. 그 동안 화면에 아무 변화가 없으면 사용자는 **멈춘 것과
+ * 도는 것을 구분할 수 없다** — 그래서 지나간 단계는 바탕색으로 구분하고, 도는 단계에는 서버가
+ * 보낸 한 줄(「받아쓰는 중」)과 등록 후 경과 시간을 함께 적는다(시각은 부르는 쪽이 `now` 로
+ * 넘긴다. 렌더 중에 시계를 읽으면 결과가 불안정해진다).
  *
  * 🔴 **색으로만 구분하지 않는다.** 색을 구분하기 어려운 사용자도 있고, 야외 화면에서는 연한
  * 바탕색 차이가 통째로 사라진다. 그래서 상태를 **기호(✓ ▶ ✕ ○)와 글자(완료·진행 중·멈춤·
  * 예정)로도** 적고, 낭독기용 이름에도 같은 말을 담는다.
  *
- * 🔴 막대는 **실제로 센 진행률이 있을 때만** 그린다(→ `lib/call-progress.ts`).
- *
- * 이 카드가 펴진 행에서는 목록이 한 줄 요약을 보여 주지 않는다 — 같은 말을 두 번 하면
- * 무엇을 봐야 할지 흐려진다(→ `app/calls.tsx`).
+ * 🔴 막대는 **실제 값이 있을 때만** 그린다(→ `lib/call-progress.ts`). 업로드 막대는 앱이
+ * 직접 센 바이트이고 서버 막대는 서버가 보낸 전체 진행률이라 **뜻이 다르므로 이름도 다르게**
+ * 적는다 — 같은 이름으로 적으면 「음성 변환 40%」가 전사의 40% 로 읽힌다.
  */
 export function CallStages({ item, now }: { item: CallRecord; now: number }) {
-  const stages = callStageViews(item, now);
+  const stages = callStageViews(item);
+  const elapsed = elapsedLabel(item, now);
   return (
     <View style={styles.list}>
       {stages.map((stage, index) => {
-        const spent = stageText(stage);
-        // 통화 분석은 구간 하나가 20분을 넘기기도 한다. 그 안에서 「살아 있음」을 보여 주는 것은
-        // 실제로 센 값뿐이다 — 지금까지 생성한 토큰 수와 초당 토큰 수(→ `lib/call-progress.ts`).
-        const live = stage.state === 'running' && stage.key === 'ANALYZE' ? liveAnalysisText(item.live) : '';
+        const spent = stateText(stage, stage.state === 'running' ? elapsed : '');
+        // 서버가 보낸 한 줄을 도는 단계에만 붙인다. 업로드는 앱이 하는 일이라 서버가 모른다.
+        const detail = stage.state === 'running' && stage.key !== 'UPLOAD' ? stageText(item) : '';
         return (
           <View key={stage.key}>
             {/* 지나온 구간과 남은 구간을 선 색으로도 가른다. */}
             {index ? <View style={[styles.link, stages[index - 1].state === 'done' && styles.linkPassed]} /> : null}
             <View
-              accessibilityLabel={`${stage.label}, ${spent.replace(/ · /g, ', ')}${live ? `, ${live.replace(/ · /g, ', ')}` : ''}`}
+              accessibilityLabel={`${stage.label}, ${spent.replace(/ · /g, ', ')}${detail ? `, ${detail}` : ''}`}
               style={[styles.stage, styles[stage.state]]}>
-              {/* 진행 중인 단계만 낭독기에 바뀌는 값을 알린다(목록 행에 있던 live region 을 여기로 옮겼다). */}
+              {/* 진행 중인 단계만 낭독기에 바뀌는 값을 알린다. */}
               <View accessibilityLiveRegion={stage.state === 'running' ? 'polite' : 'none'} style={styles.head}>
                 <Text style={[styles.mark, styles[`${stage.state}Text`]]}>{MARKS[stage.state]}</Text>
                 <Text style={[styles.name, styles[`${stage.state}Text`], stage.state === 'running' && styles.nameRunning]}>{stage.label}</Text>
                 <Text style={[s.meta, styles.spent, styles[`${stage.state}Text`]]}>{spent}</Text>
               </View>
-              {live ? <View style={styles.live}>{/* 낭독기에는 옆의 글자가 같은 말을 한다. 돌아가는 원은 화면용이므로 접근성 트리에서 숨긴다. */}
-                <ActivityIndicator size="small" color={colors.green} aria-hidden /><Text style={[s.meta, styles.liveText]}>{live}</Text></View> : null}
-              {stage.percent !== null ? <ProgressBar percent={stage.percent} label={`${stage.label} ${stage.percent}%`} /> : null}
+              {detail ? <View style={styles.live}>{/* 낭독기에는 옆의 글자가 같은 말을 한다. 돌아가는 원은 화면용이므로 접근성 트리에서 숨긴다. */}
+                <ActivityIndicator size="small" color={colors.green} aria-hidden /><Text style={[s.meta, styles.liveText]}>{detail}</Text></View> : null}
+              {stage.percent !== null ? <ProgressBar percent={stage.percent} label={stage.key === 'UPLOAD' ? `업로드 ${stage.percent}%` : `전체 진행률 ${stage.percent}%`} /> : null}
             </View>
           </View>
         );
@@ -57,14 +56,21 @@ export function CallStages({ item, now }: { item: CallRecord; now: number }) {
 
 const MARKS: Record<StageView['state'], string> = { done: '✓', running: '▶', failed: '✕', pending: '○' };
 
-/** 잰 적이 없는 시간은 지어내지 않는다 — 그때는 상태만 말한다. */
-function stageText(stage: StageView): string {
+/**
+ * 한 단계의 상태 한 줄.
+ *
+ * 🔴 **서버는 단계별 소요 시간을 주지 않는다.** 지나간 단계에 「3분 12초」를 적으려면 우리가
+ * 지어내야 하므로 적지 않는다 — 진행 중인 단계에만 등록 후 경과 시간을 붙인다.
+ */
+function stateText(stage: StageView, elapsed: string): string {
   if (stage.state === 'pending') return '예정';
-  const spent = stage.ms === null ? '' : formatDuration(stage.ms);
-  if (stage.state === 'done') return spent ? `완료 · ${spent}` : '완료';
-  if (stage.state === 'failed') return spent ? `멈춤 · ${spent}` : '멈춤';
-  const running = spent ? `진행 중 · ${spent} 경과` : '진행 중';
-  return stage.percent === null ? running : `${running} · ${stage.percent}%`;
+  // 마지막 「완료」 칸은 이름이 이미 그 말을 한다. 같은 말을 두 번 적지 않는다.
+  if (stage.state === 'done') return stage.key === 'DONE' ? '' : '완료';
+  if (stage.state === 'failed') return '멈춤';
+  const parts = ['진행 중'];
+  if (elapsed) parts.push(elapsed);
+  if (stage.percent !== null) parts.push(`${stage.percent}%`);
+  return parts.join(' · ');
 }
 
 const styles = StyleSheet.create({

@@ -5,7 +5,7 @@
  * 시간대만큼 어긋난 통화가 조용히 저장되므로 변환은 이 파일 밖에서 하지 않는다.
  */
 
-/** 기기 시계 오차 여유. `call-runtime.ts` 의 `CLOCK_SKEW_MS`, 서버 계약과 같은 값이어야 한다. */
+/** 기기 시계 오차 여유. `call-upload.ts` 의 `CLOCK_SKEW_MS`, 서버 계약과 같은 값이어야 한다. */
 export const CALL_CLOCK_SKEW_MS = 5 * 60_000;
 
 /** 현지 시각을 화면 형식으로 적는다. */
