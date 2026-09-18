@@ -58,3 +58,23 @@ export function fromDateTimeInput(value: string): string {
   const parts = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(value.trim());
   return parts ? `${parts[1]} ${parts[2]}` : '';
 }
+
+/**
+ * 목록 한 줄에 적는 통화일시 — `26.09.18 오후 2:31`.
+ *
+ * 🔴 **`toLocaleString('ko-KR')` 을 쓰지 않는다.** 같은 옵션(`dateStyle: 'short'`)이라도
+ * 엔진에 따라 `26. 9. 18.` 처럼 점 뒤에 공백이 붙거나 붙지 않고 월·일의 자리수도 들쭉날쭉해
+ * 줄마다 첫 칸의 폭이 달라진다. 한 줄 목록에서 일시는 **세로로 자리가 맞아야** 훑을 수
+ * 있으므로 자리수를 직접 채운다(연도는 두 자리 — 같은 해의 통화가 대부분이라 앞 두 자리는
+ * 이름이 설 자리를 뺏을 뿐이다).
+ *
+ * 읽을 수 없는 시각은 빈 문자열이다. `Invalid Date` 를 그대로 그리면 서버 값이 깨진 것을
+ * 사용자가 「앱이 고장 났다」로 읽는다.
+ */
+export function callBriefTime(iso: string | null | undefined): string {
+  const date = iso ? new Date(iso) : null;
+  if (!date || Number.isNaN(date.getTime())) return '';
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const hour = date.getHours();
+  return `${pad(date.getFullYear() % 100)}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${hour < 12 ? '오전' : '오후'} ${hour % 12 || 12}:${pad(date.getMinutes())}`;
+}
