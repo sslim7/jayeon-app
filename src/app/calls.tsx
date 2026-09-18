@@ -89,6 +89,14 @@ export default function CallsScreen() {
   /** 받은 통화 한 건을 목록에 덮어쓴다. 폴링·재분석이 같은 길을 쓴다. */
   const merge = useCallback((item: CallRecord) => {
     setRowsById((rows) => rows.map((row) => row.call_id === item.call_id ? { ...row, ...item } : row));
+    /*
+      🔴 **열려 있는 상세도 같은 답을 받아야 한다.** 상세 시트는 열릴 때의 값을 들고 있는
+      별개의 상태라, 여기서 얹어 주지 않으면 5초 폴링이 목록만 갱신하고 시트는 처음 열었을
+      때의 단계에 멈춰 있다 — 사용자는 서버가 멈춘 줄 알고 다시 분석을 또 누른다.
+      시트가 스스로 폴링하게 만들지 않는 이유는, 그러면 같은 통화를 5초마다 두 번 묻게 되기
+      때문이다(→ `components/call-detail.tsx`).
+    */
+    setDetail((open) => open && open.call_id === item.call_id ? { ...open, ...item } : open);
   }, []);
   /**
    * 지금 화면이 보여 주는 검색어. **응답이 늦게 도착해도 지난 검색 결과를 그리지 않게 하는
@@ -336,7 +344,7 @@ export default function CallsScreen() {
     {!loading && !appending && !cursor && loaded.length > CALL_BATCH ? <Text style={s.meta}>마지막 통화까지 모두 불러왔습니다.</Text> : null}
     {/* 등록이 끝나면 **지금 보고 있는 검색어 그대로** 다시 받는다. 검색을 말없이 풀지 않는다. */}
     {creating ? <CallCreate onClose={() => setCreating(false)} onStarted={() => void load(showing.current)} /> : null}
-    {detail ? <CallDetail key={detail.call_id} item={detail} onClose={() => setDetail(null)} /> : null}
+    {detail ? <CallDetail key={detail.call_id} item={detail} onClose={() => setDetail(null)} onUpdated={merge} /> : null}
     {playing ? <CallPlayback key={playing.call_id} item={playing} onClose={() => setPlaying(null)} /> : null}
   </SmsPage>;
 }
