@@ -49,7 +49,7 @@ export function CampaignHistorySheet({ onClose }: { onClose: () => void }) {
     {pendingError ? <Notice error message={pendingError} /> : null}
     {pending ? <View style={s.card}><Text style={s.subtitle}>미완료 발송</Text>{pending.length ? pending.map((item) => <SmsButton key={item.id} label={`${item.title} 발송 상세`} secondary onPress={() => setDetailId(item.id)} />) : <Notice message="미완료 발송이 없습니다." />}</View> : null}
     {/* 검색칸은 placeholder 가 같은 말을 하므로 라벨 글자를 걷는다(낭독기에는 그대로 읽힌다). */}
-    <TextField hideLabel label="이름 또는 폰번호 뒷4자리" placeholder="이름 또는 폰번호 뒷4자리" maxLength={100} value={query} onChangeText={(value) => { setQuery(value); setLoading(true); }} />
+    <TextField hideLabel label="이름,전화번호 뒷자리 4자" placeholder="이름,전화번호 뒷자리 4자" maxLength={100} value={query} onChangeText={(value) => { setQuery(value); setLoading(true); }} />
     <Notice message="최근 발송 순으로 표시합니다. 성공은 발송 요청의 성공이며 수신·읽음 확인은 아닙니다." />
     {loading ? <Loading /> : error ? <Notice error message={error} /> : <>
       <Text style={s.meta}>전체 {rows.length}건</Text>

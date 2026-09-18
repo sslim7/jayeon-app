@@ -1,5 +1,5 @@
 /**
- * 진행 상태의 순수 계산 — 등록 시트(`components/call-create.tsx`)와 목록(`app/calls.tsx`),
+ * 진행 상태의 순수 계산 — 등록 시트(`components/call-create.tsx`)와 목록(`app/calls/index.tsx`),
  * 단계 카드(`components/call-stages.tsx`)가 함께 쓴다.
  *
  * 🔴 **가짜 진행률을 만들지 않는다.** 여기 있는 값은 둘 중 하나다 — 앱이 직접 센 업로드
@@ -123,7 +123,7 @@ export function elapsedLabel(record: { status: CallStatus; created_at?: string |
 }
 
 /**
- * 요약이 없는 통화에서 「통화 요약」 탭을 눌렀을 때 보여 줄 안내.
+ * 보여 줄 분석이 없는 통화의 보고서 자리에 대신 서는 안내.
  *
  * 빈 화면은 「고장 났나?」로 읽힌다. **왜 비었는지**를 말해야 사용자가 다음에 무엇을 할지
  * 안다 — 진행 중이면 어느 단계인지, 실패했으면 이유와 다시 시도하는 길이다.
@@ -131,7 +131,7 @@ export function elapsedLabel(record: { status: CallStatus; created_at?: string |
 export function missingAnalysisNotice(record: { status: CallStatus; stage?: string | null; error?: string | null; created_at?: string | null }, now: number, reason = '', retryable = true): string {
   if (isActive(record.status)) {
     const elapsed = elapsedLabel(record, now);
-    return `분석이 아직 끝나지 않았습니다. 현재 단계: ${stageText(record)}${elapsed ? ` · ${elapsed}` : ''}. 완료되면 이 탭에 내용이 나타납니다.`;
+    return `분석이 아직 끝나지 않았습니다. 현재 단계: ${stageText(record)}${elapsed ? ` · ${elapsed}` : ''}. 완료되면 여기에 보고서가 나타납니다.`;
   }
   if (isFailed(record.status)) {
     /*
@@ -143,5 +143,11 @@ export function missingAnalysisNotice(record: { status: CallStatus; stage?: stri
     const base = reason || '분석을 완료하지 못했습니다.';
     return retryable ? `${base} 목록에서 다시 시도하면 저장된 통화 원문으로 분석만 다시 진행합니다.` : base;
   }
-  return '분석이 완료되지 않아 아직 보여 드릴 내용이 없습니다. 통화 원문 탭에서 저장된 내용을 확인해 주세요.';
+  /*
+    🔴 **여기서 「아래 「통화 원문」에서」라고 말하지 않는다.** 원문은 이 문서 안의 구획이
+    아니라 형제 화면이 됐고(→ `app/calls/[id]/transcript.tsx`), 무엇보다 **원문이 없는
+    통화에도 이 줄이 나온다** — 없는 곳을 가리키면 사용자는 있지도 않은 칸을 찾아 화면을
+    훑는다. 갈 곳이 있을 때만 호출부가 그 자리에 버튼을 세운다(→ `components/call-report.tsx`).
+  */
+  return '분석이 완료되지 않아 아직 보여 드릴 내용이 없습니다. 저장된 통화 원문이 있다면 그것부터 확인해 주세요.';
 }

@@ -96,7 +96,7 @@ export default function ReservedScreen() {
           })}
         </View>
         {/* 검색칸은 placeholder 가 같은 말을 하므로 라벨 글자를 걷는다(낭독기에는 그대로 읽힌다). */}
-        <TextField hideLabel label="이름 또는 폰번호 뒷4자리" placeholder="이름 또는 폰번호 뒷4자리" value={query} onChangeText={setQuery} />
+        <TextField hideLabel label="이름,전화번호 뒷자리 4자" placeholder="이름,전화번호 뒷자리 4자" value={query} onChangeText={setQuery} />
         <View style={styles.table}>
           <View style={[styles.row, styles.head]}>
             <Pressable accessibilityRole="checkbox" accessibilityLabel="전체 선택" aria-checked={all ? true : picked.length ? 'mixed' : false} accessibilityState={{ checked: all ? true : picked.length ? 'mixed' : false, disabled: busy }} disabled={busy} style={styles.check} onPress={() => setSelected(all ? [] : ids)}>

@@ -26,8 +26,9 @@ export interface TranscriptSegment { start: number; end: number; text: string; s
 /**
  * 분석 한 덩어리. **서버 계약과 같은 모양**이다(`internal/calls/model.go`).
  *
- * 항목이 비어 있을 수 있다 — 기기 분석이 만든 옛 기록은 `summary` 만 채웠다. 화면은 내용이
- * 있는 항목의 탭만 편다(→ `components/call-detail.tsx`).
+ * 항목이 비어 있을 수 있다 — 기기 분석이 만든 옛 기록은 `summary` 만 채웠다. 보고서는 내용이
+ * 있는 구획만 세우고, 빈 구획은 「확인되지 않은 항목」 한 줄로 말한다
+ * (→ `components/call-report.tsx`).
  */
 export interface CallAnalysis {
   schema_version: 1;

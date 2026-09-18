@@ -94,6 +94,13 @@ export default function RootLayout() {
     if (!ready) return;
     if (!authed || !ENV.webShell) return;
     if (pathname === '/shell') return;
+    // 🔧 측정용 예외(→ `components/asr-bench.tsx`). 측정이 끝나면 이 줄을 지운다.
+    //
+    // 🔴 이 가드가 없으면 받아쓰기 화면은 **열리자마자 웹뷰로 튕긴다.** 껍데기 모드에서는
+    // 로그인 뒤 모든 경로를 /shell 로 되돌리는데, 그 화면은 네이티브 모듈을 써야 해서
+    // 웹뷰 안에 있을 수 없는 유일한 예외다. 증상이 「메뉴를 눌러도 문자 보내기가 뜬다」라서
+    // 원인이 이동이 아니라 **되돌림**이라는 것이 화면에 전혀 드러나지 않는다.
+    if (pathname === '/asr-bench') return;
     router.replace('/shell');
   }, [ready, authed, pathname]);
 
@@ -169,6 +176,19 @@ export default function RootLayout() {
           <Stack.Screen name="calls" />
           <Stack.Screen name="sms" />
           <Stack.Screen name="templates" />
+          {/*
+            설정. 메뉴 항목이 아니라 **서랍 발치의 톱니**로 들어온다
+            (→ `components/app-navigation.tsx`). 그래서 머리도 「☰ + 메뉴 이름」이 아니라
+            「‹ 뒤로 + 설정」이다 — 그 갈래는 화면이 직접 정한다(→ `app/settings.tsx`).
+          */}
+          <Stack.Screen name="settings" />
+          {/*
+            로그인 기기 관리. 설정 안의 한 줄에서만 열리지만 **라우트는 설정과 형제**다
+            (`/settings/devices` 가 아니라 `/devices`) — 설정이 폴더가 아니라 파일 한 장이라,
+            아래에 화면을 매달려면 폴더와 레이아웃을 새로 세워야 한다. 지금 그 층을 만들면
+            얻는 것은 주소 모양뿐이고, 나가는 길은 어차피 화면이 직접 정한다(「‹ 뒤로」).
+          */}
+          <Stack.Screen name="devices" />
           {/*
             받아쓰기 속도 측정용 임시 화면. 🔴 **측정이 끝나면 이 줄과 화면 파일을 지운다**
             (→ `components/asr-bench.tsx`). 통화분석 흐름과는 이어져 있지 않다.

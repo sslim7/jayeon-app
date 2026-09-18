@@ -103,13 +103,13 @@ export function CallCreate({ onClose, onStarted }: { onClose: () => void; onStar
     }} onError={setError} />
     <View style={s.row}><SmsButton label="수신자에서 선택" secondary={manual} onPress={() => setManual(false)} /><SmsButton label="직접 입력" secondary={!manual} onPress={() => setManual(true)} /></View>
     {manual ? <><TextField label="통화 상대 이름" value={name} onChangeText={setName} maxLength={100} /><TextField label="통화 상대 전화번호" value={phone} onChangeText={setPhone} keyboardType="phone-pad" maxLength={30} /></> : <>{/* 검색칸은 placeholder 가 같은 말을 하므로 라벨 글자를 걷는다(낭독기에는 그대로 읽힌다). */}
-      <TextField hideLabel label="이름 또는 폰번호 뒷4자리" placeholder="이름 또는 폰번호 뒷4자리" value={query} onChangeText={setQuery} />{recipient ? <Text style={s.body}>선택: {recipient.name} · {formatPhone(recipient.phone)}</Text> : null}
+      <TextField hideLabel label="이름,전화번호 뒷자리 4자" placeholder="이름,전화번호 뒷자리 4자" value={query} onChangeText={setQuery} />{recipient ? <Text style={s.body}>선택: {recipient.name} · {formatPhone(recipient.phone)}</Text> : null}
       {/*
         후보는 세 줄 높이 안에서만 스크롤한다. 시트 하나에 **파일 선택 → 상대 선택 → 통화일시
         → 등록하기**가 모두 들어와야 하는데, 후보를 그대로 쌓으면 아래 둘이 화면 밖으로 밀린다.
       */}
       {!recipients.length ? <Text style={s.meta}>등록된 수신자가 없습니다. 직접 입력으로 통화 상대를 적어 주세요.</Text>
-        : !searching ? <Text style={s.meta}>이름 또는 폰번호 뒷4자리로 검색해 주세요.</Text>
+        : !searching ? <Text style={s.meta}>이름,전화번호 뒷자리 4자로 검색해 주세요.</Text>
         : !shown.length ? <Text style={s.meta}>검색어에 해당하는 수신자가 없습니다.</Text>
         : <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={styles.candidates} contentContainerStyle={styles.candidateList}>{shown.map((r) => <SmsButton key={r.id} label={`${r.name} · ${formatPhone(r.phone)}`} secondary={recipient?.id !== r.id} onPress={() => setRecipient(r)} />)}</ScrollView>}
       {/* 더 있다는 신호는 살짝 잘린 다음 줄이 맡는다. 안내는 그 스크롤로도 닿지 못할 때만 적는다. */}
