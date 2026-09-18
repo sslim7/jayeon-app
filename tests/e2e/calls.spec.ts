@@ -19,12 +19,19 @@ const done: CallRecord = {
   // 🔴 재생 주소는 **상세에만** 실린다. 목록으로 내보낼 때 `listed` 가 걷는다.
   audio_url: 'https://storage.test/calls/call-1/audio.m4a?sig=play',
   ai: { model: 'qwen-plus', model_version: '1', provider: 'alibaba' },
+  // 🔴 금액은 **서버가 원화로 계산해서** 준다 — 앱은 단가를 모른다. 정수로 반올림되어 오지도 않는다.
+  cost: { currency: 'KRW', transcription: 96.4, analysis: 14.2, total: 110.6, usage: { audio_seconds: 1706, input_tokens: 17800, output_tokens: 2200, reasoning_tokens: 1024 } },
   transcript: { text: '견적서를 보내 주세요.', segments: [{ start: 0, end: 4, text: '견적서를 보내 주세요.' }] },
   analysis: { schema_version: 1, summary: '도입 견적을 요청한 통화입니다.', details: [{ title: '견적 문의', content: '도입 비용 견적서를 요청했습니다.' }], todos: [{ content: '견적서 전달', owner: null, due_date: null, source: '견적서를 보내 주세요.' }], decisions: [], consulting: { customer_needs: ['도입 비용 확인'], questions: [], concerns: [], objections: [], important_points: ['견적 요청'], followups: [] } },
 };
-/** 목록 응답은 원문·분석·재생 주소를 빼고 온다(§`internal/calls/model.go` 의 `listRecord`). */
+/**
+ * 목록 응답은 원문·분석·재생 주소·비용을 빼고 온다(§`internal/calls/model.go` 의 `listRecord`).
+ *
+ * 비용이 빠지는 이유는 금액의 근거인 사용량이 **작업 문서에만** 있어서다 — 목록에 실으려면
+ * 한 페이지마다 작업 문서를 그만큼 더 읽어야 한다. 비용을 보여 주려고 조회 비용을 키우는 셈이다.
+ */
 function listed(record: CallRecord): CallRecord {
-  const { transcript: _t, analysis: _a, audio_url: _u, ...rest } = record;
+  const { transcript: _t, analysis: _a, audio_url: _u, cost: _c, ...rest } = record;
   return rest;
 }
 
@@ -156,6 +163,65 @@ test('내용이 있는 분석은 상세·할 일·상담 분석 탭까지 보여
   await expect(page.getByText('• 도입 비용 확인')).toBeVisible();
   await page.getByRole('tab', { name: '통화 원문' }).click();
   await expect(page.getByText('견적서를 보내 주세요.', { exact: true })).toBeVisible();
+});
+
+/**
+ * 🔴 **비용은 「합계」가 아니라 「받아쓰기와 분석」으로 보인다.**
+ *
+ * 이 파이프라인은 돈의 대부분이 받아쓰기에 나간다. 합계 한 줄만 적으면 그 사실이 가려져서
+ * 「비싸다」까지는 알아도 **어느 단계를 바꿔야 싸지는지**는 알 수 없다 — 이 화면을 만든 이유가
+ * 공급자를 바꿀지 판단하는 것이라, 나누지 않으면 화면이 목적을 잃는다.
+ *
+ * 금액은 서버가 원화로 계산해서 준다. 앱은 단가를 모르고 관례대로 적기만 한다.
+ */
+test('비용을 아는 통화는 받아쓰기와 분석을 나눠 보여 준다', async ({ page }) => {
+  await installCalls(page, server());
+  await login(page);
+  await briefRow(page, '김영국').click();
+  await page.getByRole('button', { name: '김영국 분석 보기' }).click();
+  // 96.4원 → 96원, 14.2원 → 14원, 110.6원 → 111원. 원 단위 아래는 읽는 사람에게 쓸모가 없다.
+  await expect(page.getByText('비용: 받아쓰기 96원 · 분석 14원 (합계 111원)')).toBeVisible();
+  // 어떤 AI 로 이만큼 썼는지를 나란히 봐야 판단이 된다.
+  await expect(page.getByText('분석: alibaba · qwen-plus')).toBeVisible();
+});
+
+/**
+ * 🔴 **1원 미만을 「0원」으로 적지 않는다.** 공짜로 읽히기 때문이다.
+ *
+ * 서버는 정수로 반올림하지 않고 내려보낸다(§`internal/calls/cost.go` 의 `won`). 그 값을 앱이
+ * 0원으로 뭉개면, 화면을 보고 「이 단계는 돈이 안 든다」고 판단하게 된다 — 실제로는 들었다.
+ */
+test('1원이 안 되는 비용은 소수점을 남겨 공짜로 읽히지 않게 한다', async ({ page }) => {
+  const tiny: CallRecord = {
+    ...done, call_id: 'call-tiny', contact: { name: '최짧게', phone: '+821044445555' },
+    cost: { currency: 'KRW', transcription: 0.42, analysis: 0.03, total: 0.45, usage: { audio_seconds: 4, input_tokens: 30, output_tokens: 8, reasoning_tokens: 0 } },
+  };
+  await installCalls(page, server([tiny]));
+  await login(page);
+  await briefRow(page, '최짧게').click();
+  await page.getByRole('button', { name: '최짧게 분석 보기' }).click();
+  await expect(page.getByText('비용: 받아쓰기 0.42원 · 분석 0.03원 (합계 0.45원)')).toBeVisible();
+});
+
+/**
+ * 🔴 **모르는 비용은 0원이 아니라 아무것도 아니다.**
+ *
+ * 서버가 `cost` 를 안 보내는 경우는 셋이고 전부 정상이다: 단가 설정이 없거나, 사용량이 없는
+ * 옛 통화이거나, 기기 분석 시절 기록이다. 그때 「0원」을 그리면 **돈이 안 들었다는 거짓말**이
+ * 된다 — 이 숫자는 공급자를 바꿀지 판단하는 근거라 거짓말 한 줄이 판단을 통째로 뒤집는다.
+ */
+test('비용을 모르는 옛 통화는 0원이 아니라 비용 칸 자체를 그리지 않는다', async ({ page }) => {
+  const { cost: _gone, ...unknown } = done;
+  await installCalls(page, server([{ ...unknown, call_id: 'call-old', contact: { name: '박옛날', phone: '+821011112222' } }]));
+  await login(page);
+  await briefRow(page, '박옛날').click();
+  await page.getByRole('button', { name: '박옛날 분석 보기' }).click();
+  // 나머지는 그대로 보인다 — 비용만 모르는 것이지 분석이 실패한 것이 아니다.
+  // 비용 줄이 서는 자리가 바로 이 줄 아래라, 이것이 보이는데 비용이 없으면 걷힌 것이 맞다.
+  await expect(page.getByText('분석: alibaba · qwen-plus')).toBeVisible();
+  await expect(page.getByText(/^비용: /)).toHaveCount(0);
+  // 🔴 「0원」이 어디에도 없어야 한다. 공짜로 읽히는 한 줄이 이 화면의 목적을 뒤집는다.
+  await expect(page.getByText(/0원/)).toHaveCount(0);
 });
 
 /**
