@@ -86,7 +86,7 @@ test('네 단계는 지난 단계·도는 단계·예정 단계를 시간과 함
   };
   const views = callStageViews({ status: 'ANALYZING', progress: 42, timing }, now);
   // vm 밖 realm 과 배열을 직접 비교하지 않는다(다른 Array 생성자다). 문자열로 붙여 비교한다.
-  assert.equal(views.map(view => `${view.label}:${view.state}`).join('|'), '분석 준비:done|음성 변환:done|통화 분석:running|결과 저장:pending');
+  assert.equal(views.map(view => `${view.label}:${view.state}`).join('|'), '분석 준비:done|음성 변환:done|요약 생성:running|결과 저장:pending');
   assert.equal(views[0].ms, 3_000);
   // 도는 단계는 시작 시각부터 지금까지 — 1초마다 다시 계산한다.
   assert.equal(views[2].ms, 562_000);
@@ -94,7 +94,7 @@ test('네 단계는 지난 단계·도는 단계·예정 단계를 시간과 함
   // 예정 단계는 시간도 진행률도 없다.
   assert.equal(views[3].ms, null);
   assert.equal(views[3].percent, null);
-  assert.equal(currentStageLabel({ status: 'ANALYZING' }), '통화 분석');
+  assert.equal(currentStageLabel({ status: 'ANALYZING' }), '요약 생성');
   assert.equal(currentStageLabel({ status: 'COMPLETED' }), '');
 });
 
@@ -130,7 +130,7 @@ test('요약이 없는 통화의 요약 탭에는 왜 비었는지 안내한다'
   const started = new Date(2026, 8, 17, 14, 0, 0);
   const now = started.getTime() + 192_000;
   const running = { status: 'ANALYZING', timing: { started_at: started.toISOString() } };
-  assert.equal(missingAnalysisNotice(running, now), 'AI 분석이 아직 끝나지 않았습니다. 현재 단계: 통화 분석 · 3분 12초 경과. 완료되면 이 탭에 내용이 나타납니다.');
+  assert.equal(missingAnalysisNotice(running, now), '요약이 아직 끝나지 않았습니다. 현재 단계: 요약 생성 · 3분 12초 경과. 완료되면 이 탭에 내용이 나타납니다.');
   // 실패는 저장해 둔 이유(+코드)를 그대로 보여 준다.
   const failed = { status: 'ANALYSIS_FAILED', error: '음성 변환은 완료되었지만 AI 분석을 완료하지 못했습니다. AI가 출력 한도 안에 분석을 끝내지 못했습니다. (코드: INCOMPLETE_ANALYSIS)' };
   assert.match(missingAnalysisNotice(failed, now), /코드: INCOMPLETE_ANALYSIS\) 목록에서 다시 시도하면/);

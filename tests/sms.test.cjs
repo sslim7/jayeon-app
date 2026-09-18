@@ -147,6 +147,40 @@ test('저장된 번호와 기존 국가번호는 하이픈으로 표시하고 �
   assert.equal(formatPhone('번호오류'), '번호오류');
 });
 
+const searchModule = { exports: {} };
+const searchCompiled = ts.transpileModule(fs.readFileSync('src/lib/recipient-search.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+// `@/lib/phone` 은 위에서 이미 실행한 모듈을 그대로 건넨다 — 정규화 규칙이 두 벌로 갈라지지 않게.
+vm.runInNewContext(`(function(exports, require){${searchCompiled}\n})`, { Error })(searchModule.exports, () => phoneModule.exports);
+const { matchesRecipientQuery } = searchModule.exports;
+const 철수 = { name: '김철수', phone: '+821052657649' };
+const 영희 = { name: '김영희', phone: '01012345678' };
+test('수신자 검색은 이름 부분일치와 전화번호 뒷자리를 함께 본다', () => {
+  // 이름: 부분 일치, 대소문자 무시.
+  assert.equal(matchesRecipientQuery('철수', 철수), true);
+  assert.equal(matchesRecipientQuery('kim', { name: 'Kim Chulsoo', phone: '01000000000' }), true);
+  assert.equal(matchesRecipientQuery('철수', 영희), false);
+  // 뒷번호 4자리와 더 짧은/긴 부분 일치.
+  for (const value of ['7649', '265', '5265-76', '1052657649']) assert.equal(matchesRecipientQuery(value, 철수), true);
+  assert.equal(matchesRecipientQuery('7649', 영희), false);
+  // 하이픈·공백·괄호·국가번호 표기는 걷어 내고 숫자만 비교한다.
+  for (const value of ['010-5265-7649', '010 5265 7649', '+82 10-5265-7649', '(010)5265-7649']) assert.equal(matchesRecipientQuery(value, 철수), true);
+  assert.equal(matchesRecipientQuery('+821012345678', 영희), true);
+  // 빈 검색어는 전체, 맞는 곳이 없으면 거른다.
+  for (const value of ['', '   ']) assert.equal(matchesRecipientQuery(value, 철수), true);
+  assert.equal(matchesRecipientQuery('9999', 철수), false);
+  assert.equal(matchesRecipientQuery('없는사람', 철수), false);
+});
+test('이름에 숫자가 있어도 찾고, 글자가 섞이면 글자는 이름 숫자는 번호를 가리킨다', () => {
+  assert.equal(matchesRecipientQuery('7649', { name: '고객7649', phone: '01000000000' }), true);
+  assert.equal(matchesRecipientQuery('김철 7649', 철수), true);
+  // 이름이 어긋나면 번호만 맞아도 올라오지 않는다.
+  assert.equal(matchesRecipientQuery('김영 7649', 철수), false);
+  // 번호가 어긋나도 마찬가지다.
+  assert.equal(matchesRecipientQuery('김철 1111', 철수), false);
+  // 번호를 비워 둔 사람은 숫자 검색에 걸리지 않는다.
+  assert.equal(matchesRecipientQuery('7649', { name: '김철수', phone: '' }), false);
+});
+
 const dateModule = { exports: {} };
 const dateCompiled = ts.transpileModule(fs.readFileSync('src/lib/external-send-date.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 vm.runInNewContext(`(function(exports){${dateCompiled}\n})`, { Error, Date })(dateModule.exports);

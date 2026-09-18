@@ -7,6 +7,7 @@ import { RecipientImportPanel } from '@/components/recipient-import';
 import { RecipientHistorySheet } from '@/components/recipient-history';
 import { RecipientTable } from '@/components/recipient-table';
 import { formatPhone, normalizePhone } from '@/lib/phone';
+import { matchesRecipientQuery } from '@/lib/recipient-search';
 import { recipientApi } from '@/lib/sms-api';
 import type { Recipient, RecipientInput } from '@/types/sms';
 
@@ -60,10 +61,11 @@ export default function RecipientsScreen() {
     finally { lock.current = false; setBusy(false); }
   }
   const groups = [...new Set(items.map((r) => r.groupId).filter(Boolean))];
-  const visible = items.filter((r) => (!group || r.groupId === group) && r.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const visible = items.filter((r) => (!group || r.groupId === group) && matchesRecipientQuery(query, r));
   return (
     <SmsPage wide title="수신자 관리">
-      <TextField label="수신자 이름" value={query} onChangeText={setQuery} />
+      {/* 검색칸은 placeholder 가 같은 말을 하므로 라벨 글자를 걷는다(낭독기에는 그대로 읽힌다). */}
+      <TextField hideLabel label="이름 또는 폰번호 뒷4자리" placeholder="이름 또는 폰번호 뒷4자리" value={query} onChangeText={setQuery} />
       <Text style={s.subtitle}>그룹 선택</Text>
       <View style={s.row}>
         <SmsButton label="모든 그룹" secondary={!!group} onPress={() => setGroup('')} />

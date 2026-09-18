@@ -17,7 +17,9 @@ if (typeof window !== 'undefined') (window as BridgeWindow).__NATURE_CALL_BRIDGE
   },
 };
 function invoke<T>(method: string, args?: unknown): Promise<T> {
-  if (!supported()) return Promise.reject(new Error('녹음파일 분석은 AI 기능이 포함된 Nature 앱에서 사용할 수 있어요.'));
+  // 분석은 서버로 옮기는 중이고, 브라우저에서 올리는 길은 서버 업로드 API 가 붙어야 열린다.
+  // 그때까지는 **할 수 없다는 사실만** 말한다 — 없는 기능을 약속하지 않는다.
+  if (!supported()) return Promise.reject(new Error('지금은 Nature 앱에서만 녹음파일을 고를 수 있어요.'));
   const requestId = `call-${Date.now()}-${++sequence}`;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { pending.delete(requestId); reject(new Error('기기 응답을 확인하지 못했습니다. 통화 목록을 다시 확인해 주세요.')); }, 180_000);

@@ -9,7 +9,7 @@ export function smsError(error: unknown): string {
   if (error instanceof Error && error.name === 'Error') return error.message;
   return readApiErrorMessage(error, {}, '처리하지 못했어요. 연결을 확인하고 다시 시도해 주세요.');
 }
-export function SmsPage({ title, children, wide = false, actions, hideTitle = false, compact = false, footer }: PropsWithChildren<{ title: string; wide?: boolean; actions?: ReactNode; hideTitle?: boolean; compact?: boolean; footer?: ReactNode }>) {
+export function SmsPage({ title, children, wide = false, actions, hideTitle = false, compact = false, footer, fab }: PropsWithChildren<{ title: string; wide?: boolean; actions?: ReactNode; hideTitle?: boolean; compact?: boolean; footer?: ReactNode; fab?: ReactNode }>) {
   return (
     <SafeAreaView style={s.root}>
       <Stack.Screen options={{ title }} />
@@ -18,7 +18,8 @@ export function SmsPage({ title, children, wide = false, actions, hideTitle = fa
         keyboardShouldPersistTaps="handled"
         // 제목을 앱 헤더가 대신 보여 주면 헤더 제목↔구분선 간격(약 12)과 같게 붙인다.
         // footer 가 있으면 본문이 남은 높이를 채워 목록이 그 안에서 스크롤할 수 있게 한다.
-        contentContainerStyle={[s.page, wide && { maxWidth: '100%' }, hideTitle && { paddingTop: spacing.md }, compact && s.pageCompact, !!footer && { flexGrow: 1, paddingBottom: spacing.md }]}
+        // fab 이 있으면 그 원(60)과 아래 여백만큼 본문을 더 비운다 — 안 비우면 목록 마지막 줄이 버튼에 가린다.
+        contentContainerStyle={[s.page, wide && { maxWidth: '100%' }, hideTitle && { paddingTop: spacing.md }, compact && s.pageCompact, !!footer && { flexGrow: 1, paddingBottom: spacing.md }, !!fab && { paddingBottom: 60 + spacing.xxl + spacing.lg }]}
       >
         {!hideTitle || actions ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.md }}>
         {!hideTitle ? <Text accessibilityRole="header" style={[s.title, { flexGrow: 1 }]}>
@@ -30,6 +31,8 @@ export function SmsPage({ title, children, wide = false, actions, hideTitle = fa
       </ScrollView>
       {/* 스크롤 영역 밖에 두어 목록 길이와 상관없이 항상 보인다. 하단 안전 영역은 루트가 채운다. */}
       {footer ? <View style={[s.footer, compact && { paddingHorizontal: spacing.lg }]}>{footer}</View> : null}
+      {/* 스크롤 밖 · 안전 영역 안. 목록이 아무리 길어져도 같은 자리에 남는다. */}
+      {fab}
     </SafeAreaView>
   );
 }
@@ -63,6 +66,25 @@ export function SmsButton({
       <Text numberOfLines={fill ? 1 : undefined} style={[s.buttonText, secondary && { color: danger ? colors.red : colors.ink }]}>
         {label}
       </Text>
+    </Pressable>
+  );
+}
+/**
+ * 오른쪽 아래의 둥근 「+」.
+ *
+ * 화면에서 할 수 있는 일이 「읽기」와 「새로 만들기」 둘뿐인 목록에 둔다 — 헤더 버튼은 목록을
+ * 내리면 눈에서 멀어지지만, 이 자리는 어디까지 내려가도 손이 닿는 곳에 그대로 있다.
+ * 형제 프로젝트(birdieup-app `app/boards.tsx`)의 만들기 버튼과 같은 규격이다.
+ */
+export function Fab({ accessibilityLabel, onPress }: { accessibilityLabel: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      style={({ pressed }) => [s.fab, pressed && s.fabOn]}
+    >
+      <Text style={s.fabPlus}>+</Text>
     </Pressable>
   );
 }
@@ -176,6 +198,10 @@ export const s = StyleSheet.create({
     padding: spacing.md,
   },
   secondary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.borderPill },
+  fab: { position: 'absolute', right: spacing.xl, bottom: spacing.xxl, width: 60, height: 60, borderRadius: 30, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  fabOn: { backgroundColor: colors.green },
+  /** 글리프가 아래로 치우쳐 있어 조금 올려야 원 가운데에 선다(lineHeight > fontSize). */
+  fabPlus: { ...fonts.bodyMedium, fontSize: text.display, lineHeight: 34, color: colors.onInk },
   buttonFill: { flex: 1, paddingHorizontal: spacing.xs },
   buttonRow: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm },
   buttonText: { ...fonts.bodySemi, color: colors.onInk, fontSize: text.lg },

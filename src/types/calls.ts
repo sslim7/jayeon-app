@@ -51,6 +51,13 @@ export interface CallRecord {
   transcript?: { text: string; segments: TranscriptSegment[] };
   analysis?: CallAnalysis;
   ai?: { model: string; model_version: string; processed_on_device: true };
+  /**
+   * 녹음 파일을 들을 수 있는 주소.
+   *
+   * 🔧 **서버 업로드가 붙기 전에는 아무도 채우지 않는다.** 화면은 값이 없으면 재생 버튼을
+   * 잠그고 이유를 말한다(→ `lib/call-audio.ts`). 보관 기간이 지난 녹음도 같은 길로 걸러진다.
+   */
+  audio_url?: string | null;
   error?: string | null;
   timing?: CallTiming | null;
   live?: CallLive | null;

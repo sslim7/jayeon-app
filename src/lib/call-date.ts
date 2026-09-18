@@ -38,9 +38,10 @@ export function parseCallTime(value: string, now = new Date()): string {
  * 어차피 실제 통화 시각이라는 보장이 없다(화면의 안내 문구가 그 점을 말한다).
  */
 export function defaultCallTime(fileTime: number | null | undefined, now = new Date()): string {
-  if (typeof fileTime !== 'number' || !Number.isFinite(fileTime) || fileTime <= 0) return '';
-  if (fileTime > now.getTime() + CALL_CLOCK_SKEW_MS) return '';
-  return callLocalTime(new Date(fileTime));
+  // 파일 시각을 읽을 수 없거나 미래면 현재 시각을 넣는다. 빈 칸으로 두면 통화일시를 손으로
+  // 다 적어야 하는데, 방금 끝난 통화를 바로 분석하는 경우가 흔해 현재 시각이 더 가깝다.
+  const usable = typeof fileTime === 'number' && Number.isFinite(fileTime) && fileTime > 0 && fileTime <= now.getTime() + CALL_CLOCK_SKEW_MS;
+  return callLocalTime(usable ? new Date(fileTime) : now);
 }
 
 /**

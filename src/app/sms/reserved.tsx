@@ -3,10 +3,12 @@ import { router, useFocusEffect } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
+import { TextField } from '@/components/form-fields';
 import { ButtonRow, Loading, Notice, SmsButton, SmsPage, s, smsError } from '@/components/sms-ui';
 import { colors, fonts, radii, spacing, text } from '@/constants/theme';
 import { useReservations } from '@/hooks/use-reservations';
 import { formatPhone } from '@/lib/phone';
+import { matchesRecipientQuery } from '@/lib/recipient-search';
 import { newSmsRequestId } from '@/lib/sms-dispatch';
 import { smsApi } from '@/lib/sms-api';
 import { reservedGroups, reservedTags } from '@/lib/sms-reservations';
@@ -14,6 +16,7 @@ import { reservedGroups, reservedTags } from '@/lib/sms-reservations';
 export default function ReservedScreen() {
   const { reservations, rows, loading, error, reload } = useReservations();
   const [tag, setTag] = useState('');
+  const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -23,7 +26,9 @@ export default function ReservedScreen() {
   const tags = reservedTags(rows);
   // 고른 태그가 사라지면(모두 취소 등) 남은 첫 태그로 되돌아간다.
   const active = tags.some((item) => item.title === tag) ? tag : tags[0]?.title ?? '';
-  const visible = rows.filter((row) => row.campaignTitle === active);
+  // 검색은 **고른 태그 안에서만** 좁힌다. 발송도 태그(예약) 단위라 태그 밖을 섞어 보여 주면
+  // 「보이는 사람에게 보낸다」가 깨진다.
+  const visible = rows.filter((row) => row.campaignTitle === active && matchesRecipientQuery(query, row));
   const ids = visible.map((row) => row.id);
   // 태그를 옮겨 다녀도 보이지 않는 줄이 선택에 남지 않게 한다.
   const picked = selected.filter((id) => ids.includes(id));
@@ -85,11 +90,13 @@ export default function ReservedScreen() {
         <View style={styles.tags}>
           {tags.map((item) => {
             const on = item.title === active;
-            return <Pressable key={item.title} accessibilityRole="button" accessibilityLabel={`${item.title} 예약 ${item.count}명`} accessibilityState={{ selected: on }} aria-pressed={on} disabled={busy} onPress={() => { setTag(item.title); setSelected([]); }} style={[styles.tag, on && styles.tagOn]}>
+            return <Pressable key={item.title} accessibilityRole="button" accessibilityLabel={`${item.title} 예약 ${item.count}명`} accessibilityState={{ selected: on }} aria-pressed={on} disabled={busy} onPress={() => { setTag(item.title); setSelected([]); setQuery(''); }} style={[styles.tag, on && styles.tagOn]}>
               <Text numberOfLines={1} style={[styles.tagLabel, on && styles.tagLabelOn]}>{item.title}({item.count})</Text>
             </Pressable>;
           })}
         </View>
+        {/* 검색칸은 placeholder 가 같은 말을 하므로 라벨 글자를 걷는다(낭독기에는 그대로 읽힌다). */}
+        <TextField hideLabel label="이름 또는 폰번호 뒷4자리" placeholder="이름 또는 폰번호 뒷4자리" value={query} onChangeText={setQuery} />
         <View style={styles.table}>
           <View style={[styles.row, styles.head]}>
             <Pressable accessibilityRole="checkbox" accessibilityLabel="전체 선택" aria-checked={all ? true : picked.length ? 'mixed' : false} accessibilityState={{ checked: all ? true : picked.length ? 'mixed' : false, disabled: busy }} disabled={busy} style={styles.check} onPress={() => setSelected(all ? [] : ids)}>
@@ -111,6 +118,8 @@ export default function ReservedScreen() {
             );
           })}
         </View>
+        {/* 태그 안에 사람은 있는데 검색으로 다 걸러졌을 때. 빈 표만 두면 예약이 사라진 줄 안다. */}
+        {!visible.length ? <Notice message="검색어에 해당하는 예약이 없습니다." /> : null}
         <Text style={s.meta}>{active} {visible.length}명 · 선택 {picked.length}명</Text>
         {groups.length > 1 ? <Notice message={`「${active}」 예약은 인원이 많아 ${groups.length}건으로 나뉘어 있어요. 보내기는 한 건씩 하면 되니 한 건 안에서 골라 주세요.`} /> : null}
         {single && single.selectedRowIds.length < single.total ? <Notice message={`보내기는 예약한 건 전체로 나갑니다. 같이 예약된 ${single.total - single.selectedRowIds.length}명도 함께 보내게 됩니다.`} /> : null}

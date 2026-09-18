@@ -3,7 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWin
 
 import { colors, fonts, inputFontSize, radii, text } from '@/constants/theme';
 
-/** 그룹과 이름 검색을 좁은 화면에서도 한 줄로 제공한다. */
+/** 그룹과 이름·번호 검색을 좁은 화면에서도 한 줄로 제공한다. */
 export function RecipientFilters({ groups, group, onGroupChange, query, onQueryChange }: {
   groups: string[];
   group: string;
@@ -27,7 +27,7 @@ export function RecipientFilters({ groups, group, onGroupChange, query, onQueryC
     <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel={group || '모든그룹'} aria-haspopup="menu" accessibilityState={{ expanded: !!anchor }} aria-expanded={!!anchor} onPress={open} style={styles.trigger}>
       <Text numberOfLines={1} style={styles.group}>{group || '모든그룹'}</Text><Text aria-hidden style={styles.arrow}>▼</Text>
     </Pressable>
-    <TextInput accessibilityLabel="수신자 이름" placeholder="검색할 수신자 이름" placeholderTextColor={colors.muted} value={query} onChangeText={onQueryChange} style={styles.input} />
+    <TextInput accessibilityLabel="이름 또는 폰번호 뒷4자리" placeholder="이름 또는 폰번호 뒷4자리" placeholderTextColor={colors.muted} value={query} onChangeText={onQueryChange} style={styles.input} />
     {anchor ? <Modal transparent visible animationType="none" onRequestClose={() => setAnchor(null)}>
       <View style={styles.overlay}>
         <Pressable accessibilityRole="button" accessibilityLabel="그룹 선택 닫기" style={StyleSheet.absoluteFill} onPress={() => setAnchor(null)} />

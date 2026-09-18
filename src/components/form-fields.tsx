@@ -27,24 +27,37 @@ import { colors, fonts, inputFontSize, radii, spacing, text } from '@/constants/
 type FieldProps = Omit<TextInputProps, 'style'> & {
   label: string;
   /**
+   * 라벨을 **눈에서만** 감춘다 — 검색·필터 칸 전용이다.
+   *
+   * 그 칸들은 placeholder 가 이미 같은 문장을 말하고 있어서 라벨까지 그리면 한 화면에 같은
+   * 말이 두 번 선다. 다만 낭독기에는 「무엇을 하는 칸인지」가 여전히 필요하므로 라벨 글자만
+   * 걷고 `accessibilityLabel`(웹의 `aria-label`)로는 그대로 남긴다.
+   *
+   * 🔴 이름·전화번호처럼 **무엇을 넣는 칸인지 알려 주는 일반 폼 필드에는 쓰지 마라.**
+   */
+  hideLabel?: boolean;
+  /**
    * 다음 칸으로 포커스를 넘기려면 필요하다(엔터로 이메일 → 비밀번호).
    * React 19 부터 `ref` 는 그냥 prop 이라 `forwardRef` 로 감싸지 않는다.
    */
   ref?: Ref<TextInput>;
 };
 
-export function TextField({ label, ref, ...rest }: FieldProps) {
+export function TextField({ label, hideLabel = false, ref, ...rest }: FieldProps) {
   const labelId = useId();
   return (
-    <View style={styles.field}>
-      <Text nativeID={labelId} style={styles.label}>
-        {label}
-      </Text>
+    <View style={[styles.field, hideLabel && styles.fieldBare]}>
+      {hideLabel ? null : (
+        <Text nativeID={labelId} style={styles.label}>
+          {label}
+        </Text>
+      )}
       <TextInput
         ref={ref}
         accessibilityLabel={label}
-        accessibilityLabelledBy={labelId}
-        style={styles.input}
+        // 라벨 글자가 없으면 가리킬 대상도 없다. 그 자리는 위의 `accessibilityLabel` 이 맡는다.
+        accessibilityLabelledBy={hideLabel ? undefined : labelId}
+        style={[styles.input, hideLabel && styles.inputBare]}
         placeholderTextColor={colors.empty}
         selectionColor={colors.green}
         {...rest}
@@ -91,12 +104,16 @@ export function PasswordField({ label, ref, ...rest }: FieldProps) {
 
 const styles = StyleSheet.create({
   field: { marginTop: spacing.lg },
+  /** 라벨이 없으면 라벨이 앉을 위 여백도 없다. 바깥 묶음의 간격만 남긴다. */
+  fieldBare: { marginTop: 0 },
   label: {
     ...fonts.bodySemi,
     fontSize: text.sm,
     letterSpacing: 1,
     color: colors.muted,
   },
+  /** 라벨을 감춘 칸은 라벨과의 간격도 필요 없다. */
+  inputBare: { marginTop: 0 },
   input: {
     marginTop: spacing.xs,
     height: 48,
