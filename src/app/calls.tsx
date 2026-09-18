@@ -11,7 +11,7 @@ import { colors, spacing } from '@/constants/theme';
 import { CALL_BATCH, callApi } from '@/lib/call-api';
 import { audioReady, callAudio } from '@/lib/call-audio';
 import { callBriefTime } from '@/lib/call-date';
-import { callFailureText } from '@/lib/call-errors';
+import { callFailureText, callRetryable } from '@/lib/call-errors';
 import { isActive, isFailed, elapsedLabel, formatDuration, stageText } from '@/lib/call-progress';
 import { formatPhone } from '@/lib/phone';
 import type { CallRecord, CallStatus } from '@/types/calls';
@@ -221,11 +221,13 @@ export default function CallsScreen() {
       {failed ? <Text style={s.meta}>{callFailureText(item)}</Text> : null}
       {stages ? <CallStages item={item} now={now} /> : null}
       {/*
-        🔴 다시 시도할 수 있는 것은 **분석이 실패한 통화뿐**이다. 받아쓰기가 실패한 통화에는
-        다시 분석할 원문이 없어 서버가 409 로 거절한다 — 누를 수 있는 버튼을 세워 두고
-        거절당하게 하느니, 무엇을 해야 하는지 적는다.
+        🔴 다시 시도할 수 있는 것은 **분석이 실패한 통화 중에서도 결과가 달라질 수 있는
+        것뿐**이다(→ `lib/call-errors.ts` 의 `callRetryable`). 받아쓰기가 실패한 통화에는
+        다시 분석할 원문이 없어 서버가 409 로 거절하고, 서버 처리 시간이 모자라 멈춘 통화는
+        몇 번을 눌러도 같은 자리에서 멈춘다 — 누를 수 있는 버튼을 세워 두고 거절당하거나
+        같은 실패를 되풀이하게 하느니, 위의 실패 이유가 무엇을 해야 하는지 말한다.
       */}
-      {item.status === 'ANALYSIS_FAILED' ? <SmsButton secondary label="분석 다시 시도" disabled={retrying !== null} onPress={() => void retry(item.call_id)} /> : null}
+      {callRetryable(item) ? <SmsButton secondary label="분석 다시 시도" disabled={retrying !== null} onPress={() => void retry(item.call_id)} /> : null}
       {item.status === 'TRANSCRIPTION_FAILED' ? <Text style={s.meta}>다른 녹음 파일로 다시 등록해 주세요.</Text> : null}
       {item.status === 'ANALYSIS_FAILED' ? <SmsButton secondary label="저장된 원문 보기" onPress={() => setDetail(item)} /> : null}
     </>;

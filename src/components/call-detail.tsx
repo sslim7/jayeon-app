@@ -4,7 +4,7 @@ import { BottomSheet } from '@/components/bottom-sheet';
 import { Loading, Notice, s } from '@/components/sms-ui';
 import { callApi } from '@/lib/call-api';
 import { CallStages } from '@/components/call-stages';
-import { callFailureText } from '@/lib/call-errors';
+import { callFailureText, callRetryable } from '@/lib/call-errors';
 import { isActive, isFailed, missingAnalysisNotice } from '@/lib/call-progress';
 import { formatPhone } from '@/lib/phone';
 import type { CallAnalysis, CallRecord } from '@/types/calls';
@@ -66,7 +66,7 @@ export function CallDetail({ item, onClose }: { item: CallRecord; onClose: () =>
     {analysis && tab === '할 일' ? analysis.todos.map((todo, i) => <View key={i} style={s.card}><Text selectable style={s.body}>☐ {todo.content}</Text><Text style={s.meta}>담당: {todo.owner || '확인되지 않음'} · 기한: {todo.due_date || '확인되지 않음'}</Text><Text selectable style={s.meta}>근거: {todo.source}</Text></View>) : null}
     {analysis && tab === '상담 분석' ? Object.entries(sections).map(([key, label]) => <Items key={key} title={label} items={analysis.consulting[key as keyof typeof sections]} />) : null}
     {/* 요약이 없는 통화의 요약 탭이 빈 화면이 되지 않게 왜 비었는지를 말해 준다. */}
-    {!analysis && !loading && tab !== '통화 원문' ? <Notice message={missingAnalysisNotice(record, now, failure)} /> : null}
+    {!analysis && !loading && tab !== '통화 원문' ? <Notice message={missingAnalysisNotice(record, now, failure, callRetryable(record))} /> : null}
     {tab === '통화 원문' ? record.transcript ? record.transcript.segments.length ? record.transcript.segments.map((segment, i) => <View key={i} style={s.card}><Text style={s.meta}>{time(segment.start)}{segment.speaker ? ` · ${segment.speaker}` : ''}</Text><Text selectable style={s.body}>{segment.text}</Text></View>) : <Text selectable style={s.body}>{record.transcript.text}</Text> : <Notice message="저장된 통화 원문이 없습니다." /> : null}
   </BottomSheet>;
 }
