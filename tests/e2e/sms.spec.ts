@@ -278,6 +278,44 @@ test('메뉴는 본문을 축소하고 선택을 유지하며 화면 탭·Escape
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeChecked();
 });
 
+/**
+ * 서랍 발치의 **두 원** — 왼쪽이 「나」(프로필 시트), 오른쪽이 「앱」(설정 화면).
+ *
+ * 🔴 **이름을 지키는 것이 이 테스트의 몫이다.** 아이콘뿐인 버튼이라 낭독기에는
+ * `accessibilityLabel` 이 전부인데, 그 이름이 사라져도 화면은 멀쩡해 보인다 —
+ * 눈으로는 끝까지 안 잡히는 고장이라 여기서 붙잡는다.
+ *
+ * 설정은 **쌓인 화면**이라 머리가 ☰ 가 아니라 「뒤로」다(→ `components/app-navigation.tsx`).
+ */
+test('서랍 발치의 두 원은 프로필과 설정으로 갈라지고 설정은 뒤로 돌아온다', async ({ page }) => {
+  await setup(page);
+  const open = page.getByRole('button', { name: '메뉴 열기', exact: true });
+  await open.click();
+  await expect(page.getByRole('button', { name: '문자 사용자 프로필', exact: true })).toBeVisible();
+  const settings = page.getByRole('link', { name: '설정', exact: true });
+  await expect(settings).toBeVisible();
+  await settings.click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole('heading', { name: '설정', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '뒤로', exact: true })).toBeVisible();
+  await expect(open).toHaveCount(0);
+  /*
+    이제 눌리는 줄이다 — 서버가 기기 목록을 주면서 「준비 중」 배지를 걷었다.
+    🔴 **배지가 사라졌는지도 함께 본다.** 배지만 남고 링크가 끊기면 화면은 멀쩡해 보이는데
+    잃어버린 폰을 끊으러 온 사람은 들어갈 길이 없다(그 화면 자체는 → `tests/e2e/devices.spec.ts`).
+  */
+  await expect(page.getByRole('button', { name: '로그인 기기 관리', exact: true })).toBeVisible();
+  await expect(page.getByText('준비 중', { exact: true })).toHaveCount(0);
+  // 문의를 받을 때 「어느 버전 쓰세요?」에 답할 수 있어야 하는 줄. 껍데기 밖이라 한 줄이다.
+  await expect(page.getByText('앱 버전', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^v\d+\.\d+\.\d+$/)).toBeVisible();
+  await expect(page.getByText(/^© 20\d\d(-20\d\d)? REDHEAD — Open by Nature\.$/)).toBeVisible();
+  await page.screenshot({ path: `/tmp/nature-settings-${test.info().project.name}.png`, animations: 'disabled' });
+  await page.getByRole('button', { name: '뒤로', exact: true }).click();
+  await expect(page).toHaveURL(/\/sms\/new$/);
+  await expect(open).toBeVisible();
+});
+
 test('미발송 기본 조회·발송자 포함·전체 선택·최종 발송 이력', async ({ page }) => {
   const state = await setup(page);
   state.people[0].latestSentAt = now;
@@ -288,8 +326,8 @@ test('미발송 기본 조회·발송자 포함·전체 선택·최종 발송 �
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '김영희 발송 이력 보기', exact: true })).toHaveCount(0);
   const groupBox = (await page.getByRole('button', { name: '모든그룹', exact: true }).boundingBox())!;
-  const nameFilter = page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true });
-  await expect(nameFilter).toHaveAttribute('placeholder', '이름 또는 폰번호 뒷4자리');
+  const nameFilter = page.getByRole('textbox', { name: '이름,전화번호 뒷자리 4자', exact: true });
+  await expect(nameFilter).toHaveAttribute('placeholder', '이름,전화번호 뒷자리 4자');
   const nameBox = (await nameFilter.boundingBox())!;
   expect(groupBox.x + groupBox.width).toBeLessThanOrEqual(nameBox.x);
   expect(Math.abs(groupBox.y + groupBox.height / 2 - nameBox.y - nameBox.height / 2)).toBeLessThan(2);
@@ -302,16 +340,16 @@ test('미발송 기본 조회·발송자 포함·전체 선택·최종 발송 �
   expect(compactBox.x).toBeLessThan(expandedBox.x);
   await page.getByRole('checkbox', { name: '기발신자포함', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: /김철수/ })).toBeVisible();
-  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('철수');
+  await page.getByLabel('이름,전화번호 뒷자리 4자', { exact: true }).fill('철수');
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: /김철수/ })).toBeVisible();
   // 이름 대신 번호 뒷자리로도 같은 칸에서 찾는다(김영희 +821087654321). 하이픈을 섞어 쳐도 같다.
-  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('4321');
+  await page.getByLabel('이름,전화번호 뒷자리 4자', { exact: true }).fill('4321');
   await expect(page.getByRole('checkbox', { name: /김철수/ })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeVisible();
-  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('8765-4321');
+  await page.getByLabel('이름,전화번호 뒷자리 4자', { exact: true }).fill('8765-4321');
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeVisible();
-  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('');
+  await page.getByLabel('이름,전화번호 뒷자리 4자', { exact: true }).fill('');
   await page.getByRole('button', { name: '모든그룹', exact: true }).click();
   await page.getByRole('menuitem', { name: '모임', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toHaveCount(0);
@@ -452,13 +490,13 @@ test('조회한 125명 전체를 이름순으로 보여주고 화면별 뷰 기�
   await expect.poll(async () => (await nameHeader.boundingBox())!.y).toBeCloseTo(beforeVertical.y, 0);
   expect((await nameHeader.boundingBox())!.x).toBeCloseTo(beforeVertical.x, 0);
   await table.evaluate((node) => { node.parentElement!.scrollTop = 0; node.parentElement!.scrollLeft = 0; });
-  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('사람125');
+  await page.getByLabel('이름,전화번호 뒷자리 4자', { exact: true }).fill('사람125');
   await expect(totalCount(page, 1)).toBeVisible();
   await expect(table.getByRole('row')).toHaveCount(2);
   await expect(table.getByRole('row').nth(1)).toContainText('00123');
   await page.screenshot({ path: `/tmp/nature-all-columns-${info.project.name}.png`, animations: 'disabled' });
   await page.goto('/recipients');
-  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('사람125');
+  await page.getByLabel('이름,전화번호 뒷자리 4자', { exact: true }).fill('사람125');
   await expect(page.getByText('전체 1명', { exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /사람125/ })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /사람124/ })).toHaveCount(0);
@@ -567,14 +605,14 @@ test('문자 보내기 헤더의 등록·템플릿·이력 시트에서 작업�
   // 같은 줄을 다시 누르면 접힌다.
   await openedLine.click();
   await expect(page.getByText('과거 안내 문구', { exact: true })).toHaveCount(0);
-  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).last().fill('철수');
+  await page.getByLabel('이름,전화번호 뒷자리 4자', { exact: true }).last().fill('철수');
   await expect(page.getByText('전체 1건', { exact: true })).toBeVisible();
   await expect(lines).toHaveCount(1);
   expect(queries).toContain('철수');
   await page.getByRole('button', { name: '닫기', exact: true }).click();
   await expect(page).toHaveURL(/\/sms\/new$/);
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeChecked();
-  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('김영희');
+  await page.getByLabel('이름,전화번호 뒷자리 4자', { exact: true }).fill('김영희');
   await expect(totalCount(page, 1)).toBeVisible();
   expect(state.results).toHaveLength(0);
 });
@@ -597,7 +635,7 @@ test('미완료 캠페인은 이력 시트에서 복구하되 상세 열기만�
   await expect(page.getByText('성공 2 · 실패 0 · 대기 0', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '발송 이력으로 돌아가기', exact: true }).click();
   await page.getByRole('button', { name: '닫기', exact: true }).click();
-  await expect(page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true })).toBeEditable();
+  await expect(page.getByLabel('이름,전화번호 뒷자리 4자', { exact: true })).toBeEditable();
   expect(state.results).toEqual(['cr0', 'cr1']);
 });
 
@@ -743,7 +781,7 @@ test('예약함은 고른 태그 안에서 이름·폰번호 뒷4자리로 좁�
   await reserve(page, [/김철수/, /김영희/]);
   await reserve(page, [/박영수/], '회비 안내');
   await page.goto('/sms/reserved');
-  const search = page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true });
+  const search = page.getByRole('textbox', { name: '이름,전화번호 뒷자리 4자', exact: true });
   // 뒷4자리로 찾는다(김영희 +821087654321).
   await search.fill('4321');
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeVisible();

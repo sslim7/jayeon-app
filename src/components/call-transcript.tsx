@@ -50,7 +50,6 @@ export function CallTranscript({ segments }: { segments: TranscriptSegment[] }) 
       🔴 **가정을 가정이라고 적는 줄이다. 지우지 마라.** 이 줄이 없으면 좌우로 갈린 화면
       자체가 「우리는 누가 상담사인지 안다」고 말한다(→ 위 `RIGHT_SPEAKER`).
     */}
-    {split ? <Text style={s.meta}>오른쪽이 화자 {RIGHT_SPEAKER}, 왼쪽이 나머지 화자입니다. 어느 번호가 상담사인지는 확정할 수 없어 이름 대신 번호로 적습니다.</Text> : null}
     {/*
       🔴 **말풍선은 바깥 묶음의 `gap` 을 쓰지 않는다.** 균일한 간격을 그대로 받으면 한 사람이
       이어 말한 세 마디와 상대가 받아친 한 마디가 **똑같이 떨어져** 있어, 좌우로 갈라 놓고도
@@ -69,7 +68,6 @@ export function CallTranscript({ segments }: { segments: TranscriptSegment[] }) 
             것과 같은 이유다. 그러면서도 「이 번호가 상담사라는 보장은 없다」는 사실이
             화면에 남는다(→ 위 `RIGHT_SPEAKER` 와 바로 위의 안내 줄).
           */}
-          {turned ? <Text style={[styles.speaker, right ? styles.alignRight : styles.alignLeft, index ? styles.runTop : null]}>화자 {segment.speaker}</Text> : null}
           <View style={[
             styles.turn,
             split ? (right ? styles.turnRight : styles.turnLeft) : null,

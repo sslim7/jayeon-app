@@ -13,7 +13,7 @@ import { colors, fonts, radii, spacing, text } from '@/constants/theme';
 // 🔧 측정용(→ `components/asr-bench.tsx`). 끝나면 이 import 와 아래 갈래를 함께 지운다.
 import { isNativeShell, openNativeScreen } from '@/lib/native-bridge';
 
-type MenuIconKind = 'message' | 'reserved' | 'profile' | 'calls' | 'bench';
+type MenuIconKind = 'message' | 'reserved' | 'profile' | 'calls' | 'bench' | 'settings';
 type Destination = { href: '/sms/new' | '/sms/reserved' | '/calls' | '/asr-bench'; label: string; icon: MenuIconKind };
 
 /**
@@ -94,6 +94,11 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
   }
   const profile = useUserStore((state) => state.profile);
   const profileName = profile?.userName || '내 계정';
+  /**
+   * 원 안에 세우는 첫 글자. 이름을 아직 못 받았으면 사람 아이콘으로 떨어진다 —
+   * 「내 계정」의 '내' 를 크게 세워 봐야 알려 주는 것이 없고, 진짜 이름처럼 읽힌다.
+   */
+  const profileInitial = profile?.userName?.trim().charAt(0).toUpperCase() ?? '';
   const progress = useSharedValue(0);
   const startProgress = useSharedValue(0);
   const setOpen = useCallback((next: boolean) => setOpenPath(next ? pathname : null), [pathname]);
@@ -176,11 +181,48 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
                 </Link>;
               })}
             </ScrollView>
-            <View style={styles.profileFooter}>
-              <Pressable accessibilityRole="button" accessibilityLabel={`${profileName} 프로필`} onPress={() => { setSheet('profile'); }} style={styles.profileButton}>
-                <View style={styles.avatar}><MenuIcon kind="profile" /></View>
-                <View style={{ flex: 1, gap: spacing.xs }}><Text style={styles.itemLabel}>{profileName}</Text><Text style={styles.caption}>프로필 보기</Text></View>
+            {/*
+              서랍 발치의 **두 원** — 왼쪽이 「나」, 오른쪽이 「앱」이다. 형제 앱과 같은 배치이고
+              (→ `birdieup-app/src/components/home-drawer.tsx`), 같은 사람이 두 앱을 오가므로
+              **자리가 같아야 익숙하다.**
+
+              🔴 **목록의 마지막 줄로 되돌리지 마라.** 전에는 여기가 「아바타 + 이름 + 프로필
+              보기」한 줄이었는데, 줄로 세우면 '나'가 문자 보내기·통화분석과 **같은 층에 같은
+              무게로** 선다. 위 목록은 갈 곳을 담는 자리이고 이 둘은 그 밖에 있다 — 떼어서
+              발치에 띄워 두면 메뉴 항목이 늘어도 이 자리가 밀리지 않는다.
+
+              ⚠️ **원을 셋으로 늘리지 마라.** 둘일 때만 「나 ↔ 앱」이라는 대칭이 자리만으로
+              읽힌다. 셋째가 끼는 순간 그냥 아이콘 줄이 되어 무엇이 무엇인지 눌러 봐야 안다.
+              설정 안에 들어갈 수 있는 것이면 설정 안에 넣어라(→ `app/settings.tsx`).
+
+              🔴 **아이콘뿐인 버튼이라 낭독기에는 `accessibilityLabel` 이 전부다.** 프로필 쪽
+              이름에 사용자 이름을 붙여 두는 것은, 계정을 여럿 쓰는 사람이 **어느 계정으로
+              들어와 있는지** 눌러 보지 않고도 알아야 하기 때문이다 — 눈으로는 원 안의 첫
+              글자가 같은 몫을 한다.
+            */}
+            <View style={styles.foot}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`${profileName} 프로필`} onPress={() => { setSheet('profile'); }} style={styles.footCircle}>
+                {profileInitial ? <Text style={styles.footInitial}>{profileInitial}</Text> : <MenuIcon kind="profile" />}
               </Pressable>
+              {/*
+                설정은 **화면**이라 메뉴 항목과 같이 `Link` 로 간다 — 웹에서 주소가 생기고
+                (새 탭·뒤로 가기가 그대로 동작한다) 낭독기에도 링크로 읽힌다.
+                ⚠️ 서랍을 먼저 접는 것도 메뉴 항목과 같은 이유다 — 펴 둔 채 나가면 돌아왔을 때
+                그 상태가 그대로 남는다.
+
+                🔴 **`Link asChild` 의 자식에는 `style` 을 함수나 배열로 주지 마라.** 안쪽에서
+                라딕스 `Slot` 이 부모와 자식의 style 을 **객체로 펼쳐 합치는데**, 함수를 펼치면
+                빈 객체가 되어 **스타일이 통째로 사라진다**(배열은 개발 모드에서 예외를 던지고
+                함수는 아무 말 없이 지나간다 → `expo-router/build/ui/Slot.js`). 실제로 여기서
+                원이 사라져 톱니만 덩그러니 떠 있었다. 그래서 위 메뉴 항목들도, 이 원도
+                `StyleSheet.flatten` 된 **객체 하나**를 넘긴다 — 눌림 표시를 붙이고 싶으면
+                그 규칙을 먼저 지킬 방법을 찾아라.
+              */}
+              <Link href="/settings" asChild>
+                <Pressable accessibilityRole="link" accessibilityLabel="설정" onPress={() => setOpen(false)} style={StyleSheet.flatten([styles.footCircle])}>
+                  <MenuIcon kind="settings" />
+                </Pressable>
+              </Link>
             </View>
           </SafeAreaView>
         <GestureDetector gesture={pan}>
@@ -251,6 +293,8 @@ function MenuIcon({ kind }: { kind: MenuIconKind }) {
     {kind === 'message' ? <Path d="M4 4h16v12H9l-5 4V4Zm4 4h8M8 12h5" /> : null}
     {/* 스톱워치: 「얼마나 걸리나」를 재는 임시 화면 */}
     {kind === 'bench' ? <><Circle cx={12} cy={13} r={7.5} /><Path d="M12 9.5V13l2.5 1.5M9.5 2.5h5" /></> : null}
+    {/* 톱니: 앱 자신을 다루는 자리. 형제 앱 서랍의 설정 원과 같은 그림이다 */}
+    {kind === 'settings' ? <><Circle cx={12} cy={12} r={3} /><Path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></> : null}
     {/* 달력 + 체크: 아직 보내지 않고 담아 둔 문자 */}
     {kind === 'reserved' ? <><Rect x={3} y={5} width={18} height={16} rx={2.5} /><Path d="M8 3v4M16 3v4M3 10h18M9 15l2 2 4-4" /></> : null}
   </Svg>;
@@ -280,10 +324,23 @@ const styles = StyleSheet.create({
   drawer: { position: 'absolute', top: 0, bottom: 0, left: 0, backgroundColor: colors.card, borderRightWidth: 1, borderRightColor: colors.borderPill },
   drawerHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
   drawerHeading: { flex: 1, gap: spacing.xs },
-  caption: { ...fonts.body, fontSize: text.md, color: colors.mid },
-  profileFooter: { padding: spacing.lg, borderTopWidth: 1, borderTopColor: colors.borderPill },
-  profileButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 64 },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.sageRow, alignItems: 'center', justifyContent: 'center' },
+  /**
+   * 발치의 두 원이 서는 줄.
+   *
+   * 🔴 **위에 구분선을 긋지 않는다.** 선을 그으면 목록의 마지막 구획으로 보여서, 떼어 놓으려고
+   * 원으로 만든 뜻이 도로 사라진다. 여기가 바닥이라는 것은 선이 아니라 **빈 자리**가 말한다.
+   * 그림자를 쓰지 않는 코드베이스라 '떠 있음' 은 색이 만든다 — 서랍 바탕(card)보다 한 단
+   * 어두운 종이색(bg) 원이라 바탕에서 한 겹 떠 보인다.
+   */
+  foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg },
+  /**
+   * 두 원은 **옷도 지름도 같다.** 값을 따로 두지 않는 것은 의도다 — 상수가 둘이면 한쪽만
+   * 바뀌는 날이 오고, 크기가 어긋난 두 원은 한 쌍으로 읽히지 않는다.
+   * 지름 52 는 손가락 표적 최소치(44)를 넉넉히 넘긴다.
+   */
+  footCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.borderPill, alignItems: 'center', justifyContent: 'center' },
+  /** 이름의 첫 글자. 아이콘 자리에 서므로 아이콘과 같은 초록이다 */
+  footInitial: { ...fonts.bodyBold, fontSize: text.title, color: colors.greenText },
   items: { padding: spacing.lg, gap: spacing.sm },
   item: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderRadius: radii.button },
   itemLabel: { ...fonts.bodyMedium, fontSize: text.xl, color: colors.ink, flex: 1 },

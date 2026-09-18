@@ -6,7 +6,6 @@ import { colors, fonts, spacing, text } from '@/constants/theme';
 import { callFailureText, callRetryable } from '@/lib/call-errors';
 import { isActive, isFailed, missingAnalysisNotice } from '@/lib/call-progress';
 import { summaryLines } from '@/lib/call-summary';
-import { formatPhone } from '@/lib/phone';
 import type { CallAnalysis, CallRecord } from '@/types/calls';
 
 /**
@@ -72,7 +71,6 @@ function reportOf(analysis: CallAnalysis): { sections: ReportSection[]; missing:
   ];
   return { sections: all.filter((section) => section.blocks.length), missing: all.filter((section) => !section.blocks.length).map((section) => section.title) };
 }
-const time = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 
 /**
  * 통화 한 건의 **보고서 본문.**
@@ -102,11 +100,10 @@ export function CallReport({ record, loading, now, onTranscript }: { record: Cal
   const failure = isFailed(record.status) ? callFailureText(record) : '';
   return <>
     {/*
-      **머리말.** 누구와 언제 얼마나 통화했는지까지가 여기다. 보고서 본문보다 위에 두는
-      이유는 「누구와 언제」를 모르는 채로 요약을 읽기 시작하면 그 요약이 누구 이야기인지
-      되짚느라 한 번 더 올라와야 하기 때문이다.
+      🔧 **머리말을 두지 않는다**(사용자 결정). 전화번호·통화일시·통화시간 줄을 걷고 본문이
+      바로 「요약」으로 시작한다 — 누구와 언제 한 통화인지는 목록에서 고르고 들어온 사람이
+      이미 아는 것이고, 상단 바의 「{이름} 상담 분석」이 한 번 더 말한다.
     */}
-    <Text style={s.meta}>{formatPhone(record.contact.phone)} · {new Date(record.call.recorded_at).toLocaleString('ko-KR')}{record.call.duration !== null ? ` · ${time(record.call.duration)}` : ''}</Text>
     {/* 아직 도는 통화와 멈춘 통화만 단계를 편다. 끝난 통화에 네 칸을 세울 이유가 없다. */}
     {isActive(record.status) || isFailed(record.status) ? <CallStages item={record} now={now} /> : null}
     {/*

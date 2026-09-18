@@ -165,9 +165,9 @@ test('분석 보기는 보고서 화면으로 넘어가 요약·상세·할 일�
   await installCalls(page, server());
   await login(page);
   await expect(page.getByText('김영국', { exact: true })).toBeVisible();
-  await page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true }).fill('없는 이름');
+  await page.getByRole('textbox', { name: '이름,전화번호 뒷자리 4자', exact: true }).fill('없는 이름');
   await expect(page.getByText('검색어에 해당하는 통화가 없습니다.')).toBeVisible();
-  await page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true }).fill('김영');
+  await page.getByRole('textbox', { name: '이름,전화번호 뒷자리 4자', exact: true }).fill('김영');
   // 분석을 여는 길은 줄을 펼친 뒤다 — 목록은 한 줄만 세운다.
   await briefRow(page, '김영국').click();
   await page.getByRole('button', { name: '김영국 분석 보기' }).click();
@@ -189,7 +189,9 @@ test('분석 보기는 보고서 화면으로 넘어가 요약·상세·할 일�
     보고서를 읽으러 온 사람의 질문이 아니라 **우리(운영)의 질문**이라 걷었다. 기능은 지우지
     않았고(→ `components/call-reanalyze.tsx`·`lib/call-cost.ts`) 이 화면에서 그리지 않을 뿐이다.
   */
-  await expect(page.getByText(/^010-1234-5678 · .+ · 03:00$/)).toBeVisible();
+  // 🔧 머리말(전화번호·통화일시·통화시간)을 두지 않는다(사용자 결정). 본문은 바로 「요약」이다 —
+  // 누구와 언제 한 통화인지는 목록에서 고르고 들어온 사람이 알고, 상단 바가 이름을 한 번 더 말한다.
+  await expect(page.getByText(/^010-1234-5678 · /)).toHaveCount(0);
   await expect(page.getByText(/^분석: /)).toHaveCount(0);
   await expect(page.getByText(/^비용: /)).toHaveCount(0);
   await expect(page.getByRole('button', { name: /서버 AI로 다시 분석$/ })).toHaveCount(0);
@@ -305,13 +307,11 @@ test('화자가 있는 원문은 좌우로 갈린 말풍선이 되고, 화자를
   await expect(page.getByText('02:14', { exact: true })).toBeVisible();
   await expect(page.getByText('여보세요?', { exact: true })).toBeVisible();
   /*
-    🔴 **화자 이름표는 바뀔 때 한 번만 적는다.** 발화마다 적으면 264번 나와서 읽을 내용보다
-    이름표가 많아진다. 여기 화자 차례는 0 → 1 → 0 이라 이름표는 셋이다.
+    🔧 **화자 이름표와 안내 문장을 두지 않는다**(사용자 결정). 왼쪽·오른쪽이라는 자리만으로
+    두 사람이 번갈아 말한다는 것이 읽히고, 「화자 0」 같은 번호는 읽는 사람에게 아무것도
+    알려 주지 않는다. 좌우가 실제로 갈렸는지는 아래에서 **자리로** 잰다.
   */
-  await expect(page.getByText('화자 0', { exact: true })).toHaveCount(2);
-  await expect(page.getByText('화자 1', { exact: true })).toHaveCount(1);
-  // 🔴 가정을 가정이라고 적는 줄. 이 줄이 없으면 좌우로 갈린 화면 자체가 「우리는 안다」고 말한다.
-  await expect(page.getByText(/오른쪽이 화자 0.*확정할 수 없어/)).toBeVisible();
+  await expect(page.getByText(/^화자 /)).toHaveCount(0);
   // 🔴 이름표는 번호뿐이다. 말풍선 머리에 사람 이름이 붙는 순간 화면이 거짓말을 한다.
   await expect(page.getByText('상담사', { exact: true })).toHaveCount(0);
   await expect(page.getByText('고객', { exact: true })).toHaveCount(0);
@@ -760,7 +760,8 @@ test('보고서는 모델·비용·재분석을 보이지 않지만 진행과 �
   await page.getByRole('button', { name: '강연정 통화 요약 보기' }).click();
   await expect(page.getByRole('heading', { name: '강연정 상담 분석' })).toBeVisible();
   // ① 머리말에 남는 것은 누구와 언제 얼마나 한 통화인가 한 줄뿐이다.
-  await expect(page.getByText(/^010-1234-5678 · .+ · 28:26$/)).toBeVisible();
+  // 🔧 머리말을 두지 않는다(사용자 결정). 위 테스트와 같은 이유로 없음을 확인한다.
+  await expect(page.getByText(/^010-1234-5678 · /)).toHaveCount(0);
   await expect(page.getByText(/^분석: /)).toHaveCount(0);
   await expect(page.getByText(/^비용: /)).toHaveCount(0);
   await expect(page.getByRole('button', { name: /서버 AI로 다시 분석$/ })).toHaveCount(0);
@@ -928,12 +929,12 @@ test('폰 폭에서 등록 시트에 통화일시와 등록하기가 함께 보�
   await expect(page.getByLabel('통화파일 불러오기', { exact: true })).toBeInViewport();
   // 검색하기 전에는 후보를 세우지 않는다 — 수신자가 많은 계정에서는 이름 더미가 될 뿐이다.
   await expect(page.getByRole('button', { name: /^수신자\d+ · / })).toHaveCount(0);
-  await expect(page.getByText('이름 또는 폰번호 뒷4자리로 검색해 주세요.')).toBeVisible();
+  await expect(page.getByText('이름,전화번호 뒷자리 4자로 검색해 주세요.')).toBeVisible();
   // 스크롤하지 않아도 통화일시와 제출 버튼이 한 화면에 있다.
   await expect(page.getByLabel('통화일시', { exact: true })).toBeInViewport();
   await expect(page.getByRole('button', { name: '등록하기', exact: true })).toBeInViewport();
   // 같은 이름의 검색칸이 목록에도 있다(시트가 그 위에 뜬다). 뒤에 붙는 시트 쪽을 고른다.
-  const search = page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true }).last();
+  const search = page.getByRole('textbox', { name: '이름,전화번호 뒷자리 4자', exact: true }).last();
   // 뒷4자리로도 같은 칸에서 찾는다(수신자1 +821011112201).
   await search.fill('2201');
   await expect(page.getByRole('button', { name: /^수신자\d+ · / })).toHaveCount(1);
@@ -1019,7 +1020,7 @@ test('검색어는 서버로 보내고 앱은 받은 결과를 다시 거르지 
   });
   await login(page);
   await expect(page.getByText('김영국', { exact: true })).toBeVisible();
-  await page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true }).fill('5678');
+  await page.getByRole('textbox', { name: '이름,전화번호 뒷자리 4자', exact: true }).fill('5678');
   await expect(page.getByText('서버가찾아준사람', { exact: true })).toBeVisible();
   await expect(page.getByText('김영국', { exact: true })).toHaveCount(0);
   const search = asked.filter((entry) => entry.q);
@@ -1046,7 +1047,7 @@ test('검색어가 바뀌면 커서를 버리고 처음부터 받는다', async 
   });
   await login(page);
   await expect(page.getByText('김영국', { exact: true })).toBeVisible();
-  const box = page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true });
+  const box = page.getByRole('textbox', { name: '이름,전화번호 뒷자리 4자', exact: true });
   await box.fill('김');
   /*
     🔴 **디바운스(300ms)가 끝나고 실제로 요청이 나갈 때까지 기다린다.** 기다리지 않고 다음
@@ -1091,7 +1092,7 @@ test('검색 결과가 0건이어도 커서가 있으면 스스로 이어 부른
     return route.fulfill({ json: { items: [listed({ ...done, call_id: 'call-far', contact: { name: '멀리있는사람', phone: '+821033334444' } })], nextCursor: null } });
   });
   await login(page);
-  await page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true }).fill('멀리');
+  await page.getByRole('textbox', { name: '이름,전화번호 뒷자리 4자', exact: true }).fill('멀리');
   // 사용자가 스크롤하지 않아도 세 번째 페이지까지 이어 받아 찾아낸다.
   await expect(page.getByText('멀리있는사람', { exact: true })).toBeVisible();
   expect(cursors).toEqual([null, 's1', 's2']);
@@ -1103,6 +1104,6 @@ test('정말 없으면 그때는 없다고 말한다', async ({ page }) => {
   await installCalls(page, server());
   await login(page);
   await expect(page.getByText('김영국', { exact: true })).toBeVisible();
-  await page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true }).fill('없는 이름');
+  await page.getByRole('textbox', { name: '이름,전화번호 뒷자리 4자', exact: true }).fill('없는 이름');
   await expect(page.getByText('검색어에 해당하는 통화가 없습니다.')).toBeVisible();
 });

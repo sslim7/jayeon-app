@@ -288,8 +288,13 @@ export const useUserStore = create<UserState>((set, get) => ({
      * 비밀번호를 손에 들고 있는, 다시 로그인하기 **가장 쉬운 순간**에 있기도 하다.
      *
      * 다른 기기는 즉시 끊기지 않는다 — 서버가 액세스 토큰까지 매번 검사하지는 않아서(요청마다
-     * 저장소를 한 번 더 읽어야 한다) 최대 1시간이 걸린다. 그 사실은 변경 화면이 안내한다
-     * (→ `app/change-password.tsx`).
+     * 저장소를 한 번 더 읽어야 한다) **최대 15분**이 걸린다.
+     *
+     * 🔴 **이 숫자는 서버의 `AccessTokenTTL` 이다**(§`jayeon-was/internal/auth/token.go`).
+     * 1시간에서 15분으로 줄었다 — 옛 숫자가 여기 남아 있었다. 같은 상한을 화면에서 말하는
+     * 곳은 기기 관리 화면 하나뿐이고(→ `app/devices.tsx`), 그쪽은 **서버가 끊기 응답으로
+     * 준 시각**을 그대로 적으므로 서버가 수명을 바꿔도 따라간다. 비밀번호 변경 화면은 이
+     * 숫자를 글로 적지 않는다 — 적는 순간 서버와 어긋날 사본이 하나 더 생긴다.
      */
     const clearing = clearTokens('password-changed');
     set({ ...anonymousState, booted: true, authNotice: PASSWORD_CHANGED_NOTICE });

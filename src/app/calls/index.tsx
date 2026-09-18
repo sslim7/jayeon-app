@@ -376,8 +376,15 @@ export default function CallsScreen() {
     }
     // 폰에서는 열이 아니라 줄로 쌓는다. 가로 스크롤은 한 손으로 쓰기 어렵다.
     if (mobile) return <View key={item.call_id} style={styles.mobileRow}>
-      <Text style={s.meta}>{new Date(item.call.recorded_at).toLocaleString('ko-KR')}</Text>
-      <Text style={s.body}>{item.contact.name}</Text>
+      {/*
+        🔧 **통화일시와 이름을 한 줄에 둔다**(사용자 결정). 이름을 아래로 내리면 줄 하나에
+        값 하나씩 다섯 줄이 되어, 폰에서 통화 두 건이면 화면이 다 찬다. 둘은 「언제 · 누구」로
+        함께 읽히는 값이라 한 줄에 놓고 이름을 오른쪽 끝으로 민다.
+      */}
+      <View style={styles.mobileHead}>
+        <Text style={s.meta}>{new Date(item.call.recorded_at).toLocaleString('ko-KR')}</Text>
+        <Text style={[s.body, styles.mobileName]} numberOfLines={1}>{item.contact.name}</Text>
+      </View>
       <Text selectable style={s.body}>{formatPhone(item.contact.phone)}</Text>
       <View style={styles.mobileActions}>{listen}</View>
       <View style={styles.stateCell}>{state}</View>
@@ -394,7 +401,7 @@ export default function CallsScreen() {
   // 등록은 오른쪽 아래 「+」 하나로 연다. 목록을 끝까지 내려도 자리를 잃지 않는다.
   return <SmsPage title="통화분석" hideTitle wide fab={<Fab accessibilityLabel="통화분석 등록하기" onPress={() => setCreating(true)} />} onEndReached={() => void more()}>
     {/* 검색칸은 placeholder 가 같은 말을 하므로 라벨 글자를 걷는다(낭독기에는 그대로 읽힌다). */}
-    <TextField hideLabel label="이름 또는 폰번호 뒷4자리" value={query} onChangeText={setQuery} placeholder="이름 또는 폰번호 뒷4자리" />
+    <TextField hideLabel label="이름,전화번호 뒷자리 4자" value={query} onChangeText={setQuery} placeholder="이름,전화번호 뒷자리 4자" />
     {/*
       🔧 **여기에 안내 문단을 두지 않는다.** 목록을 열 때마다 읽히는 자리인데 읽을 이유는 한
       번뿐이고, 그 한 번은 파일을 올리기 **직전**이어야 한다 — 원본 녹음이 서버에 올라가
@@ -410,7 +417,12 @@ export default function CallsScreen() {
         서버가 스캔 상한에 걸려 「2건」을 돌려주고도 커서를 함께 줄 수 있는데, 그때 `+` 가
         없으면 화면이 「이 검색어에 해당하는 통화는 2건뿐」이라고 단정해 버린다.
       */}
-      <Text style={s.meta}>{loaded.length}건{search && cursor ? '+' : ''}</Text>
+      {/*
+        🔧 **세로는 아래 맞춤**(사용자 결정). 뷰 아이콘이 글자보다 훨씬 커서 가운데로 맞추면
+        숫자가 아이콘 한가운데에 떠 보인다. 아래를 맞추면 두 값이 같은 바닥에 서서 한 줄로
+        읽힌다.
+      */}
+      <Text style={[s.meta, styles.count]}>{loaded.length}건{search && cursor ? '+' : ''}</Text>
       <View style={styles.toggle}><ViewToggle allInfo={allInfo} onChange={setAllInfo} dense={mobile} /></View>
     </View>
     {error ? <Notice error message={error} /> : null}{loading ? <Loading /> : null}
@@ -470,6 +482,9 @@ function Chevron({ up }: { up: boolean }) {
 
 const styles = StyleSheet.create({
   mobileRow: { borderBottomWidth: 1, borderColor: colors.borderCard, paddingVertical: spacing.lg, gap: spacing.sm },
+  mobileHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  // 이름은 남는 자리를 받아 **오른쪽 끝**으로 간다. 길면 줄을 늘리지 않고 이름만 줄인다.
+  mobileName: { flex: 1, textAlign: 'right' },
   mobileActions: { flexDirection: 'row', gap: spacing.sm },
   /* 간단뷰 — 접히는 한 줄. */
   /**
@@ -498,6 +513,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.borderCard, alignItems: 'center' },
   heading: { backgroundColor: colors.sageRow },
   toggle: { marginLeft: 'auto' },
+  // 🔴 `s.row` 가 가운데 맞춤이라 글자에만 덮어쓴다. 행에 걸면 아이콘까지 따라 내려간다.
+  count: { alignSelf: 'flex-end' },
   cell: { padding: spacing.md },
   // 열 폭은 담기는 것에 맞춘다 — 통화일시는 줄바꿈되면 무슨 날인지 읽기 어렵다.
   when: { width: 210 },

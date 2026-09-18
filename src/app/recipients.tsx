@@ -65,7 +65,7 @@ export default function RecipientsScreen() {
   return (
     <SmsPage wide title="수신자 관리">
       {/* 검색칸은 placeholder 가 같은 말을 하므로 라벨 글자를 걷는다(낭독기에는 그대로 읽힌다). */}
-      <TextField hideLabel label="이름 또는 폰번호 뒷4자리" placeholder="이름 또는 폰번호 뒷4자리" value={query} onChangeText={setQuery} />
+      <TextField hideLabel label="이름,전화번호 뒷자리 4자" placeholder="이름,전화번호 뒷자리 4자" value={query} onChangeText={setQuery} />
       <Text style={s.subtitle}>그룹 선택</Text>
       <View style={s.row}>
         <SmsButton label="모든 그룹" secondary={!!group} onPress={() => setGroup('')} />

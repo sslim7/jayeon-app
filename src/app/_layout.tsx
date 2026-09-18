@@ -177,6 +177,19 @@ export default function RootLayout() {
           <Stack.Screen name="sms" />
           <Stack.Screen name="templates" />
           {/*
+            설정. 메뉴 항목이 아니라 **서랍 발치의 톱니**로 들어온다
+            (→ `components/app-navigation.tsx`). 그래서 머리도 「☰ + 메뉴 이름」이 아니라
+            「‹ 뒤로 + 설정」이다 — 그 갈래는 화면이 직접 정한다(→ `app/settings.tsx`).
+          */}
+          <Stack.Screen name="settings" />
+          {/*
+            로그인 기기 관리. 설정 안의 한 줄에서만 열리지만 **라우트는 설정과 형제**다
+            (`/settings/devices` 가 아니라 `/devices`) — 설정이 폴더가 아니라 파일 한 장이라,
+            아래에 화면을 매달려면 폴더와 레이아웃을 새로 세워야 한다. 지금 그 층을 만들면
+            얻는 것은 주소 모양뿐이고, 나가는 길은 어차피 화면이 직접 정한다(「‹ 뒤로」).
+          */}
+          <Stack.Screen name="devices" />
+          {/*
             받아쓰기 속도 측정용 임시 화면. 🔴 **측정이 끝나면 이 줄과 화면 파일을 지운다**
             (→ `components/asr-bench.tsx`). 통화분석 흐름과는 이어져 있지 않다.
           */}
