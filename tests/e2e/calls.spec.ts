@@ -24,10 +24,10 @@ test.beforeEach(async ({ page }) => {
 // 분석이 붙은 뒤 받게 될 모양이다). 내용이 있으면 그 탭이 그대로 보여야 한다.
 test('내용이 있는 분석은 상세·할 일·상담 분석 탭까지 보여 준다', async ({ page }) => {
   await expect(page.getByText('김영국', { exact: true })).toBeVisible();
-  await page.getByLabel('이름으로 필터링').fill('없는 이름');
-  await expect(page.getByText('이름에 해당하는 통화가 없습니다.')).toBeVisible();
-  await page.getByLabel('이름으로 필터링').fill('김영');
-  await page.getByRole('button', { name: '김영국 통화 요약 보기' }).click();
+  await page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true }).fill('없는 이름');
+  await expect(page.getByText('검색어에 해당하는 통화가 없습니다.')).toBeVisible();
+  await page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true }).fill('김영');
+  await page.getByRole('button', { name: '김영국 분석 보기' }).click();
   await expect(page.getByRole('tab', { name: '통화 요약', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: '상세 내용' }).click();
   await expect(page.getByText('도입 비용 견적서를 요청했습니다.')).toBeVisible();
@@ -38,11 +38,33 @@ test('내용이 있는 분석은 상세·할 일·상담 분석 탭까지 보여
   await page.getByRole('tab', { name: '통화 원문' }).click();
   await expect(page.getByText('견적서를 보내 주세요.', { exact: true })).toBeVisible();
 });
-test('일반 브라우저는 분석을 실행하지 않는다', async ({ page }) => {
-  await page.getByRole('button', { name: '분석하기', exact: true }).click();
-  await expect(page.getByText(/녹음파일 분석은 AI 기능을 지원하는 Nature 모바일 앱/)).toBeVisible();
-  await expect(page.getByRole('button', { name: '통화파일 불러오기' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: '분석하기', exact: true }).last()).toBeDisabled();
+// 「AI 기능이 깔렸나」로 화면을 막지 않는다. 파일 고르기는 언제나 눌리고, 아직 올릴 곳이 없는
+// 자리에서는 눌렀을 때 **그 사실만** 오류로 말한다.
+test('일반 브라우저에서도 시트는 열리고 고를 수 없는 이유만 말한다', async ({ page }) => {
+  // 등록은 오른쪽 아래 「+」 하나로 연다(헤더 버튼은 없앴다).
+  await expect(page.getByRole('button', { name: '분석하기', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '통화분석 등록하기', exact: true }).click();
+  const picker = page.getByRole('button', { name: '통화파일 불러오기' });
+  await expect(picker).toBeEnabled();
+  await picker.click();
+  await expect(page.getByText('지금은 Nature 앱에서만 녹음파일을 고를 수 있어요.')).toBeVisible();
+  await expect(page.getByRole('button', { name: '등록하기', exact: true })).toBeDisabled();
+});
+
+// 열은 폰에서 좁다. 기본은 요약 보기이고, 요약 한 줄은 「전체정보뷰」에서만 편다.
+test('목록은 요약·전체 보기를 오가고 녹음은 준비되기 전까지 잠긴다', async ({ page }) => {
+  await expect(page.getByText('김영국', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '김영국 통화 요약 보기' })).toHaveCount(0);
+  // 분석이 끝난 통화의 상태 자리는 「분석 보기」다.
+  await expect(page.getByRole('button', { name: '김영국 분석 보기' })).toBeVisible();
+  // 녹음은 서버에 올라가기 전이라 들을 수 없다. 이유는 버튼 이름이 들고 있다.
+  const listen = page.getByRole('button', { name: /^김영국 녹음 듣기/ });
+  await expect(listen).toBeDisabled();
+  await expect(listen).toHaveAccessibleName('김영국 녹음 듣기 · 녹음이 아직 준비되지 않았습니다.');
+  await page.getByRole('button', { name: '전체정보뷰', exact: true }).click();
+  await expect(page.getByRole('button', { name: '김영국 통화 요약 보기' })).toBeVisible();
+  await page.getByRole('button', { name: '간단뷰', exact: true }).click();
+  await expect(page.getByRole('button', { name: '김영국 통화 요약 보기' })).toHaveCount(0);
 });
 
 /**
@@ -84,7 +106,7 @@ async function installCallShell(page: Page, local: CallRecord[] = []) {
 test('파일을 고르면 통화일시가 채워지고 값을 바꿀 수 있다', async ({ page }) => {
   await installCallShell(page);
   await page.goto('/calls');
-  await page.getByRole('button', { name: '분석하기', exact: true }).first().click();
+  await page.getByRole('button', { name: '통화분석 등록하기', exact: true }).click();
   const picker = page.getByRole('button', { name: '통화파일 불러오기' });
   await expect(picker).toBeEnabled();
   await picker.click();
@@ -97,6 +119,55 @@ test('파일을 고르면 통화일시가 채워지고 값을 바꿀 수 있다'
   await expect(field).toHaveValue('2026-09-16T10:30');
   await picker.click();
   await expect(field).toHaveValue('2026-09-16T10:30');
+});
+/**
+ * 폰 폭에서 시트 하나에 **파일 선택 → 상대 선택 → 통화일시 → 분석하기**가 모두 들어와야
+ * 한다. 수신자를 그대로 쌓던 때는 아래 둘이 화면 밖으로 밀려 스크롤하지 않으면 보이지
+ * 않았다 — 후보는 세 줄 높이 안에서만 스크롤한다.
+ */
+test('폰 폭에서 등록 시트에 통화일시와 등록하기가 함께 보인다', async ({ page }) => {
+  const many = Array.from({ length: 12 }, (_, i) => ({ id: `r-${i}`, name: `수신자${i}`, phone: `+8210111122${String(i).padStart(2, '0')}`, groupId: '', customFields: [], sentCount: 0, createdAt: call.created_at, updatedAt: call.created_at }));
+  await page.route(/\/recipients(?:\?.*)?$/, route => route.request().isNavigationRequest() ? route.fallback() : route.fulfill({ json: { items: many, nextCursor: null } }));
+  await installCallShell(page);
+  await page.setViewportSize({ width: 384, height: 832 });
+  await page.goto('/calls');
+  const fab = page.getByRole('button', { name: '통화분석 등록하기', exact: true });
+  await expect(fab).toBeInViewport();
+  await fab.click();
+  await expect(page.getByRole('button', { name: '통화파일 불러오기' })).toBeInViewport();
+  // 검색하기 전에는 후보를 세우지 않는다 — 수신자가 많은 계정에서는 이름 더미가 될 뿐이다.
+  await expect(page.getByRole('button', { name: /^수신자\d+ · / })).toHaveCount(0);
+  await expect(page.getByText('이름 또는 폰번호 뒷4자리로 검색해 주세요.')).toBeVisible();
+  // 스크롤하지 않아도 통화일시와 제출 버튼이 한 화면에 있다.
+  await expect(page.getByLabel('통화일시', { exact: true })).toBeInViewport();
+  await expect(page.getByRole('button', { name: '등록하기', exact: true })).toBeInViewport();
+  // 검색으로 좁히면 그 안에서 고른다.
+  // 같은 이름의 검색칸이 목록에도 있다(시트가 그 위에 뜬다). 뒤에 붙는 시트 쪽을 고른다.
+  const search = page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true }).last();
+  // 뒷4자리로도 같은 칸에서 찾는다(수신자1 +821011112201).
+  await search.fill('2201');
+  await expect(page.getByRole('button', { name: /^수신자\d+ · / })).toHaveCount(1);
+  await search.fill('수신자');
+  // 후보가 많으면 세 줄 높이 안에서만 스크롤한다. 뒤쪽 줄은 화면 밖으로 밀리지 않는다.
+  await expect(page.getByRole('button', { name: /^수신자\d+ · / })).toHaveCount(12);
+  await expect(page.getByRole('button', { name: /^수신자0 · / })).toBeInViewport();
+  await expect(page.getByRole('button', { name: /^수신자11 · / })).not.toBeInViewport();
+  await expect(page.getByLabel('통화일시', { exact: true })).toBeInViewport();
+  await search.fill('수신자7');
+  await page.getByRole('button', { name: /^수신자7 · / }).click();
+  await expect(page.getByText(/^선택: 수신자7 · /)).toBeVisible();
+  await expect(page.getByRole('button', { name: '등록하기', exact: true })).toBeInViewport();
+});
+// 녹음 주소가 붙으면 ▶ 가 열리고 재생 패널이 브라우저 재생기를 세운다.
+test('녹음이 준비된 통화는 재생 패널을 연다', async ({ page }) => {
+  const withAudio: CallRecord = { ...call, call_id: 'call-6', contact: { name: '정녹음', phone: '+821011112222' }, audio_url: 'https://example.com/a.m4a' };
+  await installCallShell(page, [withAudio]);
+  await page.goto('/calls');
+  const listen = page.getByRole('button', { name: '정녹음 녹음 듣기', exact: true });
+  await expect(listen).toBeEnabled();
+  await listen.click();
+  await expect(page.getByRole('heading', { name: '녹음 듣기', exact: true })).toBeVisible();
+  await expect(page.locator('audio')).toHaveAttribute('src', 'https://example.com/a.m4a');
 });
 test('분석 중인 통화는 진행 막대와 경과 시간을 보여 준다', async ({ page }) => {
   const running: CallRecord = { call_id: 'call-2', contact: { name: '이진행', phone: '+821099998888' }, call: { file_name: 'live.m4a', duration: null, recorded_at: '2026-09-17T04:00:00Z' }, created_at: '2026-09-17T04:10:00Z', status: 'TRANSCRIBING', progress: 42, timing: { started_at: 'RUNNING', stages: { PREPARE: { started_at: null, ms: 3_000 }, TRANSCRIBE: { started_at: 'RUNNING', ms: 0 } } } };
@@ -155,7 +226,8 @@ test('요약만 만든 기록은 요약과 원문 탭만 보여 준다', async (
   };
   await installCallShell(page, [reduced]);
   await page.goto('/calls');
-  // 목록의 요약 한 줄은 그대로다.
+  // 요약 한 줄은 「전체정보뷰」에서 선다.
+  await page.getByRole('button', { name: '전체정보뷰', exact: true }).click();
   await page.getByRole('button', { name: '정요약 통화 요약 보기' }).click();
   await expect(page.getByRole('tab')).toHaveCount(2);
   await expect(page.getByRole('tab', { name: '통화 요약', exact: true })).toHaveAttribute('aria-selected', 'true');

@@ -288,8 +288,8 @@ test('미발송 기본 조회·발송자 포함·전체 선택·최종 발송 �
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '김영희 발송 이력 보기', exact: true })).toHaveCount(0);
   const groupBox = (await page.getByRole('button', { name: '모든그룹', exact: true }).boundingBox())!;
-  const nameFilter = page.getByRole('textbox', { name: '수신자 이름', exact: true });
-  await expect(nameFilter).toHaveAttribute('placeholder', '검색할 수신자 이름');
+  const nameFilter = page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true });
+  await expect(nameFilter).toHaveAttribute('placeholder', '이름 또는 폰번호 뒷4자리');
   const nameBox = (await nameFilter.boundingBox())!;
   expect(groupBox.x + groupBox.width).toBeLessThanOrEqual(nameBox.x);
   expect(Math.abs(groupBox.y + groupBox.height / 2 - nameBox.y - nameBox.height / 2)).toBeLessThan(2);
@@ -302,10 +302,16 @@ test('미발송 기본 조회·발송자 포함·전체 선택·최종 발송 �
   expect(compactBox.x).toBeLessThan(expandedBox.x);
   await page.getByRole('checkbox', { name: '기발신자포함', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: /김철수/ })).toBeVisible();
-  await page.getByLabel('수신자 이름', { exact: true }).fill('철수');
+  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('철수');
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: /김철수/ })).toBeVisible();
-  await page.getByLabel('수신자 이름', { exact: true }).fill('');
+  // 이름 대신 번호 뒷자리로도 같은 칸에서 찾는다(김영희 +821087654321). 하이픈을 섞어 쳐도 같다.
+  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('4321');
+  await expect(page.getByRole('checkbox', { name: /김철수/ })).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeVisible();
+  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('8765-4321');
+  await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeVisible();
+  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('');
   await page.getByRole('button', { name: '모든그룹', exact: true }).click();
   await page.getByRole('menuitem', { name: '모임', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toHaveCount(0);
@@ -446,13 +452,13 @@ test('조회한 125명 전체를 이름순으로 보여주고 화면별 뷰 기�
   await expect.poll(async () => (await nameHeader.boundingBox())!.y).toBeCloseTo(beforeVertical.y, 0);
   expect((await nameHeader.boundingBox())!.x).toBeCloseTo(beforeVertical.x, 0);
   await table.evaluate((node) => { node.parentElement!.scrollTop = 0; node.parentElement!.scrollLeft = 0; });
-  await page.getByLabel('수신자 이름', { exact: true }).fill('사람125');
+  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('사람125');
   await expect(totalCount(page, 1)).toBeVisible();
   await expect(table.getByRole('row')).toHaveCount(2);
   await expect(table.getByRole('row').nth(1)).toContainText('00123');
   await page.screenshot({ path: `/tmp/nature-all-columns-${info.project.name}.png`, animations: 'disabled' });
   await page.goto('/recipients');
-  await page.getByLabel('수신자 이름', { exact: true }).fill('사람125');
+  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('사람125');
   await expect(page.getByText('전체 1명', { exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /사람125/ })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /사람124/ })).toHaveCount(0);
@@ -546,16 +552,29 @@ test('문자 보내기 헤더의 등록·템플릿·이력 시트에서 작업�
   await page.getByRole('button', { name: '발송 이력', exact: true }).click();
   await expect(page.getByRole('heading', { name: '발송 이력', exact: true })).toBeVisible();
   await expect(page.getByText('전체 2건', { exact: true })).toBeVisible();
-  const texts = page.getByText(/^(최근|과거) 안내 문구$/);
-  await expect(texts).toHaveText(['최근 안내 문구', '과거 안내 문구']);
-  await page.getByLabel('발송 이력 이름', { exact: true }).fill('철수');
-  await expect(page.getByText('전체 1건', { exact: true })).toBeVisible();
+  // 처음에는 한 줄짜리 목록이다(최신순) — 본문은 그 줄을 눌러야 펼쳐진다.
+  await expect(page.getByText(/^(최근|과거) 안내 문구$/)).toHaveCount(0);
+  const lines = page.getByRole('button', { name: /발송 이력 펼치기$/ });
+  await expect(lines).toHaveCount(2);
+  await expect(lines.first()).toContainText('김영희');
+  await expect(lines.first()).toContainText('최근 발송');
+  await expect(lines.first()).toContainText('성공');
+  await page.getByRole('button', { name: '김철수 과거 발송 발송 이력 펼치기', exact: true }).click();
+  await expect(page.getByText('과거 안내 문구', { exact: true })).toBeVisible();
   await expect(page.getByText('최근 안내 문구', { exact: true })).toHaveCount(0);
+  const openedLine = page.getByRole('button', { name: '김철수 과거 발송 발송 이력 접기', exact: true });
+  await expect(openedLine).toHaveAttribute('aria-expanded', 'true');
+  // 같은 줄을 다시 누르면 접힌다.
+  await openedLine.click();
+  await expect(page.getByText('과거 안내 문구', { exact: true })).toHaveCount(0);
+  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).last().fill('철수');
+  await expect(page.getByText('전체 1건', { exact: true })).toBeVisible();
+  await expect(lines).toHaveCount(1);
   expect(queries).toContain('철수');
   await page.getByRole('button', { name: '닫기', exact: true }).click();
   await expect(page).toHaveURL(/\/sms\/new$/);
   await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeChecked();
-  await page.getByLabel('수신자 이름', { exact: true }).fill('김영희');
+  await page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true }).fill('김영희');
   await expect(totalCount(page, 1)).toBeVisible();
   expect(state.results).toHaveLength(0);
 });
@@ -578,7 +597,7 @@ test('미완료 캠페인은 이력 시트에서 복구하되 상세 열기만�
   await expect(page.getByText('성공 2 · 실패 0 · 대기 0', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '발송 이력으로 돌아가기', exact: true }).click();
   await page.getByRole('button', { name: '닫기', exact: true }).click();
-  await expect(page.getByLabel('수신자 이름', { exact: true })).toBeEditable();
+  await expect(page.getByLabel('이름 또는 폰번호 뒷4자리', { exact: true })).toBeEditable();
   expect(state.results).toEqual(['cr0', 'cr1']);
 });
 
@@ -629,6 +648,8 @@ test('외부 발송 등록은 응답 유실 후에도 한 건만 저장하고 SM
   await expect(page.getByText('외부에서 발송한 기록입니다.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '닫기', exact: true }).click();
   await page.getByRole('button', { name: '발송 이력', exact: true }).click();
+  // 이력은 한 줄로 서고, 누르면 그 자리에서 펼쳐진다.
+  await page.getByRole('button', { name: '김철수 외부 발송 등록 발송 이력 펼치기', exact: true }).click();
   await expect(page.getByText('외부에서 발송한 기록입니다.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '외부 발송 등록 발송 상세', exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('test.sms.calls') || '[]'))).toEqual([]);
@@ -712,6 +733,34 @@ test('선택한 수신자를 템플릿으로 예약하고 예약함에서 발송
   await expect(page).toHaveURL(/\/sms\/c1$/);
   await expect(page.getByRole('heading', { name: '가을 안내', exact: true })).toBeVisible();
   expect(state.campaigns[0].status).toBe('READY');
+});
+
+test('예약함은 고른 태그 안에서 이름·폰번호 뒷4자리로 좁힌다', async ({ page }) => {
+  const state = await setup(page);
+  state.people.push({ id: 'p3', name: '박영수', phone: '+821011112222', groupId: '모임', createdAt: now, updatedAt: now });
+  state.templates.push({ ...autumn });
+  state.templates.push({ ...autumn, id: 't-fee', name: '회비 안내', message: '회비 안내드립니다.' });
+  await reserve(page, [/김철수/, /김영희/]);
+  await reserve(page, [/박영수/], '회비 안내');
+  await page.goto('/sms/reserved');
+  const search = page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true });
+  // 뒷4자리로 찾는다(김영희 +821087654321).
+  await search.fill('4321');
+  await expect(page.getByRole('checkbox', { name: /김영희/ })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: /김철수/ })).toHaveCount(0);
+  await expect(page.getByText('가을 안내 1명 · 선택 0명', { exact: true })).toBeVisible();
+  // 전체 선택은 보이는 줄만 고른다.
+  await page.getByRole('checkbox', { name: '전체 선택', exact: true }).click();
+  await expect(page.getByText('가을 안내 1명 · 선택 1명', { exact: true })).toBeVisible();
+  // 검색은 고른 태그 안에서만 좁힌다 — 다른 태그의 박영수는 올라오지 않는다.
+  await search.fill('박영수');
+  await expect(page.getByRole('checkbox', { name: /박영수/ })).toHaveCount(0);
+  await expect(page.getByText('검색어에 해당하는 예약이 없습니다.', { exact: true })).toBeVisible();
+  await expect(page.getByText('가을 안내 0명 · 선택 0명', { exact: true })).toBeVisible();
+  // 태그를 옮기면 검색어도 지운다. 남겨 두면 옮긴 태그가 통째로 빈 것처럼 보인다.
+  await page.getByRole('button', { name: '회비 안내 예약 1명', exact: true }).click();
+  await expect(search).toHaveValue('');
+  await expect(page.getByRole('checkbox', { name: /박영수/ })).toBeVisible();
 });
 
 test('예약함 삭제는 수신자를 남기고 예약만 취소한다', async ({ page }) => {

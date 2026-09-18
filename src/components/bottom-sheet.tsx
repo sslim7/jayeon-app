@@ -25,7 +25,9 @@ export function BottomSheet({ title, visible, onClose, children, headerActions }
 const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.ink, opacity: 0.4 },
-  panel: { width: '100%', maxWidth: 720, maxHeight: '90%', alignSelf: 'center', backgroundColor: colors.bg, borderTopLeftRadius: radii.sheet, borderTopRightRadius: radii.sheet, padding: spacing.lg },
+  // 등록 시트는 한 화면에 다 들어와야 한다(파일 선택 → 상대 → 통화일시 → 제출). 위에 남기는
+  // 띠는 「뒤에 화면이 있다」를 알리는 최소한만 둔다.
+  panel: { width: '100%', maxWidth: 720, maxHeight: '95%', alignSelf: 'center', backgroundColor: colors.bg, borderTopLeftRadius: radii.sheet, borderTopRightRadius: radii.sheet, padding: spacing.lg },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingBottom: spacing.md },
   content: { gap: spacing.lg, paddingBottom: spacing.xxl },
 });

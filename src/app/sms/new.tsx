@@ -21,6 +21,7 @@ import { useUserStore } from '@/store/user-store';
 import { clearSmsDraft, readSmsDraft, writeSmsDraft } from '@/lib/sms-draft';
 import { newSmsRequestId } from '@/lib/sms-dispatch';
 import { utf8Length } from '@/lib/phone';
+import { matchesRecipientQuery } from '@/lib/recipient-search';
 import { attachmentApi, recipientApi, smsApi, templateApi } from '@/lib/sms-api';
 import { excludeReserved, mergeReservation, reservedRecipientIds, reservedRows, MAX_RESERVATION_SIZE } from '@/lib/sms-reservations';
 import { useReservations } from '@/hooks/use-reservations';
@@ -261,7 +262,7 @@ export default function NewCampaignScreen() {
   const listFooter = phone && stage === 'recipients';
   const groups = [...new Set(rows.map((item) => item.groupId).filter(Boolean))];
   const reservedSelected = selected.filter((id) => reservations.recipientIds.has(id)).length;
-  const visible = rows.filter((item) => (!group || item.groupId === group) && item.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const visible = rows.filter((item) => (!group || item.groupId === group) && matchesRecipientQuery(query, item));
   return (
     <SmsPage hideTitle wide={stage === 'recipients'} compact={listFooter} footer={listFooter ? sendButton : undefined} title={stage === 'recipients' ? '문자 보내기' : '문자 작성'} actions={phone ? undefined : <>
       <SmsButton label="수신자 등록" secondary disabled={frozen} onPress={() => setPanel('register')} />
