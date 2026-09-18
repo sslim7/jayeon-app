@@ -71,7 +71,8 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/with-whisper.cjs"
     ],
     "experiments": {
       "typedRoutes": true,

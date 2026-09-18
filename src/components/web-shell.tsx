@@ -12,6 +12,7 @@
  * 웹 빌드에서는 `web-shell.web.tsx` 의 스텁이 대신 선택된다.
  */
 
+import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -140,7 +141,9 @@ function linkToPath(url: string): string | null {
 type ShellMessage =
   | SmsShellRequest
   | { type: 'ready' }
-  | { type: 'tokens'; tokens: StoredTokens | null; reason?: 'password-changed' };
+  | { type: 'tokens'; tokens: StoredTokens | null; reason?: 'password-changed' }
+  // 🔧 측정용(→ `components/asr-bench.tsx`). 끝나면 이 줄과 아래 case 를 지운다.
+  | { type: 'navigate'; path: string };
 
 /**
  * 페이지가 뜨기 전에 웹뷰에 심는 스크립트.
@@ -204,6 +207,8 @@ true;`;
 
 export function WebShell() {
   const insets = useSafeAreaInsets();
+  // 🔧 측정용 — 웹 메뉴가 보낸 navigate 를 받아 네이티브 화면을 연다. 끝나면 지운다.
+  const router = useRouter();
   useEffect(() => { startCallService(); }, []);
   const ref = useRef<WebView>(null);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -329,6 +334,12 @@ export function WebShell() {
         return;
       case 'ready':
         revealContent();
+        return;
+      case 'navigate':
+        // 🔴 웹이 준 경로를 그대로 router 에 넘기지 않는다. 웹뷰가 여는 페이지는 바깥
+        // 서버가 주는 것이라, 임의 경로를 받으면 껍데기의 아무 화면이나 열 수 있는
+        // 통로가 된다. 지금 열 수 있는 것은 측정 화면 하나뿐이다.
+        if (message.path === '/asr-bench') router.push('/asr-bench');
         return;
       case 'tokens':
         // null은 명시적 로그아웃/자격 만료일 때만 전송된다. 일시 복구 장애는 토큰을 보존한다.
