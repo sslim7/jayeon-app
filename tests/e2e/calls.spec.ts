@@ -71,6 +71,12 @@ async function installCalls(page: Page, server: Server) {
     return route.fulfill({ json: { items: [...server.rows.values()].filter((row) => matches(q, row)).map(listed), nextCursor: null } });
   });
   await page.route(/\/calls\/[^/?]+$/, (route) => {
+    /*
+      🔴 **브라우저 주소창으로 연 `/calls/<id>` 는 앱 화면 요청이지 API 요청이 아니다.**
+      이 갈래가 없으면 보고서를 주소로 직접 열 때(북마크·새로고침·테스트의 `page.goto`)
+      HTML 대신 JSON 이 그려져 **빈 화면**이 나온다. 목록 갈래도 같은 이유로 먼저 거른다.
+    */
+    if (route.request().isNavigationRequest()) return route.fallback();
     const id = new URL(route.request().url()).pathname.split('/').pop()!;
     server.seen.push(`get:${id}`);
     const row = server.rows.get(id);
@@ -143,9 +149,19 @@ test.beforeEach(async ({ page }) => {
   await page.route(/\/recipients(?:\?.*)?$/, route => route.request().isNavigationRequest() ? route.fallback() : route.fulfill({ json: { items: [], nextCursor: null } }));
 });
 
-// 이 기록에는 상세 내용·할 일·상담 분석이 모두 들어 있다(서버 분석이 채운 모양이다).
-// 내용이 있으면 그 탭이 그대로 보여야 한다.
-test('내용이 있는 분석은 상세·할 일·상담 분석 탭까지 보여 준다', async ({ page }) => {
+/**
+ * 🔴 **보고서는 한 장이다.**
+ *
+ * 예전에는 요약·상세·할 일·상담 분석이 탭 넷으로 갈라져 있어서, 전부 읽으려면 버튼을 네 번
+ * 눌러야 했다. 그 네 번을 다 누르는 사람은 없다 — 읽히지 않는 분석은 만들지 않은 것과 같다.
+ * 이제는 **아래로 내리는 것만으로** 전부 읽힌다. 이 테스트가 지키는 것이 그 「한 장」이다.
+ *
+ * 함께 고정하는 것 셋:
+ * - 시트가 아니라 **화면**이다(주소가 바뀌고 제목이 「이름 + 상담 분석」이다).
+ * - 비어 있는 갈래는 **제목을 남기지 않고**, 비었다는 사실만 한 줄로 말한다.
+ * - 만 자짜리 **원문은 이 문서에 섞이지 않는다**(기본 접힘).
+ */
+test('분석 보기는 보고서 화면으로 넘어가 요약·상세·할 일·상담 분석을 한 화면에서 보여 준다', async ({ page }) => {
   await installCalls(page, server());
   await login(page);
   await expect(page.getByText('김영국', { exact: true })).toBeVisible();
@@ -155,77 +171,242 @@ test('내용이 있는 분석은 상세·할 일·상담 분석 탭까지 보여
   // 분석을 여는 길은 줄을 펼친 뒤다 — 목록은 한 줄만 세운다.
   await briefRow(page, '김영국').click();
   await page.getByRole('button', { name: '김영국 분석 보기' }).click();
-  await expect(page.getByRole('tab', { name: '통화 요약', exact: true })).toHaveAttribute('aria-selected', 'true');
-  // 어떤 AI 가 만들었는지는 결과를 의심할 때 첫 단서다.
-  await expect(page.getByText('분석: alibaba · qwen-plus')).toBeVisible();
-  await page.getByRole('tab', { name: '상세 내용' }).click();
+  await expect(page).toHaveURL(/\/calls\/call-1$/);
+  /*
+    🔴 **제목과 나가는 길은 앱 상단 바에 있다.** 이 화면은 메뉴가 세운 화면이 아니라 목록 위에
+    쌓인 문서라, ☰ 가 아니라 「뒤로」가 서야 한다 — ☰ 를 누르면 메뉴가 열려 밑에 깔린 목록으로
+    **이동**해 버리고, 그때 사용자는 쌓아 둔 스크롤과 펼친 줄을 잃는다.
+  */
+  await expect(page.getByRole('heading', { name: '김영국 상담 분석' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '뒤로', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '메뉴 열기' })).toHaveCount(0);
+  // 🔴 누를 탭이 하나도 없다. 하나라도 남아 있으면 그만큼 읽히지 않는 구획이 생긴 것이다.
+  await expect(page.getByRole('tab')).toHaveCount(0);
+  /*
+    🔴 **머리말에 남는 것은 「누구와 언제 얼마나」 한 줄뿐이다.**
+
+    분석 모델 이름·이 통화에 든 비용·「서버 AI로 다시 분석」이 여기 함께 서 있었는데, 셋 다
+    보고서를 읽으러 온 사람의 질문이 아니라 **우리(운영)의 질문**이라 걷었다. 기능은 지우지
+    않았고(→ `components/call-reanalyze.tsx`·`lib/call-cost.ts`) 이 화면에서 그리지 않을 뿐이다.
+  */
+  await expect(page.getByText(/^010-1234-5678 · .+ · 03:00$/)).toBeVisible();
+  await expect(page.getByText(/^분석: /)).toHaveCount(0);
+  await expect(page.getByText(/^비용: /)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /서버 AI로 다시 분석$/ })).toHaveCount(0);
+  // 🔴 다섯 구획이 **동시에** 보인다. 하나를 보려고 다른 하나를 덮지 않는다.
+  for (const title of ['요약', '상세 내용', '할 일', '고객이 원한 것', '중요 발언']) {
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  }
+  /*
+    🔴 **「할 일」이 마지막 구획이다.**
+
+    앞의 구획들은 끝난 통화의 기록이고 할 일만 앞으로 할 일이라, 기록 한가운데에 끼워 두면
+    읽던 사람이 거기서 손을 떼고 움직였다가 나머지를 못 읽는다. 순서는 눈으로만 확인되는
+    성질이라 **여기서 고정하지 않으면 다음 수정에서 조용히 뒤바뀐다.**
+    (통화 원문은 보고서 밖이다 — 문서를 덮은 뒤에 오는 부록이라 이 세기에서 뺀다.)
+  */
+  const order = await page.getByRole('heading').allInnerTexts();
+  expect(order.filter((title) => title !== '통화 원문').at(-1)).toBe('할 일');
+  await expect(page.getByText('도입 견적을 요청한 통화입니다.').last()).toBeVisible();
   await expect(page.getByText('도입 비용 견적서를 요청했습니다.')).toBeVisible();
-  await page.getByRole('tab', { name: '할 일' }).click();
-  await expect(page.getByText('☐ 견적서 전달')).toBeVisible();
-  await page.getByRole('tab', { name: '상담 분석' }).click();
+  /*
+    🔴 **할 일 앞에 `☐` 를 달지 않는다.** 체크박스처럼 보이는데 누를 수가 없어서, 눌러 본
+    사람에게는 고장난 화면이 된다("이 ㅁ은 뭐지"를 실제로 들었다).
+  */
+  await expect(page.getByText('견적서 전달', { exact: true })).toBeVisible();
+  await expect(page.getByText(/☐/)).toHaveCount(0);
   await expect(page.getByText('• 도입 비용 확인')).toBeVisible();
-  await page.getByRole('tab', { name: '통화 원문' }).click();
-  await expect(page.getByText('견적서를 보내 주세요.', { exact: true })).toBeVisible();
+  await expect(page.getByText('• 견적 요청')).toBeVisible();
+  // 결정사항 0건 · consulting 의 우려/반대 0건. 빈 제목을 세우지 않고 한 줄로 말한다.
+  await expect(page.getByRole('heading', { name: '결정사항' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '걸림돌' })).toHaveCount(0);
+  await expect(page.getByText('이 통화에서 확인되지 않은 항목: 결정사항 · 걸림돌')).toBeVisible();
+  /*
+    🔴 **통화 원문은 이 문서에 없다.** 264조각·만 자짜리 원문은 접어 두더라도 보고서의 끝이
+    어디인지 흐리고, 무엇보다 **원문만 보러 온 사람이 보고서를 지나쳐 내려와야** 했다.
+    지금은 형제 화면이다(→ 아래 「목록의 통화 원문 버튼…」 테스트).
+  */
+  await expect(page.getByRole('heading', { name: '통화 원문', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '통화 원문 펼치기' })).toHaveCount(0);
+  await expect(page.getByText('견적서를 보내 주세요.', { exact: true })).toHaveCount(0);
 });
 
 /**
- * 🔴 **비용은 「합계」가 아니라 「받아쓰기와 분석」으로 보인다.**
+ * 🔴 **원문은 보고서와 형제다.** 목록에서 곧장 갈 수 있고, 들어가면 **바로** 대화가 보인다.
  *
- * 이 파이프라인은 돈의 대부분이 받아쓰기에 나간다. 합계 한 줄만 적으면 그 사실이 가려져서
- * 「비싸다」까지는 알아도 **어느 단계를 바꿔야 싸지는지**는 알 수 없다 — 이 화면을 만든 이유가
- * 공급자를 바꿀지 판단하는 것이라, 나누지 않으면 화면이 목적을 잃는다.
- *
- * 금액은 서버가 원화로 계산해서 준다. 앱은 단가를 모르고 관례대로 적기만 한다.
+ * 여닫기도 글자 수 표시도 없다 — 그것들은 「펼까 말까」를 묻던 장치인데 이 화면에 들어온
+ * 것이 이미 그 답이다. 화면 머리는 보고서와 같은 모양(「‹ 뒤로」 + 문서 이름)이다.
  */
-test('비용을 아는 통화는 받아쓰기와 분석을 나눠 보여 준다', async ({ page }) => {
+test('목록의 통화 원문 버튼이 원문 화면으로 보낸다', async ({ page }) => {
   await installCalls(page, server());
   await login(page);
   await briefRow(page, '김영국').click();
-  await page.getByRole('button', { name: '김영국 분석 보기' }).click();
-  // 96.4원 → 96원, 14.2원 → 14원, 110.6원 → 111원. 원 단위 아래는 읽는 사람에게 쓸모가 없다.
-  await expect(page.getByText('비용: 받아쓰기 96원 · 분석 14원 (합계 111원)')).toBeVisible();
-  // 어떤 AI 로 이만큼 썼는지를 나란히 봐야 판단이 된다.
-  await expect(page.getByText('분석: alibaba · qwen-plus')).toBeVisible();
+  await page.getByRole('button', { name: '김영국 통화 원문' }).click();
+  await expect(page).toHaveURL(/\/calls\/call-1\/transcript$/);
+  await expect(page.getByRole('heading', { name: '김영국 통화 원문' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '뒤로', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '메뉴 열기' })).toHaveCount(0);
+  // 펼칠 것이 없다. 들어온 것이 곧 「펼친다」는 답이다.
+  await expect(page.getByRole('button', { name: '통화 원문 펼치기' })).toHaveCount(0);
+  await expect(page.getByText('12자', { exact: true })).toHaveCount(0);
+  /*
+    ⚠️ 이 통화의 원문에는 **화자가 없다**(폰·맥북 whisper 로 만든 원문이 그렇다). 그때는
+    좌우로 가르지 않고 시각과 내용만 흐르게 두며, 가정을 설명하는 줄도 세우지 않는다 —
+    없는 정보를 있는 것처럼 그리지 않는다.
+  */
+  await expect(page.getByText('견적서를 보내 주세요.', { exact: true })).toBeVisible();
+  await expect(page.getByText('00:00', { exact: true })).toBeVisible();
+  await expect(page.getByText(/화자/)).toHaveCount(0);
+  // 돌아가는 길은 보고서와 같다 — 목록은 이 화면 아래에 살아 있다.
+  await page.getByRole('button', { name: '뒤로', exact: true }).click();
+  await expect(page).toHaveURL(/\/calls$/);
+  await expect(briefRow(page, '김영국')).toHaveAccessibleName(/ 접기$/);
 });
 
 /**
- * 🔴 **1원 미만을 「0원」으로 적지 않는다.** 공짜로 읽히기 때문이다.
+ * 🔴 **통화 원문은 목록이 아니라 대화다.**
  *
- * 서버는 정수로 반올림하지 않고 내려보낸다(§`internal/calls/cost.go` 의 `won`). 그 값을 앱이
- * 0원으로 뭉개면, 화면을 보고 「이 단계는 돈이 안 든다」고 판단하게 된다 — 실제로는 들었다.
+ * 한쪽에 몰아 세운 264줄은 「누가 무엇을 말했는가」를 보여 주지 못한다 — 상담 원문을 읽는
+ * 이유가 바로 그 한 가지인데도. 좌우로 가르면 말이 오간 모양이 형태로 남는다.
+ *
+ * ┌──────────────────────────────────────────────────────────────────────────────┐
+ * │ 🔴 **그런데 어느 번호가 상담사인지는 우리가 모른다.**                              │
+ * └──────────────────────────────────────────────────────────────────────────────┘
+ * ASR 은 화자를 `"0"`/`"1"` 로만 준다. 우리가 가진 통화에서는 상담사가 `"0"` 이었지만 보장이
+ * 없고, 짧은 대답이 반대쪽 화자로 새는 오류도 실제로 있다. 그래서 오른쪽에 `"0"` 을 두되
+ * **이름표는 번호 그대로** 달고, 그것이 가정이라는 사실을 화면이 스스로 말한다.
+ * 「상담사」「고객」이라고 박으면 **틀렸을 때 거짓이 확신에 차 보인다** — 보고서를 읽은 사람이
+ * 하지도 않은 말을 상담사가 했다고 믿게 된다. 이 테스트가 막는 것이 그것이다.
  */
-test('1원이 안 되는 비용은 소수점을 남겨 공짜로 읽히지 않게 한다', async ({ page }) => {
-  const tiny: CallRecord = {
-    ...done, call_id: 'call-tiny', contact: { name: '최짧게', phone: '+821044445555' },
-    cost: { currency: 'KRW', transcription: 0.42, analysis: 0.03, total: 0.45, usage: { audio_seconds: 4, input_tokens: 30, output_tokens: 8, reasoning_tokens: 0 } },
+test('화자가 있는 원문은 좌우로 갈린 말풍선이 되고, 화자를 이름으로 단정하지 않는다', async ({ page }) => {
+  const talk: CallRecord = {
+    ...done, call_id: 'call-talk', contact: { name: '권자현', phone: '+821012349999' },
+    transcript: {
+      text: '여보세요? 아, 네, 안녕하세요. 네, 더메이의 권자현 팀장입니다.',
+      segments: [
+        { start: 0, end: 2, text: '여보세요?', speaker: '0' },
+        { start: 3, end: 5, text: '아, 네, 안녕하세요.', speaker: '1' },
+        { start: 134, end: 138, text: '네, 더메이의 권자현 팀장입니다.', speaker: '0' },
+      ],
+    },
   };
-  await installCalls(page, server([tiny]));
+  await installCalls(page, server([talk]));
   await login(page);
-  await briefRow(page, '최짧게').click();
-  await page.getByRole('button', { name: '최짧게 분석 보기' }).click();
-  await expect(page.getByText('비용: 받아쓰기 0.42원 · 분석 0.03원 (합계 0.45원)')).toBeVisible();
+  await briefRow(page, '권자현').click();
+  await page.getByRole('button', { name: '권자현 통화 원문' }).click();
+  await expect(page.getByRole('heading', { name: '권자현 통화 원문' })).toBeVisible();
+  /*
+    🔴 **말풍선 안에는 말한 내용만 들어간다.** 시각을 같은 덩어리에 넣으면 눈이 264번
+    「00:02 · 」을 먼저 밟고 지나가야 해서, 좌우로 갈라 놓고도 원문이 읽히지 않는다.
+    시각은 말풍선 **바깥**의 형제 글자다 — 그래서 `exact` 로 잡힌다.
+  */
+  await expect(page.getByText('00:00', { exact: true })).toBeVisible();
+  await expect(page.getByText('00:03', { exact: true })).toBeVisible();
+  await expect(page.getByText('02:14', { exact: true })).toBeVisible();
+  await expect(page.getByText('여보세요?', { exact: true })).toBeVisible();
+  /*
+    🔴 **화자 이름표는 바뀔 때 한 번만 적는다.** 발화마다 적으면 264번 나와서 읽을 내용보다
+    이름표가 많아진다. 여기 화자 차례는 0 → 1 → 0 이라 이름표는 셋이다.
+  */
+  await expect(page.getByText('화자 0', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('화자 1', { exact: true })).toHaveCount(1);
+  // 🔴 가정을 가정이라고 적는 줄. 이 줄이 없으면 좌우로 갈린 화면 자체가 「우리는 안다」고 말한다.
+  await expect(page.getByText(/오른쪽이 화자 0.*확정할 수 없어/)).toBeVisible();
+  // 🔴 이름표는 번호뿐이다. 말풍선 머리에 사람 이름이 붙는 순간 화면이 거짓말을 한다.
+  await expect(page.getByText('상담사', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('고객', { exact: true })).toHaveCount(0);
+  /*
+    🔴 **실제로 좌우로 갈렸는지는 자리로 잰다.** 말풍선 색과 모서리만 바뀌고 둘 다 왼쪽에
+    서 있어도 위의 글자 검사는 전부 통과한다 — 그러면 대화가 다시 한 줄짜리 목록이 된다.
+  */
+  const right = (await page.getByText('여보세요?', { exact: true }).boundingBox())!;
+  const left = (await page.getByText('아, 네, 안녕하세요.', { exact: true }).boundingBox())!;
+  expect(right.x).toBeGreaterThan(left.x + 50);
+  /*
+    🔴 **말풍선이 가로로 선다.** 가로 묶음 안에서 `flex` 를 잘못 주면 말풍선이 한 글자 폭으로
+    찌그러진 채 글자가 세로로 쏟아지는데(react-native-web 이 `flex-basis: 0` 을 남긴다),
+    위의 글자·자리 검사는 그래도 전부 통과한다. 폭을 직접 재야 잡힌다.
+  */
+  expect(right.width).toBeGreaterThan(40);
+  expect(left.width).toBeGreaterThan(40);
+  /*
+    🔴 **시각은 말풍선의 안쪽(화면 가운데) 방향에 붙는다.** 바깥쪽에 붙이면 화면 가장자리에
+    숫자가 줄줄이 서서, 좌우로 가른 것보다 시각이 먼저 눈에 들어온다.
+  */
+  const rightTime = (await page.getByText('00:00', { exact: true }).boundingBox())!;
+  const leftTime = (await page.getByText('00:03', { exact: true }).boundingBox())!;
+  expect(rightTime.x).toBeLessThan(right.x);
+  expect(leftTime.x).toBeGreaterThan(left.x);
 });
 
 /**
- * 🔴 **모르는 비용은 0원이 아니라 아무것도 아니다.**
+ * 🔴 **돌아왔을 때 보던 자리가 남아 있어야 한다.**
  *
- * 서버가 `cost` 를 안 보내는 경우는 셋이고 전부 정상이다: 단가 설정이 없거나, 사용량이 없는
- * 옛 통화이거나, 기기 분석 시절 기록이다. 그때 「0원」을 그리면 **돈이 안 들었다는 거짓말**이
- * 된다 — 이 숫자는 공급자를 바꿀지 판단하는 근거라 거짓말 한 줄이 판단을 통째로 뒤집는다.
+ * 목록은 무한 스크롤로 쌓은 페이지와 검색어, 펼쳐 둔 줄을 **컴포넌트 상태로** 들고 있다.
+ * 보고서를 시트가 아니라 화면으로 만들면서 이 상태가 통째로 날아갈 수 있는 길이 둘 생겼다:
+ * ①목록을 `replace` 로 갈아 끼우거나 ②돌아올 때 목록을 처음부터 다시 받거나. 둘 중 하나라도
+ * 하면 30건쯤 내려간 뒤 보고서를 열었다 닫은 사용자가 **맨 위로 튕긴다.**
+ *
+ * 그래서 여기서 세는 것이 목록 요청 횟수다 — 돌아오는 길에 목록을 다시 받으면 실패한다.
  */
-test('비용을 모르는 옛 통화는 0원이 아니라 비용 칸 자체를 그리지 않는다', async ({ page }) => {
-  const { cost: _gone, ...unknown } = done;
-  await installCalls(page, server([{ ...unknown, call_id: 'call-old', contact: { name: '박옛날', phone: '+821011112222' } }]));
+test('보고서에서 목록으로 돌아오면 쌓아 둔 목록과 펼쳐 둔 줄이 그대로 남는다', async ({ page }) => {
+  const made = (prefix: string, count: number) => Array.from({ length: count }, (_, i) => listed({ ...done, call_id: `${prefix}-${i}`, contact: { name: `${prefix}통화${i}`, phone: '+821012345678' }, call: { ...done.call, recorded_at: new Date(Date.parse('2026-09-17T05:20:00Z') - (prefix === 'a' ? 0 : 3_600_000) - i * 60_000).toISOString() } }));
+  let lists = 0;
+  await page.route(/\/calls(?:\?.*)?$/, route => {
+    if (route.request().isNavigationRequest()) return route.fallback();
+    lists += 1;
+    const params = new URL(route.request().url()).searchParams;
+    if (!params.get('cursor')) return route.fulfill({ json: { items: made('a', 50), nextCursor: 'p1' } });
+    return route.fulfill({ json: { items: made('b', 10), nextCursor: null } });
+  });
+  // 🔴 상세 응답은 **목록이 아는 그 통화와 같은 통화**여야 한다. 통화일시가 다르면 목록이
+  // 다시 정렬되면서 줄이 통째로 움직이는데, 그것은 여기서 재려는 것(보던 자리)과 다른 문제다.
+  await page.route(/\/calls\/[^/?]+$/, route => route.fulfill({ json: { ...made('b', 10)[9], ...done, call_id: 'b-9', contact: { name: 'b통화9', phone: '+821012345678' }, call: made('b', 10)[9].call } }));
   await login(page);
-  await briefRow(page, '박옛날').click();
-  await page.getByRole('button', { name: '박옛날 분석 보기' }).click();
-  // 나머지는 그대로 보인다 — 비용만 모르는 것이지 분석이 실패한 것이 아니다.
-  // 비용 줄이 서는 자리가 바로 이 줄 아래라, 이것이 보이는데 비용이 없으면 걷힌 것이 맞다.
-  await expect(page.getByText('분석: alibaba · qwen-plus')).toBeVisible();
-  await expect(page.getByText(/^비용: /)).toHaveCount(0);
-  // 🔴 「0원」이 어디에도 없어야 한다. 공짜로 읽히는 한 줄이 이 화면의 목적을 뒤집는다.
-  await expect(page.getByText(/0원/)).toHaveCount(0);
+  // 아래까지 내려 두 묶음을 쌓는다. 이 60건이 곧 「보던 자리」다.
+  await expect(page.getByText('50건', { exact: true })).toBeVisible();
+  await page.getByText('a통화49', { exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByText('60건', { exact: true })).toBeVisible();
+  expect(lists).toBe(2);
+  await briefRow(page, 'b통화9').click();
+  /*
+    **스크롤 위치.** 목록은 `SmsPage` 안쪽 `ScrollView`(= 스크롤되는 div)가 들고 있다.
+    상태가 남아 있어도 이 값이 0 으로 돌아가면 사용자 눈에는 「맨 위로 튕겼다」로 똑같이 보인다.
+  */
+  const scrolled = await page.evaluate(() => [...document.querySelectorAll('div')].find((el) => el.scrollTop > 0)?.scrollTop ?? 0);
+  expect(scrolled).toBeGreaterThan(0);
+  await page.getByRole('button', { name: 'b통화9 분석 보기' }).click();
+  await expect(page.getByRole('heading', { name: 'b통화9 상담 분석' })).toBeVisible();
+  // 상단 바의 뒤로 가기. 하드웨어 뒤로가기와 브라우저 뒤로가기도 같은 길을 쓴다(아래).
+  await page.getByRole('button', { name: '뒤로', exact: true }).click();
+  await expect(page.getByText('60건', { exact: true })).toBeVisible();
+  // 🔴 목록을 다시 받지 않았다. 받았다면 60건이 50건으로 잘리고 사용자는 자리를 잃는다.
+  expect(lists).toBe(2);
+  // 펼쳐 둔 줄도 펼친 채다 — 상태가 살아 있다는 가장 눈에 보이는 증거다.
+  await expect(briefRow(page, 'b통화9')).toHaveAccessibleName(/ 접기$/);
+  // 🔴 내려와 있던 자리도 그대로다.
+  await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('div')].find((el) => el.scrollHeight > el.clientHeight + 5)?.scrollTop ?? 0)).toBeGreaterThan(scrolled - 200);
+  // 브라우저 뒤로가기(=안드로이드 하드웨어 뒤로가기가 웹뷰에서 하는 일)도 목록으로 돌아온다.
+  await page.getByRole('button', { name: 'b통화9 분석 보기' }).click();
+  await expect(page.getByRole('heading', { name: 'b통화9 상담 분석' })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByText('60건', { exact: true })).toBeVisible();
+  expect(lists).toBe(2);
 });
+
+/**
+ * 🔧 **비용은 이제 이 화면에 없다.**
+ *
+ * 「비용: 받아쓰기 96원 · 분석 14원」은 보고서를 읽으러 온 사람의 질문이 아니라 **우리(운영)의
+ * 질문**이라, 사용자가 걷어 달라고 했고 어드민 화면이 생기면 그리로 간다. 그래서 여기서 재던
+ * 것 — 받아쓰기와 분석을 나눠 적기, 1원 미만을 0원으로 뭉개지 않기, 모르는 값에 0원을 적지
+ * 않기 — 는 **표기 함수를 직접 부르는 검사로 옮겼다**(→ `tests/call-cost.test.cjs`).
+ * 🔴 계산·표기 코드(`lib/call-cost.ts`)와 서버 응답의 `cost` 는 그대로 살아 있다. 지우면
+ * 어드민을 만들 때 「0원과 모름은 다르다」를 처음부터 다시 발견해야 한다.
+ *
+ * 화면 쪽에서 남는 규칙은 하나뿐이고, 그것은 위 「한 장 보고서」 테스트가 지킨다:
+ * **머리말에 `분석: `도 `비용: `도 서지 않는다.**
+ */
 
 /**
  * 🔴 **간단뷰는 목록이 먼저다.**
@@ -241,6 +422,23 @@ test('간단뷰는 한 줄만 세우고 누른 줄을 펼쳤다 다시 눌러 �
   await expect(row).toBeVisible();
   // 한 줄에 서는 것은 셋뿐이다. 나머지는 접혀 있다.
   await expect(row).toHaveAttribute('aria-expanded', 'false');
+  /*
+    🔴 **첫 줄 위에도 선이 있다.** 줄 사이에만 선이 있으면 목록이 어디서 시작하는지가
+    화면에 없어서, 위의 「N건」과 첫 줄이 한 덩어리로 붙어 보인다.
+    🔴 **위아래 여백은 대칭이다.** 줄이 페이지 바탕의 직계 자식이면 바탕의 `gap` 16 이
+    구분선과 글자 사이에만 얹혀 「줄이 선에서 아래로 밀려 보인다」가 된다.
+    ⚠️ 높이 48 은 **손가락이 닿을 자리**다. 여백을 줄이다 이 값을 깨면 옆 줄을 잘못 눌러
+    엉뚱한 통화가 펼쳐진다.
+  */
+  const shape = await row.evaluate((el) => {
+    const line = getComputedStyle(el.parentElement!);
+    const head = getComputedStyle(el);
+    return { top: line.borderTopWidth, bottom: line.borderBottomWidth, padTop: head.paddingTop, padBottom: head.paddingBottom, height: el.getBoundingClientRect().height };
+  });
+  expect(shape.top).toBe('1px');
+  expect(shape.bottom).toBe('1px');
+  expect(shape.padTop).toBe(shape.padBottom);
+  expect(shape.height).toBeGreaterThanOrEqual(48);
   await expect(page.getByText('010-1234-5678', { exact: true })).toHaveCount(0);
   await expect(page.getByText('3분 00초', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '김영국 분석 보기' })).toHaveCount(0);
@@ -263,6 +461,42 @@ test('간단뷰는 한 줄만 세우고 누른 줄을 펼쳤다 다시 눌러 �
   await row.click();
   await expect(row).toHaveAttribute('aria-expanded', 'false');
   await expect(page.getByText('3분 00초', { exact: true })).toHaveCount(0);
+});
+
+/**
+ * 🔴 **줄 전체가 눌려 여닫힌다는 사실이 화면에 드러나야 한다.**
+ *
+ * 표시가 없으면 펼친 사용자가 **어디를 눌러야 닫히는지 모른다** — 실제로 그 물음을 받았다.
+ * 오른쪽 끝의 홑화살표가 그 답이고, 접힘/펼침에 따라 방향이 뒤집힌다.
+ *
+ * ⚠️ 화살표는 **표시이지 버튼이 아니다.** 누르는 자리는 줄 전체 그대로이고(위 테스트가
+ * 지킨다), 낭독기에서는 숨긴다 — 여닫힘은 `aria-expanded` 와 접근성 이름의 「펼치기/접기」가
+ * 이미 말한다. 그래서 여기서는 **그려진 선 자체**를 본다.
+ * ⚠️ 아래 두 문자열은 `app/calls/index.tsx` 의 `Chevron` 이 그리는 path 와 한 글자도 달라선
+ * 안 된다. 접근성 이름으로 재면 아이콘을 거꾸로 달아도 통과하므로 일부러 기하를 잰다.
+ */
+test('간단뷰의 줄 끝 화살표가 펼침에 따라 방향을 뒤집는다', async ({ page }) => {
+  const other: CallRecord = { ...done, call_id: 'call-b', contact: { name: '이둘째', phone: '+821022223333' }, call: { ...done.call, recorded_at: '2026-09-17T01:00:00Z' } };
+  await installCalls(page, server([done, other]));
+  await login(page);
+  const down = page.locator('svg path[d="M6 9l6 6 6-6"]');
+  const up = page.locator('svg path[d="M6 15l6-6 6 6"]');
+  await expect(down).toHaveCount(2);
+  await expect(up).toHaveCount(0);
+  await briefRow(page, '김영국').click();
+  await expect(up).toHaveCount(1);
+  await expect(down).toHaveCount(1);
+  // 접으면 되돌아온다. 한쪽으로만 바뀌면 펼친 뒤의 화면이 영영 거짓말을 한다.
+  await briefRow(page, '김영국').click();
+  await expect(up).toHaveCount(0);
+  await expect(down).toHaveCount(2);
+  /*
+    ⚠️ **전체정보뷰에는 이 화살표가 붙지 않는다.** 그 화면은 모든 줄이 펴진 표라 여닫을
+    것이 없다 — 여닫히지 않는 줄에 여닫기 표시가 붙으면 그것이 곧 고장이다.
+  */
+  await page.getByRole('button', { name: '전체정보뷰' }).click();
+  await expect(down).toHaveCount(0);
+  await expect(up).toHaveCount(0);
 });
 
 // 한 번에 하나만 편다. 여러 줄이 펼쳐지면 목록으로 되돌린 이유가 사라진다.
@@ -396,14 +630,34 @@ test('분석이 실패한 통화는 이유·코드를 보이고 재분석을 부
   // 🔴 뜻을 모르는 공급자 코드라도 **코드는 보여 준다.** 이것이 없으면 다음에도 추측뿐이다.
   await expect(page.getByText(/코드: DataInspectionFailed/)).toHaveCount(1);
   await expect(page.getByText('멈춤', { exact: true })).toBeVisible();
-  // 저장된 원문은 상세에서 그대로 볼 수 있다.
-  await page.getByRole('button', { name: '저장된 원문 보기' }).click();
+  /*
+    분석이 실패해도 **받아쓰기는 끝난 통화**라 원문은 남아 있다. 그 원문으로 가는 길은
+    보고서를 거치지 않는다 — 읽을 분석이 없는 통화에서 보고서를 한 번 지나게 하는 것은
+    빈 방을 한 칸 더 지나게 하는 것과 같다.
+  */
+  await page.getByRole('button', { name: '최실패 통화 원문' }).click();
+  await expect(page.getByRole('heading', { name: '최실패 통화 원문' })).toBeVisible();
   await expect(page.getByText('다음 주에 다시 연락드리겠습니다.', { exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: '통화 요약', exact: true }).click();
+  await page.getByRole('button', { name: '뒤로', exact: true }).click();
+  /*
+    보고서 쪽은 **왜 비었는지**를 말하고, 거기서도 원문으로 갈 길을 준다 — 원문이 형제 화면으로
+    나가면서 이 자리가 막다른 길이 되지 않게 하는 것이 그 버튼이다.
+
+    ⚠️ **주소로 직접 연다.** 실패한 통화의 목록 줄에는 보고서로 가는 버튼이 없다(읽을 분석이
+    없는 통화에서 빈 방을 한 칸 지나게 하지 않는다). 그래도 이 화면에 닿는 길은 있다 —
+    북마크·새로고침, 그리고 **보고서를 열어 둔 채 분석이 실패하는 경우**다.
+  */
+  await page.goto('/calls/call-3');
   await expect(page.getByText(/코드: DataInspectionFailed\) 목록에서 다시 시도하면/)).toBeVisible();
-  // 분석이 없으면 요약과 원문 말고 누를 탭이 없다. 빈 탭을 띄워 두고 헛걸음시키지 않는다.
-  await expect(page.getByRole('tab')).toHaveCount(2);
-  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  // 분석이 없으니 세울 구획도 없다. 빈 제목을 늘어놓고 헛걸음시키지 않는다.
+  await expect(page.getByRole('heading', { name: '요약', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '최실패 통화 원문 보기' }).click();
+  await expect(page.getByRole('heading', { name: '최실패 통화 원문' })).toBeVisible();
+  await page.getByRole('button', { name: '뒤로', exact: true }).click();
+  // 🔴 돌아갈 기록이 없으면(주소로 바로 열기) 목록을 새로 연다. 빈 화면에 갇히지 않는다.
+  await page.getByRole('button', { name: '뒤로', exact: true }).click();
+  await expect(page).toHaveURL(/\/calls$/);
+  await briefRow(page, '최실패').click();
   // 다시 시도는 `reanalyze` 다 — 오디오를 다시 전사하지 않고 분석만 다시 돈다.
   await page.getByRole('button', { name: '분석 다시 시도' }).click();
   await expect(page.getByText('내용 정리하는 중', { exact: true })).toBeVisible();
@@ -438,13 +692,13 @@ test('서버가 고쳐야 할 실패에는 다시 시도 버튼이 서지 않고
   await expect(page.getByText(/서버에 정해 둔 시간이 모자랍니다\. 다시 시도해도 같으니 저희가 고쳐야 합니다\. \(코드: BUDGET_TOO_SMALL\)/)).toBeVisible();
   await expect(page.getByRole('button', { name: '분석 다시 시도' })).toHaveCount(0);
   // ⚠️ 버튼이 없다고 원문까지 잠그지는 않는다 — 받아쓰기는 끝난 통화다.
-  await expect(page.getByRole('button', { name: '저장된 원문 보기' })).toBeVisible();
-  // 상세의 요약 탭도 있지도 않은 버튼을 찾아가라고 말하지 않는다.
-  await page.getByRole('button', { name: '저장된 원문 보기' }).click();
-  await page.getByRole('tab', { name: '통화 요약', exact: true }).click();
-  await expect(page.getByText(/\(코드: BUDGET_TOO_SMALL\)/).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: '박예산 통화 원문' })).toBeVisible();
+  // 보고서 화면도 있지도 않은 버튼을 찾아가라고 말하지 않는다(⚠️ 주소로 연다 — 위 참조).
+  await page.goto('/calls/call-budget');
+  await expect(page.getByText(/\(코드: BUDGET_TOO_SMALL\)/)).toBeVisible();
   await expect(page.getByText(/목록에서 다시 시도하면/)).toHaveCount(0);
-  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  await page.getByRole('button', { name: '뒤로', exact: true }).click();
+  await expect(page).toHaveURL(/\/calls$/);
 
   // 한 줄에 하나만 펴진다 — 이 줄을 펴면 위 통화는 저절로 접힌다.
   await briefRow(page, '이소진').click();
@@ -467,100 +721,137 @@ test('받아쓰기가 실패한 통화는 다시 등록하라고만 말한다', 
   await expect(page.getByText(/녹음에서 사람 말소리를 찾지 못했습니다\. \(코드: EMPTY_TRANSCRIPT\)/)).toBeVisible();
   await expect(page.getByText('다른 녹음 파일로 다시 등록해 주세요.')).toBeVisible();
   await expect(page.getByRole('button', { name: '분석 다시 시도' })).toHaveCount(0);
+  /*
+    🔴 **원문이 없는 통화에는 「통화 원문」도 세우지 않는다.** 받아쓰기가 실패했다는 것은
+    저장된 원문이 없다는 뜻이다 — 눌러서 「저장된 통화 원문이 없습니다」만 보는 화면으로
+    보내면 버튼이 약속을 어긴 것이 된다.
+  */
+  await expect(page.getByRole('button', { name: '한전사 통화 원문' })).toHaveCount(0);
 });
 
 /**
- * 🔴 **「서버 AI로 다시 분석」은 「분석 다시 시도」와 다른 일이다.**
+ * 🔧 **「서버 AI로 다시 분석」은 이 화면에서 빠졌다.**
  *
- * 폰에서 받아쓰기·요약까지 끝내고 결과만 올린 옛 통화는 실패한 적이 없어 `COMPLETED` 로
- * 남아 있다. 그래서 실패 복구용 「분석 다시 시도」는 서지 않는데, 그 요약을 만든 것은 폰의
- * 작은 모델이라 서버 모델로 다시 돌릴 값어치가 있다 — 그 길이 상세 시트의 이 버튼이다.
+ * 되돌릴 수 없이 기존 분석을 덮어쓰고 요금을 새로 쓰는 조작이라, 보고서를 읽는 자리에 둘
+ * 것이 아니라는 판단이었다(사용자 요구). 흐름은 지우지 않고 `components/call-reanalyze.tsx`
+ * 로 옮겨 두었고 — 확인 한 단계, 보낸 뒤 버튼 치우기, 받은 답을 지금 값 **위에 얹기**가
+ * 전부 거기 있다 — 어드민 화면이 생기면 그대로 붙인다.
+ * ⚠️ 그래서 **지금은 그 컴포넌트를 부르는 화면이 없어 브라우저로 밟을 길이 없다.**
  *
- * ⚠️ 누르면 되돌릴 수 없이 기존 분석을 덮어쓰고 요금이 새로 나간다. 그래서 확인을 한 단계
- * 받고, 보낸 뒤에는 버튼을 **치운다**(비활성이 아니라 치운다 — 연타한 두 번째 누름이 첫
- * 응답보다 먼저 닿으면 방금 시작한 분석을 처음부터 다시 돌리게 되고 요금이 두 배가 된다).
- * 🔴 확인은 `confirm()` 이 아니라 화면 안의 줄로 받는다. 이 앱은 WebView 안에서 돌고,
- * 그 안에서 브라우저 모달이 뜨면 화면이 그대로 멈춘다.
+ * 여기 남기는 것은 그 화면이 사라져도 계속 지켜져야 하는 둘이다:
+ * ① 보고서는 운영의 값(모델·비용)과 되돌릴 수 없는 조작을 보이지 않는다.
+ * ② 그래도 **열어 둔 보고서는 진행을 따라가고, 돌아간 목록도 그 사실을 안다.**
  */
-test('폰에서 분석한 옛 통화를 상세에서 서버 AI로 다시 분석한다', async ({ page }) => {
-  const onPhone: CallRecord = {
+test('보고서는 모델·비용·재분석을 보이지 않지만 진행과 결과는 따라간다', async ({ page }) => {
+  const running: CallRecord = {
     call_id: 'call-phone', contact: { name: '강연정', phone: '+821012345678' },
     call: { file_name: 'old.m4a', duration: 1706, recorded_at: '2026-09-01T05:00:00Z' }, created_at: '2026-09-01T05:30:00Z',
-    status: 'COMPLETED', progress: 1, summary: '폰에서 만든 요약입니다.',
+    status: 'ANALYZING', progress: 0.8, job_state: 'ANALYZING', stage: '내용 정리하는 중',
+    summary: '폰에서 만든 요약입니다.',
     // 폰 기록에는 공급자가 없다. 서버 원가도 없다 — 서버가 쓴 돈이 없기 때문이다.
     ai: { model: 'Qwen3-0.6B-Q8_0', model_version: '1', processed_on_device: true },
     transcript: { text: '견적서를 보내 주세요.', segments: [] },
     analysis: { schema_version: 1, summary: '폰에서 만든 요약입니다.', details: [], todos: [], decisions: [], consulting: { customer_needs: [], questions: [], concerns: [], objections: [], important_points: [], followups: [] } },
   };
-  const state = server([onPhone]);
+  const state = server([running]);
   await installCalls(page, state);
   await login(page);
   await briefRow(page, '강연정').click();
-  await page.getByRole('button', { name: '강연정 분석 보기' }).click();
-  // 실패한 적이 없는 통화라 복구용 버튼은 서지 않는다.
-  await expect(page.getByRole('button', { name: '분석 다시 시도' })).toHaveCount(0);
-  // 어떤 모델이 만든 요약인지 바로 위에서 읽고 나서 다시 돌릴지 고르게 된다.
-  await expect(page.getByText('분석: Qwen3-0.6B-Q8_0')).toBeVisible();
-
-  // ① 한 번 누르면 바로 돌지 않는다. 확인을 받는다.
-  await page.getByRole('button', { name: '강연정 통화를 서버 AI로 다시 분석' }).click();
-  await expect(page.getByText('지금 있는 분석을 덮어씁니다. 되돌릴 수 없고 분석 비용이 한 번 더 듭니다.')).toBeVisible();
-  expect(state.seen).not.toContain('reanalyze:call-phone');
-  // 취소하면 아무 일도 없었던 자리로 돌아간다.
-  await page.getByRole('button', { name: '취소', exact: true }).click();
-  await expect(page.getByText('지금 있는 분석을 덮어씁니다.')).toHaveCount(0);
-  expect(state.seen).not.toContain('reanalyze:call-phone');
-
-  // ② 확인하면 그때 보낸다.
-  await page.getByRole('button', { name: '강연정 통화를 서버 AI로 다시 분석' }).click();
-  await page.getByRole('button', { name: '덮어쓰고 다시 분석', exact: true }).click();
-  await expect(page.getByText('내용 정리하는 중', { exact: true }).first()).toBeVisible();
-  // 🔴 보낸 뒤에는 누를 버튼이 남아 있지 않다. 남아 있으면 요금이 두 배가 되는 길이 열린다.
-  await expect(page.getByRole('button', { name: '덮어쓰고 다시 분석', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '강연정 통화를 서버 AI로 다시 분석' })).toHaveCount(0);
-  expect(state.seen.filter((entry) => entry === 'reanalyze:call-phone')).toHaveLength(1);
-  // 답이 목록용 요약이어도 열어 둔 원문은 그대로 있어야 한다.
-  await page.getByRole('tab', { name: '통화 원문' }).click();
-  await expect(page.getByText('견적서를 보내 주세요.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '강연정 통화 요약 보기' }).click();
+  await expect(page.getByRole('heading', { name: '강연정 상담 분석' })).toBeVisible();
+  // ① 머리말에 남는 것은 누구와 언제 얼마나 한 통화인가 한 줄뿐이다.
+  await expect(page.getByText(/^010-1234-5678 · .+ · 28:26$/)).toBeVisible();
+  await expect(page.getByText(/^분석: /)).toHaveCount(0);
+  await expect(page.getByText(/^비용: /)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /서버 AI로 다시 분석$/ })).toHaveCount(0);
+  // 진행 중인 통화의 단계 카드는 **그대로 남는다** — 걷은 것은 운영의 값이지 진행 상황이 아니다.
+  await expect(page.getByText('내용 정리하는 중', { exact: true }).last()).toBeVisible();
 
   /*
-    🔴 **열어 둔 시트가 진행을 따라간다.** 시트는 스스로 폴링하지 않는다 — 목록이 5초마다
-    묻고 있고, 그 답이 시트로 내려온다. 이 연결이 끊기면 분석이 끝나도 화면은 「내용 정리하는
-    중」에 멈춰 있고, 사용자는 서버가 죽은 줄 알고 같은 분석을 한 번 더 시킨다.
+    ② 🔴 **열어 둔 보고서가 진행을 따라간다.** 이 연결이 끊기면 분석이 끝나도 화면은 「내용
+    정리하는 중」에 멈춰 있고, 사용자는 서버가 죽은 줄 알고 같은 분석을 한 번 더 시킨다.
   */
   state.rows.set('call-phone', {
-    ...onPhone, status: 'COMPLETED', progress: 1, job_state: 'COMPLETED', stage: '분석 완료',
+    ...running, status: 'COMPLETED', progress: 1, job_state: 'COMPLETED', stage: '분석 완료',
     ai: { model: 'qwen3.7-plus', model_version: '2026-09-01', provider: 'alibaba' },
     summary: '서버가 다시 만든 요약입니다.',
-    analysis: { ...onPhone.analysis!, summary: '서버가 다시 만든 요약입니다.' },
+    analysis: { ...running.analysis!, summary: '서버가 다시 만든 요약입니다.' },
     cost: { currency: 'KRW', transcription: 0, analysis: 16.2, total: 16.2, usage: { audio_seconds: 0, input_tokens: 17800, output_tokens: 2200, reasoning_tokens: 0 } },
   });
-  await expect(page.getByText('분석: alibaba · qwen3.7-plus')).toBeVisible({ timeout: 15_000 });
-  // 🔴 서버가 받아쓰기를 한 적이 없으므로 받아쓰기 몫은 0원이다 — 통화 길이(1706초)로
-  // 계산된 금액이 여기 뜨면 쓰지도 않은 돈을 청구한 것처럼 보인다.
-  await expect(page.getByText('비용: 받아쓰기 0원 · 분석 16원 (합계 16원)')).toBeVisible();
-  await page.getByRole('tab', { name: '통화 요약', exact: true }).click();
-  await expect(page.getByText('서버가 다시 만든 요약입니다.').first()).toBeVisible();
-  // 끝난 통화에는 다시 버튼이 선다 — 한 번 더 돌릴 수 있어야 A/B 비교가 된다.
-  await expect(page.getByRole('button', { name: '강연정 통화를 서버 AI로 다시 분석' })).toBeVisible();
-  expect(state.seen.filter((entry) => entry === 'reanalyze:call-phone')).toHaveLength(1);
+  await expect(page.getByText('서버가 다시 만든 요약입니다.').last()).toBeVisible({ timeout: 15_000 });
+  // 🔴 끝난 뒤에도 모델·비용은 서지 않는다. 서버가 보낸다고 그리는 것이 아니다.
+  await expect(page.getByText(/^분석: /)).toHaveCount(0);
+  await expect(page.getByText(/^비용: /)).toHaveCount(0);
+
+  /*
+    🔴 **돌아간 목록도 이 사실을 알아야 한다.**
+
+    보고서가 떠 있는 동안 목록은 폴링을 멈춘다(같은 통화를 두 곳에서 5초마다 묻지 않으려고).
+    그 사이에 끝난 통화를 **돌아오는 길에 한 번 다시 묻지 않으면**, 목록은 방금 끝난 분석을
+    「분석 중」으로 계속 보여 준다(→ `app/calls/index.tsx` 의 `visited`).
+    ⚠️ 짧은 제한 시간이 곧 이 검사다 — 5초 폴링이 대신 고쳐 주기 전에 맞아야 한다.
+  */
+  await page.getByRole('button', { name: '뒤로', exact: true }).click();
+  await expect(briefRow(page, '강연정')).toHaveAccessibleName(/ 강연정 분석 완료 접기$/, { timeout: 3_000 });
 });
 
 /**
- * 🔴 **원문이 없으면 버튼을 세우지 않는다.** 서버가 409(`CALL_NO_TRANSCRIPT`)로 거절할
- * 버튼이다 — 누를 수 있게 세워 두고 거절당하게 하느니 처음부터 없는 편이 낫다.
+ * 🔴 **같은 통화를 두 곳에서 묻지 않는다.**
+ *
+ * 진행 중인 통화는 5초마다 상세를 다시 물어야 한다. 그런데 보고서가 시트에서 **화면**이 되면서
+ * 목록은 그 아래에 **살아 있게** 됐다 — 아무것도 하지 않으면 목록과 보고서가 같은 통화를
+ * 각자 5초마다 묻는다. 상세 조회는 서명 URL 발급과 작업 문서 읽기를 함께 하는 비싼 호출이라
+ * 그 두 배가 그대로 서버 부하가 되고, 화면에는 아무 흔적도 남지 않는다.
+ *
+ * 그래서 목록의 폴링은 **포커스를 따른다**(→ `app/calls/index.tsx` 의 `useFocusEffect`).
  */
-test('다시 분석할 원문이 없는 통화에는 서버 재분석 버튼이 서지 않는다', async ({ page }) => {
+test('보고서를 열어 두는 동안 같은 통화를 두 번씩 묻지 않는다', async ({ page }) => {
+  const running: CallRecord = {
+    call_id: 'call-run', contact: { name: '정진행', phone: '+821088887777' },
+    call: { file_name: 'live.m4a', duration: 300, recorded_at: '2026-09-17T06:00:00Z' }, created_at: '2026-09-17T06:01:00Z',
+    status: 'ANALYZING', progress: 0.8, job_state: 'ANALYZING', stage: '내용 정리하는 중', has_audio: true,
+    summary: '앞선 분석이 남긴 요약입니다.',
+  };
+  const state = server([running]);
+  await installCalls(page, state);
+  await login(page);
+  await briefRow(page, '정진행').click();
+  await page.getByRole('button', { name: '정진행 통화 요약 보기' }).click();
+  await expect(page.getByRole('heading', { name: '정진행 상담 분석' })).toBeVisible();
+  // 여기서부터 센다. 이 통화를 묻는 쪽은 보고서 하나뿐이어야 한다.
+  state.seen.length = 0;
+  await page.waitForTimeout(11_000);
+  const polls = state.seen.filter((entry) => entry === 'get:call-run').length;
+  // 5초 간격이면 11초에 두 번이다. 목록이 같이 돌면 네 번이 된다 — 그 차이를 잡는 상한이다.
+  expect(polls).toBeGreaterThanOrEqual(1);
+  expect(polls).toBeLessThanOrEqual(3);
+});
+
+/**
+ * 🔴 **원문이 없다는 사실은 원문 화면이 직접 말한다.**
+ *
+ * ┌──────────────────────────────────────────────────────────────────────────────┐
+ * │ ⚠️ **목록은 원문이 있는지 확실히 알지 못한다.** 서버가 목록 응답에 원문 유무를 실어      │
+ * │ 주지 않아(`has_audio` 같은 짝이 없다) 앱은 **작업 단계로 추정한다.**                 │
+ * └──────────────────────────────────────────────────────────────────────────────┘
+ * 폰에서 받아쓰기까지 끝내고 결과만 올린 옛 통화는 `COMPLETED` 인데 서버에 원문이 없을 수
+ * 있고, 그때 버튼이 선다. 이 테스트가 고정하는 것은 **그 경우에도 화면이 빈 채로 남지
+ * 않는다**는 것이다 — 서버가 `has_transcript` 를 주면 버튼 자체가 사라지고, 그때 이 테스트는
+ * 「버튼이 서지 않는다」로 바뀐다.
+ */
+test('원문이 없는 통화는 원문 화면이 없다고 말한다', async ({ page }) => {
   const { transcript: _gone, ...noText } = done;
   await installCalls(page, server([{ ...noText, call_id: 'call-notext', contact: { name: '무원문', phone: '+821099998888' } }]));
   await login(page);
   await briefRow(page, '무원문').click();
   await page.getByRole('button', { name: '무원문 분석 보기' }).click();
-  // 분석은 보이는데 — 즉 상세는 제대로 받았는데 — 버튼만 없다.
-  await expect(page.getByText('도입 견적을 요청한 통화입니다.').first()).toBeVisible();
-  await expect(page.getByRole('button', { name: '무원문 통화를 서버 AI로 다시 분석' })).toHaveCount(0);
-  // 버튼이 없는 이유가 「원문이 없어서」라는 것을 원문 탭이 직접 말한다.
-  await page.getByRole('tab', { name: '통화 원문' }).click();
+  // 분석은 보인다 — 즉 상세는 제대로 받았고, 없는 것은 원문뿐이다.
+  // ⚠️ `.last()` — 목록이 아래에 숨은 채 살아 있다(위 `BUDGET_TOO_SMALL` 주석과 같은 이유).
+  await expect(page.getByText('도입 견적을 요청한 통화입니다.').last()).toBeVisible();
+  // 분석이 있으므로 보고서는 원문으로 가는 길을 따로 권하지 않는다.
+  await expect(page.getByRole('button', { name: '무원문 통화 원문 보기' })).toHaveCount(0);
+  await page.getByRole('button', { name: '뒤로', exact: true }).click();
+  await page.getByRole('button', { name: '무원문 통화 원문' }).click();
   await expect(page.getByText('저장된 통화 원문이 없습니다.')).toBeVisible();
 });
 
@@ -702,12 +993,12 @@ test('목록은 limit 만큼 한 번에 받고 아래로 내리면 이어 붙인
   });
   await login(page);
   // 한 번에 50건. 예전처럼 30+30 으로 나눠 부르지 않는다.
-  await expect(page.getByText('불러온 50건', { exact: true })).toBeVisible();
+  await expect(page.getByText('50건', { exact: true })).toBeVisible();
   expect(asked).toEqual([{ limit: '50', cursor: null }]);
   await expect(page.getByText('b통화0', { exact: true })).toHaveCount(0);
   // 바닥이 가까워지면 다음 묶음이 붙는다.
   await page.getByText('a통화49', { exact: true }).scrollIntoViewIfNeeded();
-  await expect(page.getByText('불러온 60건', { exact: true })).toBeVisible();
+  await expect(page.getByText('60건', { exact: true })).toBeVisible();
   await expect(page.getByText('b통화9', { exact: true })).toBeVisible();
   await expect(page.getByText('마지막 통화까지 모두 불러왔습니다.')).toBeVisible();
   expect(asked[1]).toEqual({ limit: '50', cursor: 'p1' });
@@ -757,7 +1048,19 @@ test('검색어가 바뀌면 커서를 버리고 처음부터 받는다', async 
   await expect(page.getByText('김영국', { exact: true })).toBeVisible();
   const box = page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true });
   await box.fill('김');
-  await expect(page.getByText(/^검색 결과 \d+건/)).toBeVisible();
+  /*
+    🔴 **디바운스(300ms)가 끝나고 실제로 요청이 나갈 때까지 기다린다.** 기다리지 않고 다음
+    글자를 치면 이 검색어는 영영 나가지 않아, 아래 「검색어마다 커서를 새로 시작한다」가
+    빈 배열을 보고 통과해 버린다.
+  */
+  await expect.poll(() => asked.filter((entry) => entry.q === '김').length).toBeGreaterThan(0);
+  /*
+    머리말 없이 **수만** 적는다. 「불러온」·「검색 결과」는 붙은 자리가 목록 바로 위라 이미
+    아는 사실을 한 번 더 말하는 꼴이고, 그만큼 숫자가 늦게 읽힌다.
+    ⚠️ 뒤의 `+` 는 **커서가 남아 있는 동안만** 붙는다(= 이 수가 전부가 아니라는 뜻). 여기서는
+    앱이 곧바로 다음 묶음을 이어 받아 커서를 비우므로 붙었다 사라진다 — 그래서 선택적으로 본다.
+  */
+  await expect(page.getByText(/^\d+건\+?$/)).toBeVisible();
   await box.fill('박');
   await expect(page.getByText('박검색', { exact: true })).toBeVisible();
   // 검색어별 **첫 요청**에는 커서가 붙지 않는다. 이어 받는 요청만 그 검색어의 커서를 쓴다.
