@@ -33,9 +33,7 @@ import { colors, fonts, radii, text } from '@/constants/theme';
 import { PASSWORD_CHANGED_NOTICE, useUserStore } from '@/store/user-store';
 import { getStoredTokens, isStoredTokens, saveTokens, type StoredTokens } from '@/lib/auth-tokens';
 import { handleSmsRequest, type SmsShellRequest } from '@/lib/sms-shell-handler';
-import { handleCallRequest, type CallShellRequest } from '@/lib/call-shell-handler';
 import { startCallService } from '@/lib/call-runtime';
-import { getSessionVersion } from '@/lib/auth-tokens';
 
 /**
  * 웹이 토큰을 읽는 localStorage 키. `@/lib/auth-tokens` 의 `KEY` 와 **같은 값이어야 한다.**
@@ -141,7 +139,6 @@ function linkToPath(url: string): string | null {
 /** 웹이 껍데기에 보내는 말. `native-bridge.web.ts` 의 `OutboundMessage` 와 1:1 이다. */
 type ShellMessage =
   | SmsShellRequest
-  | CallShellRequest
   | { type: 'ready' }
   | { type: 'tokens'; tokens: StoredTokens | null; reason?: 'password-changed' };
 
@@ -155,7 +152,7 @@ type ShellMessage =
  * 여기서는 전역과 localStorage 만 건드린다.
  */
 function buildInjectedScript(tokens: StoredTokens | null): string {
-  const nativeInfo = JSON.stringify({ platform: Platform.OS, appVersion: APP_VERSION, smsApiVersion: 1, callApiVersion: 1 });
+  const nativeInfo = JSON.stringify({ platform: Platform.OS, appVersion: APP_VERSION, smsApiVersion: 1 });
 
   /*
    * **`JSON.stringify` 를 두 번 쓴다.** 한 번은 토큰셋 → JSON 문자열(웹이 그대로 저장해 읽을
@@ -325,16 +322,6 @@ export function WebShell() {
       return;
     }
     switch (message?.type) {
-      case 'call': {
-        const owner = useUserStore.getState().profile?.userId;
-        const version = getSessionVersion();
-        if (!owner || useUserStore.getState().stage !== 'authed') return;
-        void handleCallRequest(message).then(reply => {
-          if (getSessionVersion() !== version || useUserStore.getState().profile?.userId !== owner || useUserStore.getState().stage !== 'authed') return;
-          ref.current?.injectJavaScript(`window.__NATURE_CALL_BRIDGE__?.receive(${JSON.stringify(reply)}); true;`);
-        });
-        return;
-      }
       case 'sms':
         void handleSmsRequest(message).then((reply) => {
           ref.current?.injectJavaScript(`(window.__NATURE_SMS_BRIDGE__ || window.__JAYEON_SMS_BRIDGE__)?.receive(${JSON.stringify(reply)}); true;`);
