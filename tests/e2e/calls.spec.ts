@@ -102,7 +102,10 @@ async function installCalls(page: Page, server: Server) {
     const current = server.rows.get(id)!;
     const again: CallRecord = { ...current, status: 'ANALYZING', progress: 0.8, job_state: 'ANALYZING', stage: '내용 정리하는 중', error: null };
     server.rows.set(id, again);
-    await route.fulfill({ json: again });
+    // 🔴 서버가 돌려주는 것은 **목록용 요약**이다(§`internal/calls/audio.go` 의 `summaryRecord`).
+    // 원문·분석이 실려 오지 않으므로, 앱이 이 답으로 화면을 통째로 갈아 끼우면 열어 둔
+    // 원문 탭이 빈 화면이 된다. 그 실수를 테스트가 잡을 수 있게 같은 모양으로 돌려준다.
+    await route.fulfill({ json: listed(again) });
   });
 }
 
@@ -464,6 +467,101 @@ test('받아쓰기가 실패한 통화는 다시 등록하라고만 말한다', 
   await expect(page.getByText(/녹음에서 사람 말소리를 찾지 못했습니다\. \(코드: EMPTY_TRANSCRIPT\)/)).toBeVisible();
   await expect(page.getByText('다른 녹음 파일로 다시 등록해 주세요.')).toBeVisible();
   await expect(page.getByRole('button', { name: '분석 다시 시도' })).toHaveCount(0);
+});
+
+/**
+ * 🔴 **「서버 AI로 다시 분석」은 「분석 다시 시도」와 다른 일이다.**
+ *
+ * 폰에서 받아쓰기·요약까지 끝내고 결과만 올린 옛 통화는 실패한 적이 없어 `COMPLETED` 로
+ * 남아 있다. 그래서 실패 복구용 「분석 다시 시도」는 서지 않는데, 그 요약을 만든 것은 폰의
+ * 작은 모델이라 서버 모델로 다시 돌릴 값어치가 있다 — 그 길이 상세 시트의 이 버튼이다.
+ *
+ * ⚠️ 누르면 되돌릴 수 없이 기존 분석을 덮어쓰고 요금이 새로 나간다. 그래서 확인을 한 단계
+ * 받고, 보낸 뒤에는 버튼을 **치운다**(비활성이 아니라 치운다 — 연타한 두 번째 누름이 첫
+ * 응답보다 먼저 닿으면 방금 시작한 분석을 처음부터 다시 돌리게 되고 요금이 두 배가 된다).
+ * 🔴 확인은 `confirm()` 이 아니라 화면 안의 줄로 받는다. 이 앱은 WebView 안에서 돌고,
+ * 그 안에서 브라우저 모달이 뜨면 화면이 그대로 멈춘다.
+ */
+test('폰에서 분석한 옛 통화를 상세에서 서버 AI로 다시 분석한다', async ({ page }) => {
+  const onPhone: CallRecord = {
+    call_id: 'call-phone', contact: { name: '강연정', phone: '+821012345678' },
+    call: { file_name: 'old.m4a', duration: 1706, recorded_at: '2026-09-01T05:00:00Z' }, created_at: '2026-09-01T05:30:00Z',
+    status: 'COMPLETED', progress: 1, summary: '폰에서 만든 요약입니다.',
+    // 폰 기록에는 공급자가 없다. 서버 원가도 없다 — 서버가 쓴 돈이 없기 때문이다.
+    ai: { model: 'Qwen3-0.6B-Q8_0', model_version: '1', processed_on_device: true },
+    transcript: { text: '견적서를 보내 주세요.', segments: [] },
+    analysis: { schema_version: 1, summary: '폰에서 만든 요약입니다.', details: [], todos: [], decisions: [], consulting: { customer_needs: [], questions: [], concerns: [], objections: [], important_points: [], followups: [] } },
+  };
+  const state = server([onPhone]);
+  await installCalls(page, state);
+  await login(page);
+  await briefRow(page, '강연정').click();
+  await page.getByRole('button', { name: '강연정 분석 보기' }).click();
+  // 실패한 적이 없는 통화라 복구용 버튼은 서지 않는다.
+  await expect(page.getByRole('button', { name: '분석 다시 시도' })).toHaveCount(0);
+  // 어떤 모델이 만든 요약인지 바로 위에서 읽고 나서 다시 돌릴지 고르게 된다.
+  await expect(page.getByText('분석: Qwen3-0.6B-Q8_0')).toBeVisible();
+
+  // ① 한 번 누르면 바로 돌지 않는다. 확인을 받는다.
+  await page.getByRole('button', { name: '강연정 통화를 서버 AI로 다시 분석' }).click();
+  await expect(page.getByText('지금 있는 분석을 덮어씁니다. 되돌릴 수 없고 분석 비용이 한 번 더 듭니다.')).toBeVisible();
+  expect(state.seen).not.toContain('reanalyze:call-phone');
+  // 취소하면 아무 일도 없었던 자리로 돌아간다.
+  await page.getByRole('button', { name: '취소', exact: true }).click();
+  await expect(page.getByText('지금 있는 분석을 덮어씁니다.')).toHaveCount(0);
+  expect(state.seen).not.toContain('reanalyze:call-phone');
+
+  // ② 확인하면 그때 보낸다.
+  await page.getByRole('button', { name: '강연정 통화를 서버 AI로 다시 분석' }).click();
+  await page.getByRole('button', { name: '덮어쓰고 다시 분석', exact: true }).click();
+  await expect(page.getByText('내용 정리하는 중', { exact: true }).first()).toBeVisible();
+  // 🔴 보낸 뒤에는 누를 버튼이 남아 있지 않다. 남아 있으면 요금이 두 배가 되는 길이 열린다.
+  await expect(page.getByRole('button', { name: '덮어쓰고 다시 분석', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '강연정 통화를 서버 AI로 다시 분석' })).toHaveCount(0);
+  expect(state.seen.filter((entry) => entry === 'reanalyze:call-phone')).toHaveLength(1);
+  // 답이 목록용 요약이어도 열어 둔 원문은 그대로 있어야 한다.
+  await page.getByRole('tab', { name: '통화 원문' }).click();
+  await expect(page.getByText('견적서를 보내 주세요.', { exact: true })).toBeVisible();
+
+  /*
+    🔴 **열어 둔 시트가 진행을 따라간다.** 시트는 스스로 폴링하지 않는다 — 목록이 5초마다
+    묻고 있고, 그 답이 시트로 내려온다. 이 연결이 끊기면 분석이 끝나도 화면은 「내용 정리하는
+    중」에 멈춰 있고, 사용자는 서버가 죽은 줄 알고 같은 분석을 한 번 더 시킨다.
+  */
+  state.rows.set('call-phone', {
+    ...onPhone, status: 'COMPLETED', progress: 1, job_state: 'COMPLETED', stage: '분석 완료',
+    ai: { model: 'qwen3.7-plus', model_version: '2026-09-01', provider: 'alibaba' },
+    summary: '서버가 다시 만든 요약입니다.',
+    analysis: { ...onPhone.analysis!, summary: '서버가 다시 만든 요약입니다.' },
+    cost: { currency: 'KRW', transcription: 0, analysis: 16.2, total: 16.2, usage: { audio_seconds: 0, input_tokens: 17800, output_tokens: 2200, reasoning_tokens: 0 } },
+  });
+  await expect(page.getByText('분석: alibaba · qwen3.7-plus')).toBeVisible({ timeout: 15_000 });
+  // 🔴 서버가 받아쓰기를 한 적이 없으므로 받아쓰기 몫은 0원이다 — 통화 길이(1706초)로
+  // 계산된 금액이 여기 뜨면 쓰지도 않은 돈을 청구한 것처럼 보인다.
+  await expect(page.getByText('비용: 받아쓰기 0원 · 분석 16원 (합계 16원)')).toBeVisible();
+  await page.getByRole('tab', { name: '통화 요약', exact: true }).click();
+  await expect(page.getByText('서버가 다시 만든 요약입니다.').first()).toBeVisible();
+  // 끝난 통화에는 다시 버튼이 선다 — 한 번 더 돌릴 수 있어야 A/B 비교가 된다.
+  await expect(page.getByRole('button', { name: '강연정 통화를 서버 AI로 다시 분석' })).toBeVisible();
+  expect(state.seen.filter((entry) => entry === 'reanalyze:call-phone')).toHaveLength(1);
+});
+
+/**
+ * 🔴 **원문이 없으면 버튼을 세우지 않는다.** 서버가 409(`CALL_NO_TRANSCRIPT`)로 거절할
+ * 버튼이다 — 누를 수 있게 세워 두고 거절당하게 하느니 처음부터 없는 편이 낫다.
+ */
+test('다시 분석할 원문이 없는 통화에는 서버 재분석 버튼이 서지 않는다', async ({ page }) => {
+  const { transcript: _gone, ...noText } = done;
+  await installCalls(page, server([{ ...noText, call_id: 'call-notext', contact: { name: '무원문', phone: '+821099998888' } }]));
+  await login(page);
+  await briefRow(page, '무원문').click();
+  await page.getByRole('button', { name: '무원문 분석 보기' }).click();
+  // 분석은 보이는데 — 즉 상세는 제대로 받았는데 — 버튼만 없다.
+  await expect(page.getByText('도입 견적을 요청한 통화입니다.').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: '무원문 통화를 서버 AI로 다시 분석' })).toHaveCount(0);
+  // 버튼이 없는 이유가 「원문이 없어서」라는 것을 원문 탭이 직접 말한다.
+  await page.getByRole('tab', { name: '통화 원문' }).click();
+  await expect(page.getByText('저장된 통화 원문이 없습니다.')).toBeVisible();
 });
 
 /** 등록 한 번. 세 걸음이 **순서대로** 일어나야 한다. */
