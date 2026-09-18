@@ -103,6 +103,19 @@ function server(rows: CallRecord[] = [done]): Server {
   return { rows: new Map(rows.map((row) => [row.call_id, row])), seen: [], lists: [], holdPut: false };
 }
 
+const isMobile = () => test.info().project.name === 'mobile';
+
+/**
+ * 간단뷰(기본)의 접히는 줄.
+ *
+ * 한 줄에 서는 것은 **통화일시 · 이름 · 상태**뿐이고, 줄의 접근성 이름은 그 셋에 「펼치기/
+ * 접기」를 붙인 말이다. 일시는 기기 시간대에 따라 달라지므로 형태만 맞춘다 — 테스트가 도는
+ * 기계의 시간대를 가정하면 CI 에서만 깨진다.
+ */
+function briefRow(page: Page, name: string) {
+  return page.getByRole('button', { name: new RegExp(`^\\d{2}\\.\\d{2}\\.\\d{2} (오전|오후) \\d{1,2}:\\d{2} ${name} .+ (펼치기|접기)$`) });
+}
+
 async function login(page: Page) {
   await page.goto('/login');
   await page.getByLabel('이메일', { exact: true }).fill('call@example.com');
@@ -129,6 +142,8 @@ test('내용이 있는 분석은 상세·할 일·상담 분석 탭까지 보여
   await page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true }).fill('없는 이름');
   await expect(page.getByText('검색어에 해당하는 통화가 없습니다.')).toBeVisible();
   await page.getByRole('textbox', { name: '이름 또는 폰번호 뒷4자리', exact: true }).fill('김영');
+  // 분석을 여는 길은 줄을 펼친 뒤다 — 목록은 한 줄만 세운다.
+  await briefRow(page, '김영국').click();
   await page.getByRole('button', { name: '김영국 분석 보기' }).click();
   await expect(page.getByRole('tab', { name: '통화 요약', exact: true })).toHaveAttribute('aria-selected', 'true');
   // 어떤 AI 가 만들었는지는 결과를 의심할 때 첫 단서다.
@@ -143,25 +158,77 @@ test('내용이 있는 분석은 상세·할 일·상담 분석 탭까지 보여
   await expect(page.getByText('견적서를 보내 주세요.', { exact: true })).toBeVisible();
 });
 
-// 열은 폰에서 좁다. 기본은 요약 보기이고, 요약 한 줄은 「전체정보뷰」에서만 편다.
-test('목록은 요약·전체 보기를 오가고 녹음은 상세에서 받은 주소로 연다', async ({ page }) => {
+/**
+ * 🔴 **간단뷰는 목록이 먼저다.**
+ *
+ * 모든 줄을 펴 두면 진행 중인 통화 두세 건만으로 한 화면이 차서 「언제 누구와 통화했나」를
+ * 훑을 수가 없다. 한 줄에는 통화일시·이름·상태만 세우고 나머지는 누른 줄에서만 편다
+ * (발송 이력과 같은 규칙 — §`components/campaign-history-sheet.tsx`).
+ */
+test('간단뷰는 한 줄만 세우고 누른 줄을 펼쳤다 다시 눌러 접는다', async ({ page }) => {
   await installCalls(page, server());
   await login(page);
-  await expect(page.getByText('김영국', { exact: true })).toBeVisible();
+  const row = briefRow(page, '김영국');
+  await expect(row).toBeVisible();
+  // 한 줄에 서는 것은 셋뿐이다. 나머지는 접혀 있다.
+  await expect(row).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByText('010-1234-5678', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('3분 00초', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '김영국 분석 보기' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '김영국 통화 요약 보기' })).toHaveCount(0);
-  // 분석이 끝난 통화의 상태 자리는 「분석 보기」다.
-  await expect(page.getByRole('button', { name: '김영국 분석 보기' })).toBeVisible();
+  // 누르면 그 줄 아래로 펼쳐진다 — 지금까지 목록이 보여 주던 것이 전부 이 안에 있다.
+  await row.click();
+  await expect(row).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByText('010-1234-5678', { exact: true })).toBeVisible();
   // 통화시간과 ▶ 는 한 칸에 선다(180초 = 3분 00초).
   await expect(page.getByText('3분 00초', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '김영국 분석 보기' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '김영국 통화 요약 보기' })).toBeVisible();
   // 🔴 목록이 아는 것은 `has_audio` 뿐이다. 주소는 패널이 상세를 물어본 뒤 받는다.
   const listen = page.getByRole('button', { name: '김영국 녹음 듣기', exact: true });
   await expect(listen).toBeEnabled();
   await listen.click();
   await expect(page.locator('audio')).toHaveAttribute('src', /storage\.test/);
   await page.getByRole('button', { name: '닫기', exact: true }).click();
+  // 같은 줄을 다시 누르면 닫힌다.
+  await row.click();
+  await expect(row).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByText('3분 00초', { exact: true })).toHaveCount(0);
+});
+
+// 한 번에 하나만 편다. 여러 줄이 펼쳐지면 목록으로 되돌린 이유가 사라진다.
+test('다른 줄을 누르면 앞서 펼친 줄이 닫힌다', async ({ page }) => {
+  const other: CallRecord = { ...done, call_id: 'call-b', contact: { name: '이둘째', phone: '+821022223333' }, call: { ...done.call, duration: 65, recorded_at: '2026-09-17T01:00:00Z' } };
+  await installCalls(page, server([done, other]));
+  await login(page);
+  await briefRow(page, '김영국').click();
+  await expect(page.getByText('010-1234-5678', { exact: true })).toBeVisible();
+  await briefRow(page, '이둘째').click();
+  await expect(page.getByText('010-2222-3333', { exact: true })).toBeVisible();
+  await expect(page.getByText('010-1234-5678', { exact: true })).toHaveCount(0);
+  await expect(briefRow(page, '김영국')).toHaveAttribute('aria-expanded', 'false');
+});
+
+/**
+ * 전체정보뷰는 **접지 않는다** — 「자세히 보겠다」고 고른 화면에서 다시 눌러 펴게 하면
+ * 고른 의미가 없다. 넓은 화면에서는 열로, 폰에서는 줄로 쌓아 같은 값을 모두 보인다.
+ */
+test('전체정보뷰는 모든 칸을 편 채 보여 주고 넓은 화면에서는 열로 세운다', async ({ page }) => {
+  await installCalls(page, server());
+  await login(page);
   await page.getByRole('button', { name: '전체정보뷰', exact: true }).click();
+  // 접히는 줄 자체가 사라진다.
+  await expect(briefRow(page, '김영국')).toHaveCount(0);
+  await expect(page.getByText('010-1234-5678', { exact: true })).toBeVisible();
+  await expect(page.getByText('3분 00초', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '김영국 분석 보기' })).toBeVisible();
   await expect(page.getByRole('button', { name: '김영국 통화 요약 보기' })).toBeVisible();
+  // 표 머리글은 넓은 화면에만 선다. 폰에서 가로 스크롤은 한 손으로 쓰기 어렵다.
+  for (const column of ['통화일시', '이름', '전화번호', '통화시간', '상태', '요약 한 줄']) {
+    await expect(page.getByText(column, { exact: true })).toHaveCount(isMobile() ? 0 : 1);
+  }
   await page.getByRole('button', { name: '간단뷰', exact: true }).click();
+  await expect(briefRow(page, '김영국')).toBeVisible();
   await expect(page.getByRole('button', { name: '김영국 통화 요약 보기' })).toHaveCount(0);
 });
 
@@ -171,6 +238,7 @@ test('원본이 없는 통화는 재생 버튼을 잠그고 이유를 말한다'
   const { has_audio: _gone, audio_url: _url, ...noAudio } = done;
   await installCalls(page, server([{ ...noAudio, call_id: 'call-old', contact: { name: '박옛날', phone: '+821011112222' }, ai: { model: 'qwen', model_version: '1', processed_on_device: true } }]));
   await login(page);
+  await briefRow(page, '박옛날').click();
   const listen = page.getByRole('button', { name: /^박옛날 녹음 듣기 · / });
   await expect(listen).toBeVisible();
   await expect(listen).toBeDisabled();
@@ -188,6 +256,10 @@ test('서버가 처리 중인 통화는 단계와 서버 문구·전체 진행�
   await installCalls(page, state);
   await login(page);
   await expect(page.getByText('이진행', { exact: true })).toBeVisible();
+  // 단계 카드는 펼친 줄에만 선다. 접힌 줄은 상태 한 낱말로 말한다.
+  await expect(page.getByText('음성 변환 중', { exact: true })).toBeVisible();
+  await expect(page.getByText('받아쓰는 중', { exact: true })).toHaveCount(0);
+  await briefRow(page, '이진행').click();
   // 네 단계: 업로드는 끝났고(서버에 기록이 있다는 것이 그 증거다), 음성 변환이 돈다.
   await expect(page.getByText('업로드', { exact: true })).toBeVisible();
   await expect(page.getByText('음성 변환', { exact: true })).toBeVisible();
@@ -200,12 +272,42 @@ test('서버가 처리 중인 통화는 단계와 서버 문구·전체 진행�
   state.rows.set('call-2', { ...running, status: 'ANALYZING', progress: 0.8, job_state: 'ANALYZING', stage: '내용 정리하는 중' });
   await expect(page.getByText('내용 정리하는 중', { exact: true })).toBeVisible({ timeout: 15_000 });
   expect(state.seen.filter((entry) => entry === 'get:call-2').length).toBeGreaterThan(0);
+  // 🔴 펼친 줄은 폴링으로 목록이 갱신돼도 **열린 채** 남는다(펼침을 `call_id` 로 들고 있다).
+  await expect(briefRow(page, '이진행')).toHaveAttribute('aria-expanded', 'true');
   // 끝난 뒤에는 폴링이 멈춘다.
   state.rows.set('call-2', { ...running, status: 'COMPLETED', progress: 1, job_state: 'COMPLETED', stage: '분석 완료', summary: '끝났습니다.' });
   await expect(page.getByRole('button', { name: '이진행 분석 보기' })).toBeVisible({ timeout: 15_000 });
+  await expect(briefRow(page, '이진행')).toHaveAttribute('aria-expanded', 'true');
   const settled = state.seen.length;
   await page.waitForTimeout(7_000);
   expect(state.seen.length).toBe(settled);
+});
+
+/**
+ * 🔴 **접힌 줄도 살아 있다.**
+ *
+ * 폴링은 화면이 무엇을 펼쳤는지 보지 않고 `isActive` 인 통화를 묻는다 — 접힌 줄을 폴링에서
+ * 빼면 사용자가 열어 보기 전까지 「음성 변환 중」이 영원히 그대로 남는다.
+ */
+test('접힌 줄도 폴링으로 상태가 갱신된다', async ({ page }) => {
+  const running: CallRecord = {
+    call_id: 'call-8', contact: { name: '박접힘', phone: '+821044445555' },
+    call: { file_name: 'live.m4a', duration: null, recorded_at: '2026-09-17T04:00:00Z' },
+    created_at: new Date(Date.now() - 60_000).toISOString(),
+    status: 'TRANSCRIBING', progress: 0.4, job_state: 'ASR_POLLING', stage: '받아쓰는 중', has_audio: true,
+  };
+  const state = server([running]);
+  await installCalls(page, state);
+  await login(page);
+  const row = briefRow(page, '박접힘');
+  await expect(row).toHaveAttribute('aria-expanded', 'false');
+  await expect(row).toHaveAccessibleName(/ 박접힘 음성 변환 중 펼치기$/);
+  // 한 번도 펼치지 않았는데도 상태가 따라온다.
+  state.rows.set('call-8', { ...running, status: 'ANALYZING', progress: 0.8, job_state: 'ANALYZING', stage: '내용 정리하는 중' });
+  await expect(row).toHaveAccessibleName(/ 박접힘 분석 중 펼치기$/, { timeout: 15_000 });
+  state.rows.set('call-8', { ...running, status: 'COMPLETED', progress: 1, job_state: 'COMPLETED', stage: '분석 완료', summary: '끝났습니다.' });
+  await expect(row).toHaveAccessibleName(/ 박접힘 분석 완료 펼치기$/, { timeout: 15_000 });
+  expect(state.seen.filter((entry) => entry === 'get:call-8').length).toBeGreaterThan(0);
 });
 
 test('분석이 실패한 통화는 이유·코드를 보이고 재분석을 부른다', async ({ page }) => {
@@ -219,6 +321,9 @@ test('분석이 실패한 통화는 이유·코드를 보이고 재분석을 부
   const state = server([failed]);
   await installCalls(page, state);
   await login(page);
+  // 접힌 줄은 「분석 실패」한 낱말로 말하고, 이유와 코드는 펼친 칸에 있다.
+  await expect(briefRow(page, '최실패')).toHaveAccessibleName(/ 최실패 분석 실패 펼치기$/);
+  await briefRow(page, '최실패').click();
   // 🔴 뜻을 모르는 공급자 코드라도 **코드는 보여 준다.** 이것이 없으면 다음에도 추측뿐이다.
   await expect(page.getByText(/코드: DataInspectionFailed/)).toHaveCount(1);
   await expect(page.getByText('멈춤', { exact: true })).toBeVisible();
@@ -244,6 +349,7 @@ test('받아쓰기가 실패한 통화는 다시 등록하라고만 말한다', 
     status: 'TRANSCRIPTION_FAILED', progress: 0.4, job_state: 'TRANSCRIPTION_FAILED', stage: '받아쓰기에 실패했어요', error: 'EMPTY_TRANSCRIPT',
   }]));
   await login(page);
+  await briefRow(page, '한전사').click();
   await expect(page.getByText(/녹음에서 사람 말소리를 찾지 못했습니다\. \(코드: EMPTY_TRANSCRIPT\)/)).toBeVisible();
   await expect(page.getByText('다른 녹음 파일로 다시 등록해 주세요.')).toBeVisible();
   await expect(page.getByRole('button', { name: '분석 다시 시도' })).toHaveCount(0);
@@ -263,6 +369,9 @@ test('파일을 고르면 업로드 주소를 받아 저장소에 올리고 등�
   await page.getByRole('button', { name: '등록하기', exact: true }).click();
   // 등록이 끝나면 시트가 닫히고 목록에 그 통화가 선다.
   await expect(page.getByText('새통화', { exact: true })).toBeVisible();
+  // 새 줄도 접힌 채로 선다. 서버가 보낸 한 줄은 펼쳐야 나온다.
+  await expect(briefRow(page, '새통화')).toHaveAccessibleName(/ 새통화 분석 준비 펼치기$/);
+  await briefRow(page, '새통화').click();
   await expect(page.getByText('업로드 완료, 순서 기다리는 중', { exact: true })).toBeVisible();
   const flow = state.seen.filter((entry) => !entry.startsWith('get:') && entry !== 'list');
   expect(flow[0]).toMatch(/^upload-url:/);
