@@ -4,6 +4,7 @@ import { BottomSheet } from '@/components/bottom-sheet';
 import { Loading, Notice, s } from '@/components/sms-ui';
 import { callApi } from '@/lib/call-api';
 import { CallStages } from '@/components/call-stages';
+import { costLine } from '@/lib/call-cost';
 import { callFailureText, callRetryable } from '@/lib/call-errors';
 import { isActive, isFailed, missingAnalysisNotice } from '@/lib/call-progress';
 import { formatPhone } from '@/lib/phone';
@@ -58,6 +59,14 @@ export function CallDetail({ item, onClose }: { item: CallRecord; onClose: () =>
     {failure ? <Notice error message={failure} /> : null}
     {/* 어떤 AI 가 만들었는지는 결과를 의심할 때 첫 단서다. 서버가 알려 줄 때만 적는다. */}
     {record.ai?.provider || record.ai?.model ? <Text style={s.meta}>분석: {[record.ai.provider, record.ai.model].filter(Boolean).join(' · ')}</Text> : null}
+    {/*
+      이 한 건에 실제로 든 돈. 어떤 AI 를 썼는지 바로 아래에 두는 이유는 **둘을 같이 봐야
+      판단이 되기 때문**이다 — 「alibaba 로 이만큼」이 곧 공급자를 바꿀지 말지의 근거다.
+
+      🔴 서버가 금액을 안 보내면 **칸을 통째로 걷는다.** 0원으로 그리면 공짜로 읽히는데,
+      실제로는 「모른다」는 뜻이다(단가 미설정이거나 사용량이 없는 옛 통화다).
+    */}
+    {record.cost ? <Text style={s.meta}>{costLine(record.cost)}</Text> : null}
     <View style={s.row}>{tabs.map((label) => <Pressable key={label} accessibilityRole="tab" aria-selected={label === tab} accessibilityState={{ selected: label === tab }} onPress={() => setTab(label)} style={[s.choice, label === tab && s.secondary]}><Text style={label === tab ? s.link : s.body}>{label}</Text></Pressable>)}</View>
     {loading ? <Loading /> : null}{error ? <Notice error message={error} /> : null}
     {/* 옛 기록의 결정사항·중요 포인트는 탭을 따로 두지 않고 요약 아래에 붙인다. */}

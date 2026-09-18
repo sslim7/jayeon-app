@@ -44,6 +44,29 @@ export type CallStageKey = 'UPLOAD' | 'TRANSCRIBE' | 'ANALYZE' | 'DONE';
 /** 무엇이 분석했는지. `provider` 는 서버 파이프라인만, `processed_on_device` 는 옛 기기 기록만 채운다. */
 export interface CallAI { model: string; model_version: string; processed_on_device?: boolean; provider?: string }
 
+/**
+ * 통화 한 건에 **실제로 든 돈.** 단위는 원이고 서버가 계산해서 준다.
+ *
+ * 🔴 **앱은 단가를 모른다.** 단가·환율은 서버 설정이라 개정되는데, 앱이 곱하기 시작하면
+ * 단가가 바뀔 때마다 새로 배포해야 하고 그전까지 구버전 앱은 옛 금액을 계속 보여 준다
+ * (§`jayeon-was/internal/calls/cost.go`).
+ *
+ * 🔴 **정수로 반올림되어 오지 않는다.** 1원 미만이 그대로 실려 오며, 그것을 「0원」으로
+ * 적으면 공짜로 읽힌다 — 표기는 `lib/call-cost.ts` 가 맡는다.
+ *
+ * `usage` 는 금액의 **근거**다. 금액만 있으면 「이 숫자가 왜 이렇지」를 검산할 수 없다.
+ * `output_tokens` 에는 추론 토큰이 **이미 포함**돼 있고 `reasoning_tokens` 는 그 내역이다.
+ */
+export interface CallCost {
+  currency: 'KRW';
+  /** 받아쓰기(ASR) 비용. 이 제품에서는 비용의 대부분이 여기다. */
+  transcription: number;
+  /** 분석(LLM) 비용. */
+  analysis: number;
+  total: number;
+  usage: { audio_seconds: number; input_tokens: number; output_tokens: number; reasoning_tokens: number };
+}
+
 export interface CallRecord {
   call_id: string;
   contact: CallContact;
@@ -75,6 +98,14 @@ export interface CallRecord {
    * (→ `components/call-playback.tsx`).
    */
   audio_url?: string | null;
+  /**
+   * 이 통화에 든 돈. **상세(`GET /calls/{id}`)에만 온다** — 목록에는 오지 않는다.
+   *
+   * 🔴 없는 것이 정상인 경우가 셋이고 전부 오류가 아니다: ①서버에 단가 설정이 없다
+   * ②사용량이 없는 옛 통화다 ③기기 분석 시절 기록이라 사용량이 애초에 없다.
+   * **그때 「0원」을 그리면 안 된다 — 0원과 「모름」은 다르다.** 화면은 칸을 통째로 걷는다.
+   */
+  cost?: CallCost | null;
   /** 실패 코드. 사람이 읽을 문구는 앱이 만든다(→ `lib/call-errors.ts`). */
   error?: string | null;
 }
