@@ -1,0 +1,684 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e7]:
+    - navigation "Page Contents" [ref=f4e8]:
+      - generic [ref=f4e9]:
+        - generic:
+          - list
+    - generic [ref=f4e12]:
+      - generic [ref=f4e15]:
+        - link [ref=f4e17] [cursor=pointer]:
+          - /url: https://cloud.google.com/blog/products/compute/ironwood-tpus-and-new-axion-based-vms-for-your-ai-workloads
+          - paragraph [ref=f4e20]: "Google custom silicon announcements: Ironwood TPUs and new Axion VMs, designed to power the age of inference."
+        - generic [ref=f4e24]:
+          - generic [ref=f4e25]:
+            - heading "Compute Engine" [level=1] [ref=f4e29]
+            - heading "Virtual machines pricing" [level=2] [ref=f4e31]
+            - generic [ref=f4e33]:
+              - generic [ref=f4e36] [cursor=pointer]:
+                - generic [aria-hidden] [ref=f4e37]: Pricing calculator
+                - link "Pricing calculator" [ref=f4e38]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVEwWWpJeE5XSTRZaTAyTm1WaExUUm1NV0V0T0dKbVlpMHlORGhqWXpReE1XRTBaV0VRQVE9PRAIGiRCRjIwRTY2NS1ERTkzLTQ4MzMtOTQ3Mi0zOTNEODIzNTY1OUM
+              - generic [ref=f4e41] [cursor=pointer]:
+                - generic [aria-hidden] [ref=f4e42]: Get started for free
+                - link "Get started for free" [ref=f4e43]:
+                  - /url: https://console.cloud.google.com/freetrial/?redirectPath=/compute
+            - paragraph [ref=f4e47]:
+              - text: This page describes the cost of running a Compute Engine VM instance. To see the pricing for other Google Cloud products, see the
+              - link "Google Cloud pricing list" [ref=f4e48] [cursor=pointer]:
+                - /url: https://cloud.google.com/pricing/list
+              - text: .
+          - complementary "Product Highlights 1" [ref=f4e50]:
+            - heading "Product Highlights" [level=3] [ref=f4e52]
+            - separator [ref=f4e53]
+            - list [ref=f4e54]:
+              - listitem [ref=f4e56] [cursor=pointer]:
+                - link [ref=f4e57]:
+                  - /url: https://www.youtube.com/watch?v=QZ8PmZjF9vw
+                  - img "Google Cloud VM" [ref=f4e61]
+                  - generic [ref=f4e62]:
+                    - paragraph [ref=f4e63]: How to choose the right VM
+                    - paragraph [ref=f4e64]: 5-minute video explainer
+      - generic [ref=f4e67]:
+        - paragraph [ref=f4e68]: View VM prices for your workload and requirements
+        - generic [ref=f4e70]:
+          - table [ref=f4e71]:
+            - rowgroup [ref=f4e72]:
+              - row [ref=f4e73]:
+                - columnheader "Optimization" [ref=f4e74]
+                - columnheader "Workloads" [ref=f4e75]
+                - columnheader "Machine Types" [ref=f4e76]
+              - row [ref=f4e77]:
+                - cell [ref=f4e78]:
+                  - generic [ref=f4e79]:
+                    - paragraph [ref=f4e80]: General-purpose
+                    - paragraph [ref=f4e81]:
+                      - link "View prices" [ref=f4e82] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose
+                - cell [ref=f4e83]:
+                  - generic [ref=f4e84]:
+                    - paragraph [ref=f4e85]: Best price-performance ratio for a variety of workloads.
+                    - paragraph [ref=f4e86]:
+                      - link "Learn more" [ref=f4e87] [cursor=pointer]:
+                        - /url: https://docs.cloud.google.com/free/docs/free-cloud-features#compute
+                      - text: about Google Cloud free VM program for e2-micro VM instance.
+                - cell [ref=f4e88]:
+                  - generic [ref=f4e89]:
+                    - paragraph [ref=f4e90]: "Flexible: Best price-performance for balanced and flexible workloads."
+                    - paragraph [ref=f4e91]:
+                      - link "N4" [ref=f4e92] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#n4-machine-types
+                      - text: ","
+                      - link "N4A," [ref=f4e93] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#n4a-machine-types
+                      - link "N4D" [ref=f4e94] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#n4d-machine-types
+                      - text: ","
+                      - link "N2" [ref=f4e95] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#n2-machine-types
+                      - text: ","
+                      - link "N2D" [ref=f4e96] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#n2d-machine-types
+                      - text: ","
+                      - link "N1" [ref=f4e97] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#n1-machine-types
+                    - paragraph [ref=f4e98]: "Performance: Best performance with advanced capabilities."
+                    - paragraph [ref=f4e99]:
+                      - link "C4A" [ref=f4e100] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#c4a-machine-types
+                      - text: ","
+                      - link "C4" [ref=f4e101] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#c4-machine-types
+                      - text: ","
+                      - link "C4D" [ref=f4e102] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#c4d-machine-types
+                      - text: ","
+                      - link "C3" [ref=f4e103] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#c3-machine-types
+                      - text: ","
+                      - link "C3D" [ref=f4e104] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#c3d-machine-types
+                    - paragraph [ref=f4e105]: "Efficient: Lowest cost per core."
+                    - paragraph [ref=f4e106]:
+                      - link "E2" [ref=f4e107] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#e2-machine-types
+                    - paragraph [ref=f4e108]: Ampere Altra Arm processor
+                    - paragraph [ref=f4e109]:
+                      - link "Tau T2A" [ref=f4e110] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#tau-t2a-machine-types
+                      - text: ","
+                      - link "Tau T2D" [ref=f4e111] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/general-purpose#tau-t2d-machine-types
+              - row [ref=f4e112]:
+                - cell [ref=f4e113]:
+                  - generic [ref=f4e114]:
+                    - paragraph [ref=f4e115]: Compute-optimized
+                    - paragraph [ref=f4e116]:
+                      - link "View prices" [ref=f4e117] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/compute-optimized
+                - cell [ref=f4e118]:
+                  - paragraph [ref=f4e120]: Designed for high performance computing (HPC) solutions and compute-intensive workloads.
+                - cell [ref=f4e121]:
+                  - generic [ref=f4e122]:
+                    - paragraph [ref=f4e123]:
+                      - link "H4D" [ref=f4e124] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/compute-optimized#h4d-machine-types
+                      - text: ": HPC workloads and multi-node workloads"
+                    - paragraph [ref=f4e125]:
+                      - link "H3" [ref=f4e126] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/compute-optimized#h3-machine-types
+                      - text: ": HPC workloads"
+                    - paragraph [ref=f4e127]:
+                      - link "C2D" [ref=f4e128] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/compute-optimized#c2d-machine-types
+                      - text: ": Memory-bound workloads"
+                    - paragraph [ref=f4e129]:
+                      - link "C2" [ref=f4e130] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/compute-optimized#c2-machine-types
+                      - text: ": Compute-bound workloads"
+              - row [ref=f4e131]:
+                - cell [ref=f4e132]:
+                  - generic [ref=f4e133]:
+                    - paragraph [ref=f4e134]: Memory-optimized
+                    - paragraph [ref=f4e135]:
+                      - link "View prices" [ref=f4e136] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/memory-optimized
+                - cell [ref=f4e137]:
+                  - paragraph [ref=f4e139]: Ideal for memory-intensive workloads, offering more memory per core than other machine families.
+                - cell [ref=f4e140]:
+                  - generic [ref=f4e141]:
+                    - paragraph [ref=f4e142]:
+                      - link "X4" [ref=f4e143] [cursor=pointer]:
+                        - /url: https://docs.cloud.google.com/compute/docs/memory-optimized-machines#x4_machine_types
+                      - text: ": Instances from 6TB–32TB of memory."
+                    - paragraph [ref=f4e144]:
+                      - link "M4" [ref=f4e145] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/memory-optimized#m4-machine-type
+                      - text: ": Instances from 248GB-6TB of memory"
+                    - paragraph [ref=f4e146]:
+                      - link "M3" [ref=f4e147] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/memory-optimized#m3-machine-types
+                      - text: ": Instances from 1TB-4TB of memory"
+                    - paragraph [ref=f4e148]:
+                      - link "M2" [ref=f4e149] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/memory-optimized#m2-machine-types
+                      - text: ": Instances from 6TB-12TB of memory"
+                    - paragraph [ref=f4e150]:
+                      - link "M1" [ref=f4e151] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/memory-optimized#m1-machine-types
+                      - text: ": Instances from 1TB-4TB of memory"
+              - row [ref=f4e152]:
+                - cell [ref=f4e153]:
+                  - generic [ref=f4e154]:
+                    - paragraph [ref=f4e155]: Network-optimized
+                    - paragraph [ref=f4e156]:
+                      - link "View prices" [ref=f4e157] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/network-optimized
+                - cell [ref=f4e158]:
+                  - paragraph [ref=f4e160]: Purpose-built for I/O-intensive workloads, these instances deliver Compute Engine's highest network and block storage performance. They offer best-in-class price-performance optimized for demanding I/O bound applications such as network and security appliances, high-performance databases, Telco 5G UPF, high-scale data analytics, and distributed file systems.
+                - cell [ref=f4e161]:
+                  - generic [ref=f4e162]:
+                    - paragraph [ref=f4e163]:
+                      - link "C4N" [ref=f4e164] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/network-optimized#c4n-machine-type
+                      - text: ": Network-optimized instances delivering up to 400 Gbps network bandwidth, 95 MPPS packet processing, and premier block storage performance scaling up to 25 GiB/s throughput and 1M IOPS."
+                    - paragraph [ref=f4e165]:
+                      - link "M4N" [ref=f4e166] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/network-optimized#m4n-machine-type
+                      - text: ": Memory Optimized instances with network-optimized capabilities, delivering up to 400Gbps of network bandwidth, 25 GiB/s and 1M IOPS for storage"
+              - row [ref=f4e167]:
+                - cell [ref=f4e168]:
+                  - generic [ref=f4e169]:
+                    - paragraph [ref=f4e170]: Storage-optimized
+                    - paragraph [ref=f4e171]:
+                      - link "View prices" [ref=f4e172] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/storage-optimized
+                - cell [ref=f4e173]:
+                  - paragraph [ref=f4e175]: Best for workloads that are low in core usage and high in storage density.
+                - cell [ref=f4e176]:
+                  - generic [ref=f4e177]:
+                    - paragraph [ref=f4e178]:
+                      - text: Offers the following Local SSD storage capacities using
+                      - link "Titanium SSD" [ref=f4e179] [cursor=pointer]:
+                        - /url: https://docs.cloud.google.com/compute/docs/disks/local-ssd#local_ssd_types
+                    - paragraph [ref=f4e180]:
+                      - link "Z3" [ref=f4e181] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/storage-optimized#z3-highmem-with-standardlssd
+                      - text: ","
+                      - link "Z4D" [ref=f4e182] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/storage-optimized#z4d-highmem-with-standardlssd
+              - row [ref=f4e183]:
+                - cell [ref=f4e184]:
+                  - generic [ref=f4e185]:
+                    - paragraph [ref=f4e186]: Accelerator-optimized
+                    - paragraph [ref=f4e187]:
+                      - link "View prices" [ref=f4e188] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/accelerator-optimized
+                - cell [ref=f4e189]:
+                  - paragraph [ref=f4e191]: Ideal for massively parallelized Compute Unified Device Architecture (CUDA) compute workloads, such as machine learning (ML) and high performance computing (HPC).
+                - cell [ref=f4e192]:
+                  - generic [ref=f4e193]:
+                    - paragraph [ref=f4e194]: "Accelerators: Highest performing accelerators."
+                    - paragraph [ref=f4e195]:
+                      - link "A4X" [ref=f4e196] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/accelerator-optimized#accelerator-optimized-machine-type-family
+                      - text: ","
+                      - link "A4" [ref=f4e197] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/accelerator-optimized#accelerator-optimized-machine-type-family
+                      - text: ","
+                      - link "A3," [ref=f4e198] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/accelerator-optimized#accelerator-optimized-machine-type-family
+                      - link "A2" [ref=f4e199] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/accelerator-optimized#accelerator-optimized-machine-type-family
+                    - paragraph [ref=f4e200]: "Graphics and inference with GPUs:"
+                    - paragraph [ref=f4e201]:
+                      - link "G4" [ref=f4e202] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/accelerator-optimized#accelerator-optimized-machine-type-family
+                      - text: ","
+                      - link "G2" [ref=f4e203] [cursor=pointer]:
+                        - /url: https://cloud.google.com/products/compute/pricing/accelerator-optimized#accelerator-optimized-machine-type-family
+          - paragraph [ref=f4e209]:
+            - text: "Documentation:"
+            - link "Machine families resource and comparison guide" [ref=f4e210] [cursor=pointer]:
+              - /url: https://docs.cloud.google.com/compute/docs/machine-resource
+      - generic [ref=f4e214]:
+        - heading [level=2]
+        - heading "Pricing overview" [level=3] [ref=f4e215]
+        - generic [ref=f4e217]:
+          - paragraph [ref=f4e218]: Compute Engine charges for usage based on the following price sheet. A bill is sent out at the end of each billing cycle, providing a sum of Google Cloud charges. Prices on this page are listed in U.S. dollars (USD).
+          - paragraph [ref=f4e219]: For Compute Engine, disk size, machine type memory, and network usage are calculated in JEDEC binary gigabytes (GB), or IEC gibibytes (GiB), where 1 GiB is 230 bytes. Similarly, 1 TiB is 240 bytes, or 1024 JEDEC GBs.
+          - paragraph [ref=f4e220]: If you pay in a currency other than USD, the prices listed in your currency on Cloud Platform SKUs apply.
+          - paragraph [ref=f4e221]: This page does not cover pricing for any disk and images, networking, sole tenancy, Confidential VM service, or GPUs used by the VM instance.
+      - generic [ref=f4e227]:
+        - generic [ref=f4e228]:
+          - paragraph [ref=f4e229]: FAQ
+          - button "Toggle all" [ref=f4e233] [cursor=pointer]:
+            - generic [ref=f4e235]: Expand all
+        - generic [ref=f4e240]:
+          - button [expanded] [ref=f4e241] [cursor=pointer]:
+            - generic [ref=f4e242]:
+              - heading "What is the billing model for all vCPUs, GPUs, and memory resources?" [level=4] [ref=f4e243]
+              - text: 
+          - generic [ref=f4e248]:
+            - paragraph [ref=f4e249]: The following billing model applies to all vCPUs, GPUs, and memory resources. The billing model also applies to several premium images that you run on Compute Engine instances.
+            - paragraph [ref=f4e250]: All vCPUs, GPUs, and GB of memory are charged a minimum of 1 minute. For example, if you run your virtual machine for 30 seconds, you will be billed for 1 minute of usage.
+            - paragraph [ref=f4e251]: After 1 minute, instances are charged in 1 second increments.
+        - generic [ref=f4e252]:
+          - button [ref=f4e253] [cursor=pointer]:
+            - generic [ref=f4e254]:
+              - heading "How is Instance uptime measured?" [level=4] [ref=f4e255]
+              - text: 
+          - generic [ref=f4e258]:
+            - paragraph [ref=f4e259]: Instance uptime is measured as the number of seconds between when you start an instance and when you stop an instance, the latter being when the instance state is STOPPING. In some cases, your instance can suffer from a failure and be marked as STOPPING by the system; in these cases, you will not be charged for usage after the instance reaches the STOPPING state. If an instance is idle, but still has a state of RUNNING, it will be charged for instance uptime. The easiest way to determine the status of an instance is to use gcloud compute with the gcloud compute instances list command or to visit the Google Cloud console.
+            - paragraph [ref=f4e260]: In the case of reservations, instance uptime is measured as the number of seconds between when you create a reservation and when you delete that reservation. Reserved resources are billed at standard rates, whether they are started or not.
+            - paragraph [ref=f4e261]: Note that Compute Engine bills for a minimum of 1 minute of usage, so if you use an instance for 30 seconds of uptime, you are billed for 1 minute. After 1 minute, your instance is billed on a per-second basis. For more information, see the billing model.
+            - paragraph [ref=f4e262]: "Note: If you are a Microsoft licensee with a contract that includes Software Assurance, you might be able to move your existing SQL Server licenses to Compute Engine, instead of paying a per-hour license fee. To find out more information about License Mobility, see the documentation for Using Existing Microsoft Licenses."
+        - generic [ref=f4e263]:
+          - button [ref=f4e264] [cursor=pointer]:
+            - generic [ref=f4e265]:
+              - heading "Resource-based pricing details" [level=4] [ref=f4e266]
+              - text: 
+          - generic [ref=f4e269]:
+            - paragraph [ref=f4e270]: Each vCPU and each GB of memory on Compute Engine is billed separately rather than as part of a single machine type. You still create instances using predefined machine types, but your bill reports them as individual vCPUs and memory used per hour. If you change the number of threads per core, you are billed for the number of vCPUs defined by a VM's machine type, not the number of threads used by the VM.
+            - paragraph [ref=f4e271]: The pricing tables in the machine family and machine type sections on this page describe prices for machine types based on vCPU and memory resources, but also include the calculated cost for each machine type. You can also use the Google Cloud Pricing Calculator to better understand prices for different configurations.
+        - generic [ref=f4e272]:
+          - button [ref=f4e273] [cursor=pointer]:
+            - generic [ref=f4e274]:
+              - heading "What discounts are available?" [level=4] [ref=f4e275]
+              - text: 
+          - generic [ref=f4e278]:
+            - paragraph [ref=f4e279]: "vCPU and memory usage for each machine type use the on-demand price unless that usage qualifies for a discount. vCPU and memory usage for each machine type can receive one of the following discounts:"
+            - list [ref=f4e280]:
+              - listitem [ref=f4e281]: "Spot prices: automatic discounts for all Spot VMs (and preemptible VMs), which typically offer the largest discounts—up to 91% off of the corresponding on-demand price—are listed separately on the Spot VMs pricing page."
+              - listitem [ref=f4e282]: "Note: Spot prices can change up to once every 30 days and don't appear in most pricing tables for Compute Engine. For the latest prices, see the Spot VMs pricing page."
+              - listitem [ref=f4e283]: "Committed use discounts (CUDs): up to a 70% discount for memory-optimized machine types and up to a 55% discount for all other machine types."
+              - listitem [ref=f4e284]: "Sustained use discounts (SUDs): automatic discount of up to 30% on resources that are used for more than 25% of a month and are not receiving any other discounts."
+            - paragraph [ref=f4e285]: Discount types cannot be combined. For more information, see Order of discount application.
+        - generic [ref=f4e286]:
+          - button [ref=f4e287] [cursor=pointer]:
+            - generic [ref=f4e288]:
+              - heading "What are Spot prices?" [level=4] [ref=f4e289]
+              - text: 
+          - generic [ref=f4e292]:
+            - paragraph [ref=f4e293]: Spot prices are variable and can change up to once every day, but provide discounts of up to 91% off of the corresponding default price for many machine types, GPUs, TPUs, and Local SSDs. Spot prices are automatically applied to all Spot VMs and preemptible VMs. However, Compute Engine can preempt Spot VMs and preemptible VMs at any time, so they are only recommended for fault-tolerant applications that can handle VM preemption.
+            - paragraph [ref=f4e294]: For the latest prices, see the Spot VMs pricing page.
+            - paragraph [ref=f4e295]:
+              - text: For more information, see the
+              - link "documentation for Spot VMs" [ref=f4e296] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/compute/docs/instances/spot
+              - text: .
+        - generic [ref=f4e297]:
+          - button [ref=f4e298] [cursor=pointer]:
+            - generic [ref=f4e299]:
+              - heading "What are committed use discounts" [level=4] [ref=f4e300]
+              - text: 
+          - generic [ref=f4e303]:
+            - paragraph [ref=f4e304]: Compute Engine offers resources at deeply discounted prices in return for purchasing committed use contracts (also known as commitments). When you purchase a commitment, you commit either to a minimum amount of resource usage or to a minimum spend amount for a specified term of one or three years.
+            - paragraph [ref=f4e305]: "Depending on your resource usage requirements, you can purchase 1-year or 3-year commitments and receive CUDs for Compute Engine resources in either of the following ways:"
+            - list [ref=f4e306]:
+              - listitem [ref=f4e307]: "Resource-based committed use discounts: You receive these CUDs when you purchase a resource-based commitment and commit to use a minimum level of Compute Engine resources in a particular region."
+              - listitem [ref=f4e308]: "Compute flexible committed use discounts: You avail Compute flexible CUDs when you purchase a spend-based Compute flexible commitment and commit to a minimum amount of hourly spend."
+        - generic [ref=f4e309]:
+          - button [ref=f4e310] [cursor=pointer]:
+            - generic [ref=f4e311]:
+              - heading "What are Resource-based CUDs?" [level=4] [ref=f4e312]
+              - text: 
+          - generic [ref=f4e315]:
+            - paragraph [ref=f4e316]: Compute Engine offers a flat committed use discount percentage on its VMs across all regions. When you purchase vCPUs, memory, or both on a 1-year commitment, you get the resources at a discount up to 37% over the on-demand prices. When you purchase your resources on a 3-year commitment, the discount increases to 70% over the on-demand prices for memory-optimized machine types and to 55% over the on-demand prices for all other machine types.
+            - paragraph [ref=f4e317]: "Resource-based CUDs are available for the following machine types in each machine family, with the exception of Memory Optimized Upgrade Premium SKUs:"
+            - list [ref=f4e318]:
+              - listitem [ref=f4e319]: "General purpose:"
+              - listitem [ref=f4e320]: All general purpose machine types except for N1 shared-core machine types
+              - listitem [ref=f4e321]: All N1, N2, N2D, N4, C3, C3D, C4, C4A and C4D sole-tenant nodes
+              - listitem [ref=f4e322]: "Memory-optimized:"
+              - listitem [ref=f4e323]: All M1, M2, M3, machine types
+              - listitem [ref=f4e324]: All M1, M2, M3, sole-tenant node types
+              - listitem [ref=f4e325]: "Compute-optimized:"
+              - listitem [ref=f4e326]: All compute-optimized (C2, C2D, and H3) machine types
+              - listitem [ref=f4e327]: All C2 and H3 sole-tenant node types
+              - listitem [ref=f4e328]: "Storage-optimized:"
+              - listitem [ref=f4e329]: All Z3 machine types
+              - listitem [ref=f4e330]: "Accelerator-optimized:"
+              - listitem [ref=f4e331]: All A2, A3, and G2 machine types
+              - listitem [ref=f4e332]: All G2 sole-tenant node types
+            - paragraph [ref=f4e333]: For a more detailed breakdown, see Commitment types.
+        - generic [ref=f4e334]:
+          - button [ref=f4e335] [cursor=pointer]:
+            - generic [ref=f4e336]:
+              - heading "Combine reservations with committed use discounts" [level=4] [ref=f4e337]
+              - text: 
+          - generic [ref=f4e340]:
+            - paragraph [ref=f4e341]: "A commitment provides a 1- or 3-year discounted price agreement, but it does not reserve capacity in a specific zone. A reservation ensures that capacity is held in a specific zone even if the reserved VMs are not running. To get zonal resources at discounted prices and also ensure that capacity is reserved for them, you must do both of the following: purchase commitments and create reservations for those zonal resources."
+            - paragraph [ref=f4e342]: You can also attach reservations to your resource-based commitments to ensure that Compute Engine reserves capacity for your committed resources. When you commit to GPU or Local SSD resources, you must also reserve those resources and attach those reservations to your commitment.
+            - paragraph [ref=f4e343]: For more information, see Combine reservations with committed use discounts.
+        - generic [ref=f4e344]:
+          - button [ref=f4e345] [cursor=pointer]:
+            - generic [ref=f4e346]:
+              - heading "Purchase resource-based commitments" [level=4] [ref=f4e347]
+              - text: 
+          - generic [ref=f4e350]:
+            - paragraph [ref=f4e351]: "To learn how to purchase resource-based commitments, see the following:"
+            - paragraph [ref=f4e352]:
+              - link "Purchase commitments without attached reservations" [ref=f4e353] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/compute/docs/instances/signing-up-committed-use-discounts#purchasecommitment
+            - paragraph [ref=f4e354]:
+              - link "Purchase commitments with attached reservations" [ref=f4e355] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/compute/docs/instances/signing-up-committed-use-discounts#purchasecommitmentgpuslocalssd
+        - generic [ref=f4e356]:
+          - button [ref=f4e357] [cursor=pointer]:
+            - generic [ref=f4e358]:
+              - heading "Pricing for resource-based commitments" [level=4] [ref=f4e359]
+              - text: 
+          - generic [ref=f4e362]:
+            - paragraph [ref=f4e363]: After you purchase a resource-based commitment, you're billed monthly for your commitment and must pay your monthly commitment fee even if you don't use all of your committed resources. Your commitment fee is the sum of the discounted prices of all your committed resources. Compute Engine calculates the discounted price of each resource by using its prevailing on-demand price on the day your commitment becomes active. Your monthly commitment fee and the discounted prices for your resources stay the same until the end of your commitment term, even if the on-demand prices change.
+            - paragraph [ref=f4e364]: If you use your commitments to run custom machine types, then Compute Engine charges a 5% premium over the commitment prices. Compute Engine charges this premium for the portion and duration of your commitment that you run these custom machine type VMs.
+            - paragraph [ref=f4e365]: "Note: If you merge or split your commitments, then the discounted prices for your committed resources might change on the day your merged or split commitments become active."
+        - generic [ref=f4e366]:
+          - button [ref=f4e367] [cursor=pointer]:
+            - generic [ref=f4e368]:
+              - heading "What are Compute flexible CUDs" [level=4] [ref=f4e369]
+              - text: 
+          - generic [ref=f4e372]:
+            - paragraph [ref=f4e373]: "Compute flexible CUDs are spend-based CUDs that you receive when you commit to a minimum amount of hourly spend on one or more of the following services:"
+            - list [ref=f4e374]:
+              - listitem [ref=f4e375]: Compute Engine
+              - listitem [ref=f4e376]: Google Kubernetes Engine
+              - listitem [ref=f4e377]: Cloud Run
+            - paragraph [ref=f4e378]: For Compute Engine, you can receive flexible CUDs for your vCPU and memory usage in any of the projects within your Cloud Billing account, across any region, and belonging to any eligible machine types.
+            - paragraph [ref=f4e379]: "You purchase flexible commitments for your Cloud Billing account and commit to a minimum hourly spend amount across these products for a 1-year or 3-year term duration. Specifically, you commit to spend on eligible resources or services that are worth a specified minimum amount of on-demand price, per hour, throughout the commitment's term. Depending on your commitment's term, you receive the following CUDs on that minimum hourly spend amount:"
+            - list [ref=f4e380]:
+              - listitem [ref=f4e381]: A 28% discount over your committed hourly spend amount for a 1-year commitment
+              - listitem [ref=f4e382]: A 46% discount over your committed hourly spend amount for a 3-year commitment
+            - paragraph [ref=f4e383]: "Note: The discounts that you receive may differ for Cloud Billing accounts that have other on-demand VM savings in effect."
+            - paragraph [ref=f4e384]: Your commitment becomes active within the first hour of its purchase. This discounted committed spend amount becomes your hourly commitment fee. In return, you receive hourly credits on your Cloud Billing account that are worth your total committed spend amount. Google Cloud uses these credits to offset your hourly spend on usage that is eligible for flexible CUDs. At the end of each month, Google Cloud calculates your total commitment fee for that month and bills you that amount.
+            - paragraph [ref=f4e385]: Your hourly commitment fee remains your minimum hourly expenditure throughout the commitment term and you have to pay it even if you don't use resources whose on-demand prices total up to your committed hourly spend. Your commitment fee remains the same even if the on-demand prices for your resources change during your commitment term.
+            - paragraph [ref=f4e386]: "Important: A single flexible commitment covers your eligible spend across Compute Engine, GKE, and Cloud Run . For any given flexible commitment, the credits from flexible CUDs that you receive are distributed across these services in proportion to their individual eligible spend amounts. Depending on whether your Google Cloud usage is limited to Compute Engine or also spans across these other services, you might see differences in the flexible CUD credits that you receive for your commitment."
+            - paragraph [ref=f4e387]: For Compute Engine, only memory and vCPUs of the following machine series are eligible for flexible CUDs. For every listed machine series, all available machine types and sole-tenant node types are eligible.
+            - list [ref=f4e388]:
+              - listitem [ref=f4e389]: "General purpose: C3, C3D, C4, C4A, C4D, E2, N1, N2, N2D, N4, N4, N4D, and N4A (In Preview; CUDs available at GA) machine series"
+              - listitem [ref=f4e390]: "Compute-optimized:"
+              - listitem [ref=f4e391]: H3 and H4D machine series (Available only after opting in to the new model)
+              - listitem [ref=f4e392]: C2 and C2D machine series
+              - listitem [ref=f4e393]: "Memory-optimized: M1, M2, M3, and M4 machine series (Available only after opting in to the new model)"
+              - listitem [ref=f4e394]: "Storage-optimized: Z3 machine series"
+            - paragraph [ref=f4e395]: "For more information, see the following documents:"
+            - paragraph [ref=f4e396]: To learn more about flexible CUDs, see Compute flexible CUDs.
+            - list [ref=f4e397]:
+              - listitem [ref=f4e398]: To learn how to purchase spend-based commitments, see Purchasing spend-based commitments.
+              - listitem [ref=f4e399]: To view the full list of Compute Engine SKUs that are eligible for flexible CUDs, see Compute flexible CUDs eligible SKUs.
+              - listitem [ref=f4e400]: To learn how to view, analyze, and manage your spend-based commitments, see Analyze the effectiveness of flexible commitments.
+        - generic [ref=f4e401]:
+          - button [ref=f4e402] [cursor=pointer]:
+            - generic [ref=f4e403]:
+              - heading "Sustained use discounts" [level=4] [ref=f4e404]
+              - text: 
+          - generic [ref=f4e407]:
+            - paragraph [ref=f4e408]: Compute Engine offers sustained use discounts (SUDs) on resources that are used for more than 25% of a billing month and are not receiving any other discounts. Whenever you use an applicable resource for more than a fourth of a billing month, you automatically receive a discount for every incremental hour that you continue to use that resource. The discount increases incrementally with usage and you can get up to a 30% net discount off of the resource cost for virtual machine (VM) instances that run the entire month.
+            - paragraph [ref=f4e409]: Compute Engine automatically calculates and applies SUDs to resource usage within a Cloud Billing account, so there is no action required on your part to enable these discounts.
+            - paragraph [ref=f4e410]: You receive SUDs in the form of monthly credits. At the end of every month, for every eligible Compute Engine resource that you use, you receive applicable SUDs as credits based on the duration of time for which you used that resource. Any credits that you receive for your SUDs have no cash value. Compute Engine uses these credits to offset your monthly resource usage costs. You can't store or use these credits beyond the month in which you receive them.
+            - paragraph [ref=f4e411]: To learn more about sustained use discounts, see the SUDs documentation.
+            - paragraph [ref=f4e412]: You can view all your earned credits during a particular month in the cost table report for your Cloud Billing account on the Google Cloud console. To learn more about credits and how to view them, see View and analyze your credits.
+        - generic [ref=f4e413]:
+          - button [ref=f4e414] [cursor=pointer]:
+            - generic [ref=f4e415]:
+              - heading "Order of discount application" [level=4] [ref=f4e416]
+              - text: 
+          - generic [ref=f4e419]:
+            - paragraph [ref=f4e420]: You can purchase both resource-based and flexible commitments to cover Compute Engine resources for projects within your Cloud Billing account. However, the discount types that Google Cloud offers on your Compute Engine resources are mutually exclusive and can't be combined. At any given point, a resource is eligible for only one kind of discount. If you're receiving a specific type of discount for a portion of your resource usage, then that portion of usage doesn't qualify for any other type of discount.
+            - paragraph [ref=f4e421]: "You can use your resource-based commitments to cover your predictable and stable resource usage that is specific to a project, region, and a machine series. You can use flexible commitments to cover any resource usage that isn't specific to any one machine series, project, or region. If you purchase both resource-based commitments and flexible commitments for your Compute Engine resources, then Google Cloud optimizes the use of your commitments, on an hourly basis, in the following way:"
+            - paragraph [ref=f4e422]: Google Cloud first utilizes your resource-based commitments and applies all the resulting resource-based CUDs to any eligible hourly usage.
+            - paragraph [ref=f4e423]: Google Cloud then utilizes your spend-based commitments and applies all the resulting flexible CUDs to any remaining eligible on-demand usage.
+            - paragraph [ref=f4e424]: After utilizing all of your commitments, Google Cloud uses the on-demand rates to charge any additional hourly usage. This overage hourly usage might be eligible for any applicable SUDs.
+            - paragraph [ref=f4e425]: Additionally, spot prices apply to all Spot VMs (and preemptible VMs), so Spot VMs (and preemptible VMs) cannot receive CUDs or SUDs.
+            - paragraph [ref=f4e426]: "The pricing tables in the machine family and machine type sections on this page compare the on-demand prices for machine types in each machine family with the discounted prices for each of the following:"
+            - list [ref=f4e427]:
+              - listitem [ref=f4e428]: Spot VMs (and preemptible VMs)
+              - listitem [ref=f4e429]: 1-year resource-based commitments
+              - listitem [ref=f4e430]: 3-year resource-based commitments
+              - listitem [ref=f4e431]: 1-year flexible CUD consumption rates
+              - listitem [ref=f4e432]: 3-year flexible CUD consumption rates
+        - generic [ref=f4e433]:
+          - button [ref=f4e434] [cursor=pointer]:
+            - generic [ref=f4e435]:
+              - heading "Viewing usage" [level=4] [ref=f4e436]
+              - text: 
+          - generic [ref=f4e439]:
+            - paragraph [ref=f4e440]: The Google Cloud console provides a transaction history for each of your projects. This history describes your current balance and estimated resource usage for that particular project.
+            - paragraph [ref=f4e441]: To view a project's transaction history, go to the estimated billing invoice page.
+  - banner [ref=f4e442]:
+    - generic [ref=f4e445]:
+      - link [ref=f4e447] [cursor=pointer]:
+        - /url: https://cloud.google.com/
+        - img "Google Cloud" [ref=f4e448]
+      - generic [ref=f4e449]:
+        - navigation [ref=f4e452]:
+          - text: chevron_left
+          - link "Overview" [ref=f4e454] [cursor=pointer]:
+            - /url: https://cloud.google.com/why-google-cloud
+          - link "Solutions" [ref=f4e456] [cursor=pointer]:
+            - /url: https://cloud.google.com/solutions
+          - link "Products" [ref=f4e458] [cursor=pointer]:
+            - /url: https://cloud.google.com/products
+          - link "Pricing" [ref=f4e460] [cursor=pointer]:
+            - /url: https://cloud.google.com/pricing
+          - link "Resources" [ref=f4e462] [cursor=pointer]:
+            - /url: https://cloud.google.com/docs/get-started
+          - text: chevron_right
+        - generic [ref=f4e466]:
+          - generic [aria-hidden]:
+            - generic [aria-hidden]: 
+          - generic [ref=f4e467]:
+            - generic [aria-hidden]: search
+            - generic:
+              - combobox "Search"
+            - button "Search" [ref=f4e469] [cursor=pointer]: send
+      - generic [ref=f4e470]:
+        - link "Docs" [ref=f4e472] [cursor=pointer]:
+          - /url: https://cloud.google.com/docs
+        - link "Support" [ref=f4e474] [cursor=pointer]:
+          - /url: https://cloud.google.com/support-hub
+      - link "Sign in" [ref=f4e477] [cursor=pointer]:
+        - /url: https://accounts.google.com/AccountChooser?continue=https://cloud.google.com/products/compute/pricing?hl%3Den&hl=en&prompt=select_account&service=cloudconsole
+  - contentinfo [ref=f4e478]:
+    - generic [ref=f4e479]:
+      - navigation "Footer Links" [ref=f4e481]:
+        - list [ref=f4e482]:
+          - listitem [ref=f4e483]:
+            - heading "Why Google" [level=3] [ref=f4e484]
+            - list [ref=f4e485]:
+              - listitem [ref=f4e486]:
+                - link "Choosing Google Cloud" [ref=f4e487] [cursor=pointer]:
+                  - /url: https://cloud.google.com/why-google-cloud
+              - listitem [ref=f4e488]:
+                - link "Trust and security" [ref=f4e489] [cursor=pointer]:
+                  - /url: https://cloud.google.com/trust-center
+              - listitem [ref=f4e490]:
+                - link "Modern Infrastructure Cloud" [ref=f4e491] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/modern-infrastructure
+              - listitem [ref=f4e492]:
+                - link "Multicloud" [ref=f4e493] [cursor=pointer]:
+                  - /url: https://cloud.google.com/multicloud
+              - listitem [ref=f4e494]:
+                - link "Global infrastructure" [ref=f4e495] [cursor=pointer]:
+                  - /url: https://cloud.google.com/infrastructure
+              - listitem [ref=f4e496]:
+                - link "Locations" [ref=f4e497] [cursor=pointer]:
+                  - /url: https://cloud.google.com/about/locations
+              - listitem [ref=f4e498]:
+                - link "Customers and case studies" [ref=f4e499] [cursor=pointer]:
+                  - /url: https://cloud.google.com/customers
+              - listitem [ref=f4e500]:
+                - link "Analyst reports" [ref=f4e501] [cursor=pointer]:
+                  - /url: https://cloud.google.com/analyst-reports
+              - listitem [ref=f4e502]:
+                - link "Whitepapers" [ref=f4e503] [cursor=pointer]:
+                  - /url: https://cloud.google.com/whitepapers
+              - listitem [ref=f4e504]:
+                - link "Blog" [ref=f4e505] [cursor=pointer]:
+                  - /url: https://cloud.google.com/blog
+          - listitem [ref=f4e506]:
+            - heading "Products and pricing" [level=3] [ref=f4e507]
+            - list [ref=f4e508]:
+              - listitem [ref=f4e509]:
+                - link "Google Cloud pricing" [ref=f4e510] [cursor=pointer]:
+                  - /url: https://cloud.google.com/pricing
+              - listitem [ref=f4e511]:
+                - link "Google Workspace pricing" [ref=f4e512] [cursor=pointer]:
+                  - /url: https://workspace.google.com/pricing.html
+              - listitem [ref=f4e513]:
+                - link "See all products" [ref=f4e514] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products
+          - listitem [ref=f4e515]:
+            - heading "Solutions" [level=3] [ref=f4e516]
+            - list [ref=f4e517]:
+              - listitem [ref=f4e518]:
+                - link "Infrastructure modernization" [ref=f4e519] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/infrastructure-modernization/
+              - listitem [ref=f4e520]:
+                - link "Databases" [ref=f4e521] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/databases
+              - listitem [ref=f4e522]:
+                - link "Application modernization" [ref=f4e523] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/application-modernization
+              - listitem [ref=f4e524]:
+                - link "Smart analytics" [ref=f4e525] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/data-analytics-and-ai
+              - listitem [ref=f4e526]:
+                - link "Artificial Intelligence" [ref=f4e527] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/ai
+              - listitem [ref=f4e528]:
+                - link "Security" [ref=f4e529] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/security
+              - listitem [ref=f4e530]:
+                - link "Productivity & work transformation" [ref=f4e531] [cursor=pointer]:
+                  - /url: https://workspace.google.com/enterprise
+              - listitem [ref=f4e532]:
+                - link "Industry solutions" [ref=f4e533] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/#industry-solutions
+              - listitem [ref=f4e534]:
+                - link "DevOps solutions" [ref=f4e535] [cursor=pointer]:
+                  - /url: https://cloud.google.com/devops
+              - listitem [ref=f4e536]:
+                - link "Small business solutions" [ref=f4e537] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions#section-14
+              - listitem [ref=f4e538]:
+                - link "See all solutions" [ref=f4e539] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions
+          - listitem [ref=f4e540]:
+            - heading "Resources" [level=3] [ref=f4e541]
+            - list [ref=f4e542]:
+              - listitem [ref=f4e543]:
+                - link "Google Cloud Affiliate Program" [ref=f4e544] [cursor=pointer]:
+                  - /url: https://cloud.google.com/affiliate-program
+              - listitem [ref=f4e545]:
+                - link "Google Cloud documentation" [ref=f4e546] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/
+              - listitem [ref=f4e547]:
+                - link "Google Cloud quickstarts" [ref=f4e548] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/docs/get-started/
+              - listitem [ref=f4e549]:
+                - link "Google Cloud Marketplace" [ref=f4e550] [cursor=pointer]:
+                  - /url: https://cloud.google.com/marketplace
+              - listitem [ref=f4e551]:
+                - link "Learn about cloud computing" [ref=f4e552] [cursor=pointer]:
+                  - /url: https://cloud.google.com/discover
+              - listitem [ref=f4e553]:
+                - link "Support" [ref=f4e554] [cursor=pointer]:
+                  - /url: https://cloud.google.com/support-hub
+              - listitem [ref=f4e555]:
+                - link "Code samples" [ref=f4e556] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/docs/samples
+              - listitem [ref=f4e557]:
+                - link "Cloud Architecture Center" [ref=f4e558] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/architecture
+              - listitem [ref=f4e559]:
+                - link "Training" [ref=f4e560] [cursor=pointer]:
+                  - /url: https://cloud.google.com/learn/training
+              - listitem [ref=f4e561]:
+                - link "Certifications" [ref=f4e562] [cursor=pointer]:
+                  - /url: https://cloud.google.com/learn/certification
+              - listitem [ref=f4e563]:
+                - link "Google for Developers" [ref=f4e564] [cursor=pointer]:
+                  - /url: https://developers.google.com
+              - listitem [ref=f4e565]:
+                - link "Google Cloud for Startups" [ref=f4e566] [cursor=pointer]:
+                  - /url: https://cloud.google.com/startup
+              - listitem [ref=f4e567]:
+                - link "System status" [ref=f4e568] [cursor=pointer]:
+                  - /url: https://status.cloud.google.com
+              - listitem [ref=f4e569]:
+                - link "Release Notes" [ref=f4e570] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/release-notes
+          - listitem [ref=f4e571]:
+            - heading "Engage" [level=3] [ref=f4e572]
+            - list [ref=f4e573]:
+              - listitem [ref=f4e574]:
+                - link "Contact sales" [ref=f4e575] [cursor=pointer]:
+                  - /url: https://cloud.google.com/contact
+              - listitem [ref=f4e576]:
+                - link "Find a Partner" [ref=f4e577] [cursor=pointer]:
+                  - /url: https://cloud.google.com/partners
+              - listitem [ref=f4e578]:
+                - link "Become a Partner" [ref=f4e579] [cursor=pointer]:
+                  - /url: https://cloud.google.com/partners/become-a-partner
+              - listitem [ref=f4e580]:
+                - link "Events" [ref=f4e581] [cursor=pointer]:
+                  - /url: https://cloud.google.com/events
+              - listitem [ref=f4e582]:
+                - link "Podcasts" [ref=f4e583] [cursor=pointer]:
+                  - /url: https://cloud.google.com/podcasts
+              - listitem [ref=f4e584]:
+                - link "Developer Center" [ref=f4e585] [cursor=pointer]:
+                  - /url: https://cloud.google.com/developers
+              - listitem [ref=f4e586]:
+                - link "Press Corner" [ref=f4e587] [cursor=pointer]:
+                  - /url: https://www.googlecloudpresscorner.com
+              - listitem [ref=f4e588]:
+                - link "Google Cloud on YouTube" [ref=f4e589] [cursor=pointer]:
+                  - /url: https://www.youtube.com/googlecloud
+              - listitem [ref=f4e590]:
+                - link "Google Cloud Tech on YouTube" [ref=f4e591] [cursor=pointer]:
+                  - /url: https://www.youtube.com/googlecloudplatform
+              - listitem [ref=f4e592]:
+                - link "Follow on X" [ref=f4e593] [cursor=pointer]:
+                  - /url: https://x.com/googlecloud
+              - listitem [ref=f4e594]:
+                - link "Join User Research" [ref=f4e595] [cursor=pointer]:
+                  - /url: https://userresearch.google.com/?reserved=1&utm_source=website&Q_Language=en&utm_medium=own_srch&utm_campaign=CloudWebFooter&utm_term=0&utm_content=0&productTag=clou&campaignDate=jul19&pType=devel&referral_code=jk212693
+              - listitem [ref=f4e596]:
+                - link "We're hiring. Join Google Cloud!" [ref=f4e597] [cursor=pointer]:
+                  - /url: https://careers.google.com/cloud
+              - listitem [ref=f4e598]:
+                - link "Community forums" [ref=f4e599] [cursor=pointer]:
+                  - /url: https://discuss.google.dev/c/google-cloud/14
+      - navigation "Utility links" [ref=f4e601]:
+        - list [ref=f4e602]:
+          - listitem [ref=f4e603]:
+            - link "About Google" [ref=f4e604] [cursor=pointer]:
+              - /url: https://about.google
+          - listitem [ref=f4e605]:
+            - text: "|"
+            - link "Privacy" [ref=f4e606] [cursor=pointer]:
+              - /url: https://policies.google.com/privacy
+          - listitem [ref=f4e607]:
+            - text: "|"
+            - link "Site terms" [ref=f4e608] [cursor=pointer]:
+              - /url: https://policies.google.com/terms
+          - listitem [ref=f4e609]:
+            - text: "|"
+            - link "Google Cloud terms" [ref=f4e610] [cursor=pointer]:
+              - /url: https://cloud.google.com/product-terms
+          - text: "|"
+          - listitem [ref=f4e611]:
+            - text: "|"
+            - 'link "Our third decade of climate action: join us" [ref=f4e612] [cursor=pointer]':
+              - /url: https://cloud.google.com/sustainability
+          - listitem [ref=f4e613]:
+            - generic [ref=f4e614]: Sign up for the Google Cloud newsletter
+            - generic [ref=f4e618] [cursor=pointer]:
+              - text: Subscribe
+              - link "Subscribe" [ref=f4e619]:
+                - /url: https://cloud.google.com/newsletter
+        - combobox "‪English‬" [ref=f4e623] [cursor=pointer]:
+          - generic [aria-hidden]: language
+          - generic [aria-hidden]:
+            - generic: ‪English‬

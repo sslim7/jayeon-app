@@ -1,0 +1,1371 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e7]:
+    - navigation "페이지 콘텐츠" [ref=e8]:
+      - list [ref=e11]:
+        - listitem [ref=e12]:
+          - link "Cloud Run 가격 책정" [ref=e13] [cursor=pointer]:
+            - /url: /run/pricing#cloud-run-pricing
+        - listitem [ref=e14]:
+          - link "가격 책정 고려사항" [ref=e15] [cursor=pointer]:
+            - /url: /run/pricing#pricing-considerations
+        - listitem [ref=e16]:
+          - link "가격표" [ref=e17] [cursor=pointer]:
+            - /url: /run/pricing#tables
+        - listitem [ref=e18]:
+          - link "서비스 (인스턴스 기반 청구)" [ref=e19] [cursor=pointer]:
+            - /url: /run/pricing#services-instance-based-billing
+        - listitem [ref=e20]:
+          - link "서비스 (요청 기반 결제)" [ref=e21] [cursor=pointer]:
+            - /url: /run/pricing#services-requests-based-billing
+        - listitem [ref=e22]:
+          - link "작업" [ref=e23] [cursor=pointer]:
+            - /url: /run/pricing#jobs
+        - listitem [ref=e24]:
+          - link "지연된 작업" [ref=e25] [cursor=pointer]:
+            - /url: /run/pricing#delayed-jobs
+        - listitem [ref=e26]:
+          - link "작업자 풀" [ref=e27] [cursor=pointer]:
+            - /url: /run/pricing#worker-pools
+        - listitem [ref=e28]:
+          - link "인스턴스" [ref=e29] [cursor=pointer]:
+            - /url: /run/pricing#instances
+        - listitem [ref=e30]:
+          - link "이페머럴 디스크" [ref=e31] [cursor=pointer]:
+            - /url: /run/pricing#ephemeral-disk
+        - listitem [ref=e32]:
+          - link "지역별 가격 등급" [ref=e33] [cursor=pointer]:
+            - /url: /run/pricing#tiers
+        - listitem [ref=e34]:
+          - link "청구 가능한 인스턴스 시간:" [ref=e35] [cursor=pointer]:
+            - /url: /run/pricing#billable-time
+        - listitem [ref=e36]:
+          - link "가격 책정 예시" [ref=e37] [cursor=pointer]:
+            - /url: /run/pricing#pricing-examples
+        - listitem [ref=e38]:
+          - link "소스 배포 및 함수" [ref=e39] [cursor=pointer]:
+            - /url: /run/pricing#source-deployments-and-functions
+        - listitem [ref=e40]:
+          - link "다음 단계" [ref=e41] [cursor=pointer]:
+            - /url: /run/pricing#whats-next
+    - generic [ref=e44]:
+      - generic [ref=e48]:
+        - heading "Cloud Run 가격 책정" [level=2] [ref=e49]
+        - generic [ref=e51]:
+          - paragraph [ref=e52]: Cloud Run은 약 100밀리초 단위로 올림 처리하여 사용한 리소스에 대해서만 비용을 청구합니다. 총 Cloud Run 요금은 무료 등급이 적용된 후 가격 책정 표에 있는 리소스 사용량의 합계입니다.
+          - paragraph [ref=e53]:
+            - link "동시 실행" [ref=e54] [cursor=pointer]:
+              - /url: https://cloud.google.com/run/docs/about-concurrency
+            - text: 을 한 번에 2개 이상의 요청으로 설정하면 인스턴스의 할당된 CPU 및 메모리를 여러 요청이 공유할 수 있습니다.
+          - paragraph [ref=e55]:
+            - text: 아웃바운드 인터넷 데이터 전송은
+            - link "프리미엄 네트워크 서비스 등급" [ref=e56] [cursor=pointer]:
+              - /url: https://cloud.google.com/network-tiers/docs/overview#premium_tier
+            - text: 을 사용하며
+            - link "Google Cloud 네트워킹 가격 책정" [ref=e57] [cursor=pointer]:
+              - /url: https://cloud.google.com/vpc/network-pricing
+            - text: 에 따라 요금이 청구됩니다. 북미 내에서 매월 1GiB의 무료 데이터 전송이 제공됩니다.
+          - paragraph [ref=e58]:
+            - text: Virtual Private Cloud 네트워크로의 데이터 전송은 VM에서의 데이터 전송으로 청구되며
+            - link "Virtual Private Cloud 데이터 전송 요금" [ref=e59] [cursor=pointer]:
+              - /url: https://cloud.google.com/vpc/network-pricing#egress
+            - text: 이 적용됩니다. 서버리스 VPC 액세스 커넥터는 실행에 필요한 컴퓨팅에 대해서도 요금을 청구합니다.
+            - link "서버리스 VPC 액세스 가격 책정" [ref=e60] [cursor=pointer]:
+              - /url: https://cloud.google.com/vpc/network-pricing#serverless-vpc-pricing
+            - text: 을 참조하세요.
+          - paragraph [ref=e61]:
+            - text: "동일한 리전의 Google Cloud 리소스로의 데이터 전송 (예: 하나의 Cloud Run 서비스에서 다른 Cloud Run 서비스로의 트래픽)에는 요금이 부과되지 않습니다."
+            - link "Media CDN" [ref=e62] [cursor=pointer]:
+              - /url: https://cloud.google.com/media-cdn/docs
+            - text: ","
+            - link "Cloud CDN" [ref=e63] [cursor=pointer]:
+              - /url: https://cloud.google.com/cdn/docs
+            - text: ","
+            - link "Cloud Load Balancing" [ref=e64] [cursor=pointer]:
+              - /url: https://cloud.google.com/load-balancing
+            - text: 으로의 데이터 전송에는 요금이 부과되지 않습니다.
+      - generic [ref=e67]:
+        - generic [ref=e68]:
+          - generic [ref=e71]:
+            - heading "가격 책정 고려사항" [level=2] [ref=e72]
+            - generic [ref=e75]:
+              - paragraph [ref=e76]: Cloud Run의 가격 책정을 평가할 때는 다음 사항을 고려하세요.
+              - list [ref=e77]:
+                - listitem [ref=e78]: "주문형 및 사용량 기반 요금: Cloud Run은 주문형 용량을 제공하고 인스턴스를 자동으로 확장합니다. Cloud Run은 예상되는 최대 사용량을 수용하기 위해 인프라를 사전 프로비저닝할 필요가 없습니다. Cloud Run에서 청구되는 컨테이너 인스턴스는 사용된 컨테이너 인스턴스입니다."
+                - listitem [ref=e79]:
+                  - text: "총 소유 비용: Cloud Run은 컴퓨팅 비용에 대해 요금을 청구하지만 더 많은 가치를 제공합니다. 예를 들어 Cloud Run은"
+                  - link "영역 중복" [ref=e80] [cursor=pointer]:
+                    - /url: https://cloud.google.com/run/docs/zonal-redundancy
+                  - text: 을 제공하며,
+                  - link "사이트 안정성 엔지니어" [ref=e81] [cursor=pointer]:
+                    - /url: https://sre.google/
+                  - text: 가 백그라운드에서 많은 작업을 수행하므로 운영 부담이 적고, 단순성을 통해 사용자와 팀의 생산성을 높여줍니다.
+                - listitem [ref=e82]:
+                  - text: "약정 사용 할인:"
+                  - link "약정 사용 할인" [ref=e83] [cursor=pointer]:
+                    - /url: https://docs.cloud.google.com/run/cud
+                  - text: 을 구매하여 Cloud Run의 지속적인 사용 비용을 절감할 수 있습니다. 예를 들어 Cloud Run 서비스에 항상 하나 이상의 활성 인스턴스가 있는 경우 최소한 이 정도의 인스턴스에 대해 약정을 체결하여 비용을 절감할 수 있습니다. Compute 가변형 약정 사용 할인은 GKE, Compute Engine, Cloud Run 전반에 적용됩니다.
+              - paragraph [ref=e84]:
+                - link "비용 최적화" [ref=e85] [cursor=pointer]:
+                  - /url: https://cloud.google.com/architecture/framework/cost-optimization
+                - text: 에 대해 자세히 알아보세요.
+          - generic [ref=e88]:
+            - heading [level=3] [ref=e89]:
+              - paragraph [ref=e91]: 가격 계산기
+            - paragraph [ref=e94]:
+              - link "Google Cloud 가격 계산기" [ref=e95] [cursor=pointer]:
+                - /url: https://cloud.google.com/products/calculator
+              - text: 를 사용하여 Cloud Run 사용 비용을 추정할 수 있습니다.
+        - generic [ref=e96]:
+          - generic [ref=e99]:
+            - heading "가격표" [level=2] [ref=e100]
+            - generic [ref=e103]:
+              - paragraph [ref=e104]:
+                - text: 다음 가격표는
+                - emphasis [ref=e105]: GiB-초
+                - text: 단위를 사용합니다. GiB-초란 1초 동안 1기비바이트의 인스턴스를 실행하거나 4초 동안 256메비바이트의 인스턴스를 실행하는 경우를 의미합니다.
+                - emphasis [ref=e106]: vCPU-초
+                - text: 단위에도 동일한 원칙이 적용됩니다. CUD는
+                - link "약정 사용 할인" [ref=e107] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/run/cud
+                - text: 을 나타냅니다.
+              - paragraph [ref=e108]:
+                - text: 무료 등급 사용량은
+                - link "결제 계정" [ref=e109] [cursor=pointer]:
+                  - /url: https://cloud.google.com/billing/docs/how-to/manage-billing-account
+                - text: 별로
+                - link "프로젝트" [ref=e110] [cursor=pointer]:
+                  - /url: https://cloud.google.com/resource-manager/docs/creating-managing-projects
+                - text: 전체를 대상으로 집계되고 매달 재설정됩니다. 무료 등급을 초과한 사용량에 대한 요금만 청구됩니다. 무료 등급은 등급 1 가격을 사용한 할인에 기반한 지출로 적용됩니다.
+              - paragraph [ref=e111]:
+                - text: Cloud Run 가격은
+                - link "선택한 리전" [ref=e112] [cursor=pointer]:
+                  - /url: /run/pricing#tiers
+                - text: 에 따라 다릅니다. Cloud Run 서비스의 가격 책정은
+                - link "결제" [ref=e113] [cursor=pointer]:
+                  - /url: https://cloud.google.com/run/docs/configuring/billing-settings
+                - text: 구성에도 따라 달라집니다.
+              - paragraph [ref=e114]:
+                - text: USD 외의 통화로 지불하는 경우
+                - link "Cloud Platform SKU" [ref=e115] [cursor=pointer]:
+                  - /url: https://cloud.google.com/skus/
+                - text: 에 해당 통화로 표기된 가격이 적용됩니다.
+          - generic [ref=e118]:
+            - heading [level=3] [ref=e119]:
+              - paragraph [ref=e121]: 서비스 (인스턴스 기반 청구)
+            - generic [ref=e123]:
+              - paragraph [ref=e124]:
+                - link "인스턴스 기반 결제" [ref=e125] [cursor=pointer]:
+                  - /url: https://cloud.google.com/run/docs/configuring/cpu-allocation
+                - text: 서비스
+              - paragraph [ref=e126]: "무료 등급 (us-central1 가격 책정 기준):"
+              - list [ref=e127]:
+                - listitem [ref=e128]: "CPU: 처음 240,000vCPU-초/월 무료"
+                - listitem [ref=e129]: "RAM: 처음 450,000GiB-초/월 무료"
+          - generic [ref=e130]:
+            - generic [ref=e131]:
+              - combobox [ref=e134] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=e137]:
+                - text: 할인 옵션 표시
+                - switch "Show discount options" [checked] [ref=e140] [cursor=pointer]
+            - region "서비스 (인스턴스 기반 청구)" [ref=e145]:
+              - table [ref=e146]:
+                - row [ref=e147]:
+                  - columnheader [ref=e148]:
+                    - paragraph [ref=e150]: 리소스
+                  - columnheader [ref=e151]:
+                    - generic [ref=e152]:
+                      - paragraph [ref=e153]: 기본값 (USD)
+                      - superscript [ref=e154]: "*"
+                      - button "tooltip" [ref=e156] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e158]: info
+                  - columnheader [ref=e160]:
+                    - generic [ref=e161]:
+                      - text: Cloud Run CUD - 1 Year
+                      - superscript [ref=e162]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e164] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e166]: info
+                  - columnheader [ref=e168]:
+                    - generic [ref=e169]:
+                      - text: Cloud Run CUD - 3 Year
+                      - superscript [ref=e170]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e172] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e174]: info
+                  - columnheader [ref=e176]:
+                    - generic [ref=e177]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=e178]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e180] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e182]: info
+                  - columnheader [ref=e184]:
+                    - generic [ref=e185]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=e186]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e188] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e190]: info
+                - rowgroup [ref=e192]:
+                  - row [ref=e193]:
+                    - cell [ref=e194]:
+                      - paragraph [ref=e195]: CPU (vCPU-초당)
+                    - cell "US$0.000018" [ref=e196]
+                    - cell "US$0.00001494" [ref=e197]
+                    - cell "US$0.00001494" [ref=e198]
+                    - cell "US$0.00001296" [ref=e199]
+                    - cell "US$0.00000972" [ref=e200]
+                  - row [ref=e201]:
+                    - cell [ref=e202]:
+                      - paragraph [ref=e203]: 메모리 (GiB-초당)
+                    - cell "US$0.000002" [ref=e204]
+                    - cell "US$0.00000166" [ref=e205]
+                    - cell "US$0.00000166" [ref=e206]
+                    - cell "US$0.00000144" [ref=e207]
+                    - cell "US$0.00000108" [ref=e208]
+                  - row [ref=e209]:
+                    - cell [ref=e210]:
+                      - paragraph [ref=e211]: GPU 유형 NVIDIA-L4 영역 중복 없음 (초당)
+                    - cell "US$0.0001867" [ref=e212]
+                    - cell "-" [ref=e213]
+                    - cell "-" [ref=e214]
+                    - cell "-" [ref=e215]
+                    - cell "-" [ref=e216]
+                  - row [ref=e217]:
+                    - cell [ref=e218]:
+                      - paragraph [ref=e219]: GPU 유형 NVIDIA-L4 영역 중복 (초당)
+                    - cell "US$0.0002909" [ref=e220]
+                    - cell "-" [ref=e221]
+                    - cell "-" [ref=e222]
+                    - cell "-" [ref=e223]
+                    - cell "-" [ref=e224]
+                  - row [ref=e225]:
+                    - cell [ref=e226]:
+                      - paragraph [ref=e227]: GPU 유형 NVIDIA RTX Pro 6000 영역 중복 없음 (초당)
+                    - cell "US$0.00036522" [ref=e228]
+                    - cell "-" [ref=e229]
+                    - cell "-" [ref=e230]
+                    - cell "-" [ref=e231]
+                    - cell "-" [ref=e232]
+                  - row [ref=e233]:
+                    - cell [ref=e234]:
+                      - paragraph [ref=e235]: GPU 유형 NVIDIA RTX Pro 6000 영역 중복 (초당)
+                    - cell "US$0.00056913" [ref=e236]
+                    - cell "-" [ref=e237]
+                    - cell "-" [ref=e238]
+                    - cell "-" [ref=e239]
+                    - cell "-" [ref=e240]
+          - generic [ref=e241]:
+            - generic [ref=e242]:
+              - superscript [ref=e243]: "*"
+              - text: 각 소비 모델에는 고유 ID가 있습니다. 소비 모델 할인을 받으려면 선택해야 할 수 있습니다. 자세히 알아보려면
+              - link "여기" [ref=e244] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: 를 클릭하세요.
+            - paragraph [ref=e245]: Cloud Run CUD는 Cloud Run 리소스에만 적용됩니다. 더욱 유연한 사용을 원하시면 Compute 가변형 CUD를 사용하세요.
+            - paragraph [ref=e246]:
+              - emphasis [ref=e247]: 가변형 CUD
+              - text: 는
+              - link [ref=e248] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#flexible_cuds
+                - emphasis [ref=e249]: Compute 가변형 약정 사용 할인
+              - text: 을 나타냅니다.
+          - generic [ref=e252]:
+            - heading [level=3] [ref=e253]:
+              - paragraph [ref=e255]: 서비스 (요청 기반 결제)
+            - generic [ref=e257]:
+              - paragraph [ref=e258]:
+                - link "청구된 인스턴스" [ref=e259] [cursor=pointer]:
+                  - /url: /run/pricing#billable-time
+                - text: 시간 동안
+                - link "요청 기반" [ref=e260] [cursor=pointer]:
+                  - /url: https://cloud.google.com/run/docs/configuring/cpu-allocation
+                - text: 결제가 적용되는 서비스
+              - paragraph [ref=e261]: "무료 등급 (us-central1 활성 가격 책정 기준):"
+              - list [ref=e262]:
+                - listitem [ref=e263]: "CPU: 처음 180,000vCPU-초/월 무료"
+                - listitem [ref=e264]: "RAM: 처음 360,000GiB-초/월 무료"
+                - listitem [ref=e265]: 요청 - 요청 200만 개/월 무료
+          - generic [ref=e266]:
+            - generic [ref=e267]:
+              - combobox [ref=e270] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=e273]:
+                - text: 할인 옵션 표시
+                - switch "Show discount options" [checked] [ref=e276] [cursor=pointer]
+            - region "서비스 (요청 기반 결제)" [ref=e281]:
+              - table [ref=e282]:
+                - row [ref=e283]:
+                  - columnheader [ref=e284]:
+                    - paragraph [ref=e286]: 리소스
+                  - columnheader [ref=e287]:
+                    - paragraph [ref=e289]: 유형
+                  - columnheader [ref=e290]:
+                    - generic [ref=e291]:
+                      - paragraph [ref=e292]: 기본값 (USD)
+                      - superscript [ref=e293]: "*"
+                      - button "tooltip" [ref=e295] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e297]: info
+                  - columnheader [ref=e299]:
+                    - generic [ref=e300]:
+                      - text: Cloud Run CUD - 1 Year
+                      - superscript [ref=e301]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e303] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e305]: info
+                  - columnheader [ref=e307]:
+                    - generic [ref=e308]:
+                      - text: Cloud Run CUD - 3 Year
+                      - superscript [ref=e309]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e311] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e313]: info
+                  - columnheader [ref=e315]:
+                    - generic [ref=e316]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=e317]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e319] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e321]: info
+                  - columnheader [ref=e323]:
+                    - generic [ref=e324]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=e325]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e327] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e329]: info
+                - rowgroup [ref=e331]:
+                  - row [ref=e332]:
+                    - cell [ref=e333]:
+                      - paragraph [ref=e334]: CPU (vCPU-초당)
+                    - cell [ref=e335]:
+                      - paragraph [ref=e336]: 사용 시간
+                      - paragraph [ref=e337]
+                    - cell "US$0.000024" [ref=e338]
+                    - cell "US$0.00001992" [ref=e339]
+                    - cell "US$0.00001992" [ref=e340]
+                    - cell "US$0.00001992" [ref=e341]
+                    - cell "US$0.00001992" [ref=e342]
+                  - row [ref=e343]:
+                    - cell [ref=e344]:
+                      - paragraph [ref=e345]:
+                        - text: 유휴 시간 (최소 인스턴스
+                        - superscript [ref=e346]: "1"
+                        - text: )
+                      - paragraph [ref=e347]
+                    - cell "US$0.0000025" [ref=e348]
+                    - cell "US$0.000002075" [ref=e349]
+                    - cell "US$0.000002075" [ref=e350]
+                    - cell "US$0.000002075" [ref=e351]
+                    - cell "US$0.000002075" [ref=e352]
+                  - row [ref=e353]:
+                    - cell [ref=e354]:
+                      - paragraph [ref=e355]: 메모리 (GiB-초당)
+                    - cell [ref=e356]:
+                      - paragraph [ref=e357]: 사용 시간
+                    - cell "US$0.0000025" [ref=e358]
+                    - cell "US$0.000002075" [ref=e359]
+                    - cell "US$0.000002075" [ref=e360]
+                    - cell "US$0.000002075" [ref=e361]
+                    - cell "US$0.000002075" [ref=e362]
+                  - row [ref=e363]:
+                    - cell [ref=e364]:
+                      - paragraph [ref=e365]:
+                        - text: 유휴 시간 (최소 인스턴스
+                        - superscript [ref=e366]: "1"
+                        - text: )
+                    - cell "US$0.0000025" [ref=e367]
+                    - cell "US$0.000002075" [ref=e368]
+                    - cell "US$0.000002075" [ref=e369]
+                    - cell "US$0.000002075" [ref=e370]
+                    - cell "US$0.000002075" [ref=e371]
+                  - row [ref=e372]:
+                    - cell [ref=e373]:
+                      - paragraph [ref=e374]: 요청 (1,000,000건당)
+                    - cell [ref=e375]:
+                      - paragraph [ref=e376]: 해당 사항 없음
+                    - cell "US$0.40" [ref=e377]
+                    - cell "US$0.332" [ref=e378]
+                    - cell "US$0.332" [ref=e379]
+                    - cell "US$0.332" [ref=e380]
+                    - cell "US$0.332" [ref=e381]
+          - generic [ref=e382]:
+            - generic [ref=e383]:
+              - superscript [ref=e384]: "*"
+              - text: 각 소비 모델에는 고유 ID가 있습니다. 소비 모델 할인을 받으려면 선택해야 할 수 있습니다. 자세히 알아보려면
+              - link "여기" [ref=e385] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: 를 클릭하세요.
+            - paragraph [ref=e386]:
+              - superscript [ref=e387]: "1"
+              - emphasis [ref=e388]: 유휴 최소 인스턴스
+              - text: 는
+              - link "최소 인스턴스" [ref=e389] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/configuring/min-instances
+              - text: 를 사용하여 준비 상태로 유지되는 인스턴스의
+              - link [ref=e390] [cursor=pointer]:
+                - /url: /run/pricing#billable-time
+                - emphasis [ref=e391]: 비활성 청구 가능 시간
+              - text: 을 나타냅니다. 최소 인스턴스가 아닌 유휴 인스턴스에는 요금이 청구되지 않습니다.
+            - paragraph [ref=e392]:
+              - text: 요청은
+              - link "인증" [ref=e393] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/authenticating/overview
+              - text: 이 성공한 후 컨테이너에 도달한 경우에만 요금이 청구되며 IAM 정책에서 거부된 요청에는 요금이 청구되지 않습니다.
+            - paragraph [ref=e394]: Cloud Run CUD는 Cloud Run 리소스에만 적용됩니다. 더욱 유연한 사용을 원하시면 Compute 가변형 CUD를 사용하세요.
+            - paragraph [ref=e395]:
+              - emphasis [ref=e396]: CUD
+              - text: 는
+              - link [ref=e397] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#applicable-usage
+                - emphasis [ref=e398]: 약정 사용 할인
+              - text: 을 나타냅니다.
+          - generic [ref=e401]:
+            - heading [level=3] [ref=e402]:
+              - paragraph [ref=e404]: 작업
+            - generic [ref=e406]:
+              - paragraph [ref=e407]: "무료 등급 (us-central1 가격 책정 기준):"
+              - list [ref=e408]:
+                - listitem [ref=e409]: "CPU: 처음 240,000vCPU-초/월 무료"
+                - listitem [ref=e410]: "RAM: 처음 450,000GiB-초/월 무료"
+          - generic [ref=e411]:
+            - generic [ref=e412]:
+              - combobox [ref=e415] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=e418]:
+                - text: 할인 옵션 표시
+                - switch "Show discount options" [checked] [ref=e421] [cursor=pointer]
+            - region "작업" [ref=e426]:
+              - table [ref=e427]:
+                - row [ref=e428]:
+                  - columnheader [ref=e429]:
+                    - paragraph [ref=e431]: 리소스
+                  - columnheader [ref=e432]:
+                    - generic [ref=e433]:
+                      - paragraph [ref=e434]: 기본값 (USD)
+                      - superscript [ref=e435]: "*"
+                      - button "tooltip" [ref=e437] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e439]: info
+                  - columnheader [ref=e441]:
+                    - generic [ref=e442]:
+                      - text: Cloud Run CUD - 1 Year
+                      - superscript [ref=e443]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e445] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e447]: info
+                  - columnheader [ref=e449]:
+                    - generic [ref=e450]:
+                      - text: Cloud Run CUD - 3 Year
+                      - superscript [ref=e451]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e453] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e455]: info
+                  - columnheader [ref=e457]:
+                    - generic [ref=e458]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=e459]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e461] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e463]: info
+                  - columnheader [ref=e465]:
+                    - generic [ref=e466]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=e467]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e469] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e471]: info
+                - rowgroup [ref=e473]:
+                  - row [ref=e474]:
+                    - cell [ref=e475]:
+                      - paragraph [ref=e476]: CPU (vCPU-초당)
+                    - cell "US$0.000018" [ref=e477]
+                    - cell "US$0.00001494" [ref=e478]
+                    - cell "US$0.00001494" [ref=e479]
+                    - cell "US$0.00001296" [ref=e480]
+                    - cell "US$0.00000972" [ref=e481]
+                  - row [ref=e482]:
+                    - cell [ref=e483]:
+                      - paragraph [ref=e484]: 메모리 (GiB-초당)
+                    - cell "US$0.000002" [ref=e485]
+                    - cell "US$0.00000166" [ref=e486]
+                    - cell "US$0.00000166" [ref=e487]
+                    - cell "US$0.00000144" [ref=e488]
+                    - cell "US$0.00000108" [ref=e489]
+                  - row [ref=e490]:
+                    - cell [ref=e491]:
+                      - paragraph [ref=e492]: GPU 유형 NVIDIA-L4 영역 중복 없음 (초당)
+                    - cell "US$0.0001867" [ref=e493]
+                    - cell "-" [ref=e494]
+                    - cell "-" [ref=e495]
+                    - cell "-" [ref=e496]
+                    - cell "-" [ref=e497]
+                  - row [ref=e498]:
+                    - cell [ref=e499]:
+                      - paragraph [ref=e500]: GPU 유형 NVIDIA RTX Pro 6000 비영역 중복 (초당)
+                    - cell "US$0.00036522" [ref=e501]
+                    - cell "-" [ref=e502]
+                    - cell "-" [ref=e503]
+                    - cell "-" [ref=e504]
+                    - cell "-" [ref=e505]
+          - generic [ref=e506]:
+            - generic [ref=e507]:
+              - superscript [ref=e508]: "*"
+              - text: 각 소비 모델에는 고유 ID가 있습니다. 소비 모델 할인을 받으려면 선택해야 할 수 있습니다. 자세히 알아보려면
+              - link "여기" [ref=e509] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: 를 클릭하세요.
+            - paragraph [ref=e510]: Cloud Run CUD는 Cloud Run 리소스에만 적용됩니다. 더욱 유연한 사용을 원하시면 Compute 가변형 CUD를 사용하세요.
+            - paragraph [ref=e511]:
+              - emphasis [ref=e512]: 가변형 CUD
+              - text: 는
+              - link [ref=e513] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#flexible_cuds
+                - emphasis [ref=e514]: Compute 가변형 약정 사용 할인
+              - text: 을 나타냅니다.
+          - generic [ref=e517]:
+            - heading [level=3] [ref=e518]:
+              - paragraph [ref=e520]: 지연된 작업
+            - generic [ref=e522]:
+              - paragraph [ref=e523]: "무료 등급 (us-central1 가격 책정 기준):"
+              - list [ref=e524]:
+                - listitem [ref=e525]: CPU - 처음 342,857vCPU-초/월 무료
+                - listitem [ref=e526]: RAM - 처음 642,857GiB-초/월 무료
+          - generic [ref=e527]:
+            - generic [ref=e528]:
+              - combobox [ref=e531] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=e534]:
+                - text: 할인 옵션 표시
+                - switch "Show discount options" [checked] [ref=e537] [cursor=pointer]
+            - region "지연된 작업" [ref=e542]:
+              - table [ref=e543]:
+                - row [ref=e544]:
+                  - columnheader [ref=e545]:
+                    - paragraph [ref=e547]: 리소스
+                  - columnheader [ref=e548]:
+                    - generic [ref=e549]:
+                      - paragraph [ref=e550]:
+                        - text: 기본값 (USD)
+                        - superscript [ref=e551]: "*"
+                      - button "tooltip" [ref=e553] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e555]: info
+                  - columnheader [ref=e557]:
+                    - generic [ref=e558]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=e559]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e561] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e563]: info
+                  - columnheader [ref=e565]:
+                    - generic [ref=e566]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=e567]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e569] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e571]: info
+                - rowgroup [ref=e573]:
+                  - row [ref=e574]:
+                    - cell [ref=e575]:
+                      - paragraph [ref=e576]: CPU (vCPU-초당)
+                    - cell "US$0.0000126 / 1 second" [ref=e577]
+                    - cell "US$0.000009072 / 1 second" [ref=e578]
+                    - cell "US$0.000006804 / 1 second" [ref=e579]
+                  - row [ref=e580]:
+                    - cell [ref=e581]:
+                      - paragraph [ref=e582]: 메모리 (GiB-초당)
+                    - cell "US$0.0000014 / 1 gibibyte second" [ref=e583]
+                    - cell "US$0.000001008 / 1 gibibyte second" [ref=e584]
+                    - cell "US$0.000000756 / 1 gibibyte second" [ref=e585]
+          - generic [ref=e586]:
+            - generic [ref=e587]:
+              - superscript [ref=e588]: "*"
+              - text: 각 소비 모델에는 고유 ID가 있습니다. 소비 모델 할인을 받으려면 선택해야 할 수 있습니다. 자세히 알아보려면
+              - link "여기" [ref=e589] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: 를 클릭하세요.
+            - paragraph [ref=e590]: "참고: 지연된 작업 가격은 동적이며 30일마다 최대 한 번 변경될 수 있습니다."
+            - paragraph [ref=e591]: Cloud Run CUD는 Cloud Run 리소스에만 적용됩니다. 더욱 유연한 사용을 원하시면 Compute 가변형 CUD를 사용하세요.
+            - paragraph [ref=e592]:
+              - emphasis [ref=e593]: 가변형 CUD
+              - text: 는
+              - link [ref=e594] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#flexible_cuds
+                - emphasis [ref=e595]: Compute 가변형 약정 사용 할인
+              - text: 을 나타냅니다.
+          - generic [ref=e598]:
+            - heading [level=3] [ref=e599]:
+              - paragraph [ref=e601]: 작업자 풀
+            - generic [ref=e603]:
+              - paragraph [ref=e604]: "무료 등급 (us-central1 가격 책정 기준):"
+              - list [ref=e605]:
+                - listitem [ref=e606]: CPU - 처음 384,204 vCPU-초/월 무료
+                - listitem [ref=e607]: RAM - 처음 728,744 GiB-초/월 무료
+          - generic [ref=e608]:
+            - generic [ref=e609]:
+              - combobox [ref=e612] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=e615]:
+                - text: 할인 옵션 표시
+                - switch "Show discount options" [checked] [ref=e618] [cursor=pointer]
+            - region "작업자 풀" [ref=e623]:
+              - table [ref=e624]:
+                - row [ref=e625]:
+                  - columnheader [ref=e626]:
+                    - paragraph [ref=e628]: 리소스
+                  - columnheader [ref=e629]:
+                    - generic [ref=e630]:
+                      - paragraph [ref=e631]: 기본값 (USD)
+                      - superscript [ref=e632]: "*"
+                      - button "tooltip" [ref=e634] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e636]: info
+                  - columnheader [ref=e638]:
+                    - generic [ref=e639]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=e640]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e642] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e644]: info
+                  - columnheader [ref=e646]:
+                    - generic [ref=e647]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=e648]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e650] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e652]: info
+                - rowgroup [ref=e654]:
+                  - row [ref=e655]:
+                    - cell [ref=e656]:
+                      - paragraph [ref=e657]: CPU (vCPU-초당)
+                    - cell "US$0.000011244" [ref=e658]
+                    - cell "US$0.000008096" [ref=e659]
+                    - cell "US$0.000006072" [ref=e660]
+                  - row [ref=e661]:
+                    - cell [ref=e662]:
+                      - paragraph [ref=e663]: 메모리 (GiB-초당)
+                    - cell "US$0.000001235" [ref=e664]
+                    - cell "US$0.000000889" [ref=e665]
+                    - cell "US$0.000000667" [ref=e666]
+                  - row [ref=e667]:
+                    - cell [ref=e668]:
+                      - paragraph [ref=e669]: GPU 유형 NVIDIA-L4 영역 중복 없음 (초당)
+                    - cell "US$0.0001867" [ref=e670]
+                    - cell "-" [ref=e671]
+                    - cell "-" [ref=e672]
+                  - row [ref=e673]:
+                    - cell [ref=e674]:
+                      - paragraph [ref=e675]: GPU 유형 NVIDIA-L4 영역 중복 (초당)
+                    - cell "US$0.0002909" [ref=e676]
+                    - cell "-" [ref=e677]
+                    - cell "-" [ref=e678]
+                  - row [ref=e679]:
+                    - cell [ref=e680]:
+                      - paragraph [ref=e681]: GPU 유형 NVIDIA RTX Pro 6000 영역 중복 없음 (초당)
+                    - cell "US$0.00036522" [ref=e682]
+                    - cell "-" [ref=e683]
+                    - cell "-" [ref=e684]
+                  - row [ref=e685]:
+                    - cell [ref=e686]:
+                      - paragraph [ref=e687]: GPU 유형 NVIDIA RTX Pro 6000 영역 중복 (초당)
+                    - cell "US$0.00056913" [ref=e688]
+                    - cell "-" [ref=e689]
+                    - cell "-" [ref=e690]
+          - generic [ref=e691]:
+            - generic [ref=e692]:
+              - superscript [ref=e693]: "*"
+              - text: 각 소비 모델에는 고유 ID가 있습니다. 소비 모델 할인을 받으려면 선택해야 할 수 있습니다. 자세히 알아보려면
+              - link "여기" [ref=e694] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: 를 클릭하세요.
+            - paragraph [ref=e695]:
+              - text: USD 외의 통화로 지불하는 경우
+              - link "Cloud Platform SKU" [ref=e696] [cursor=pointer]:
+                - /url: https://cloud.google.com/skus/
+              - text: 에 해당 통화로 표기된 가격이 적용됩니다.
+            - paragraph [ref=e697]:
+              - emphasis [ref=e698]: 가변형 CUD
+              - text: 는
+              - link [ref=e699] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#flexible_cuds
+                - emphasis [ref=e700]: Compute 가변형 약정 사용 할인
+              - text: 을 나타냅니다.
+          - heading [level=3] [ref=e704]:
+            - paragraph [ref=e706]: 인스턴스
+          - generic [ref=e707]:
+            - generic [ref=e708]:
+              - combobox [ref=e711] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=e714]:
+                - text: 할인 옵션 표시
+                - switch "Show discount options" [checked] [ref=e717] [cursor=pointer]
+            - region "인스턴스" [ref=e722]:
+              - table [ref=e723]:
+                - row [ref=e724]:
+                  - columnheader [ref=e725]:
+                    - paragraph [ref=e727]: 리소스
+                  - columnheader [ref=e728]:
+                    - generic [ref=e729]:
+                      - paragraph [ref=e730]: 기본값 (USD)
+                      - superscript [ref=e731]: "*"
+                      - button "tooltip" [ref=e733] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e735]: info
+                  - columnheader [ref=e737]:
+                    - generic [ref=e738]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=e739]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e741] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e743]: info
+                  - columnheader [ref=e745]:
+                    - generic [ref=e746]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=e747]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e749] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e751]: info
+                - rowgroup [ref=e753]:
+                  - row [ref=e754]:
+                    - cell [ref=e755]:
+                      - paragraph [ref=e756]: CPU (vCPU-초당)
+                    - cell "US$0.00000027" [ref=e757]
+                    - cell "US$0.000000194" [ref=e758]
+                    - cell "US$0.000000146" [ref=e759]
+                  - row [ref=e760]:
+                    - cell [ref=e761]:
+                      - paragraph [ref=e762]: 메모리 (GiB-초당)
+                    - cell "US$0.00000193" [ref=e763]
+                    - cell "US$0.00000139" [ref=e764]
+                    - cell "US$0.000001042" [ref=e765]
+          - generic [ref=e766]:
+            - generic [ref=e767]:
+              - superscript [ref=e768]: "*"
+              - text: 각 소비 모델에는 고유 ID가 있습니다. 소비 모델 할인을 받으려면 선택해야 할 수 있습니다. 자세히 알아보려면
+              - link "여기" [ref=e769] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: 를 클릭하세요.
+            - paragraph [ref=e770]:
+              - text: USD 외의 통화로 지불하는 경우
+              - link "Cloud Platform SKU" [ref=e771] [cursor=pointer]:
+                - /url: https://cloud.google.com/skus/
+              - text: 에 해당 통화로 표기된 가격이 적용됩니다.
+            - paragraph [ref=e772]:
+              - emphasis [ref=e773]: 가변형 CUD
+              - text: 는
+              - emphasis
+              - link [ref=e774] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#flexible_cuds
+                - emphasis [ref=e775]: Compute 가변형 약정 사용 할인
+              - text: 을 나타냅니다.
+          - heading [level=3] [ref=e779]:
+            - paragraph [ref=e781]: 이페머럴 디스크
+          - generic [ref=e782]:
+            - generic [ref=e783]:
+              - combobox [ref=e786] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=e788]:
+                - generic [ref=e789]:
+                  - text: 할인 옵션 표시
+                  - switch "Show discount options" [checked] [ref=e792] [cursor=pointer]
+                - radiogroup "Duration" [ref=e797]:
+                  - generic [ref=e798]:
+                    - radio "매시간" [checked] [ref=e799] [cursor=pointer]
+                    - radio "매월" [ref=e807] [cursor=pointer]
+            - region "이페머럴 디스크" [ref=e815]:
+              - table [ref=e816]:
+                - row [ref=e817]:
+                  - columnheader [ref=e818]:
+                    - paragraph [ref=e820]: 리소스
+                  - columnheader [ref=e821]:
+                    - generic [ref=e822]:
+                      - paragraph [ref=e823]: 기본 USD
+                      - superscript [ref=e824]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e826] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e828]: info
+                  - columnheader [ref=e830]:
+                    - generic [ref=e831]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=e832]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e834] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e836]: info
+                  - columnheader [ref=e838]:
+                    - generic [ref=e839]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=e840]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=e842] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=e844]: info
+                - rowgroup [ref=e846]:
+                  - row [ref=e847]:
+                    - cell [ref=e848]:
+                      - paragraph [ref=e849]: 이페머럴 디스크
+                    - cell "US$0.000109589 / 1 gibibyte hour" [ref=e850]
+                    - cell "US$0.000078904 / 1 gibibyte hour" [ref=e851]
+                    - cell "US$0.000059178 / 1 gibibyte hour" [ref=e852]
+          - generic [ref=e854]:
+            - superscript [ref=e855]: "*"
+            - text: 각 소비 모델에는 고유 ID가 있습니다. 소비 모델 할인을 받으려면 선택해야 할 수 있습니다. 자세히 알아보려면
+            - link "여기" [ref=e856] [cursor=pointer]:
+              - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+            - text: 를 클릭하세요.
+        - generic [ref=e857]:
+          - heading "지역별 가격 등급" [level=2] [ref=e861]
+          - generic [ref=e865]:
+            - heading [level=3] [ref=e866]:
+              - paragraph [ref=e868]: 등급 1 가격 적용
+            - list [ref=e871]:
+              - listitem [ref=e872]: africa-south1 (요하네스버그)
+              - listitem [ref=e873]: asia-east1 (타이완)
+              - listitem [ref=e874]: asia-northeast1 (도쿄)
+              - listitem [ref=e875]: asia-northeast2 (오사카)
+              - listitem [ref=e876]: asia-south1 (인도 뭄바이)
+              - listitem [ref=e877]: asia-southeast3 (방콕)
+              - listitem [ref=e878]: asia-southeast4 (쿠알라룸푸르)
+              - listitem [ref=e879]:
+                - text: europe-north1 (핀란드)
+                - link [ref=e880] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e881]: "2"
+              - listitem [ref=e882]:
+                - text: europe-north2 (스톡홀름)
+                - link [ref=e883] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e884]: "2"
+              - listitem [ref=e885]:
+                - text: europe-southwest1 (마드리드)
+                - link [ref=e886] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e887]: "2"
+              - listitem [ref=e888]:
+                - text: europe-west1 (벨기에)
+                - link [ref=e889] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e890]: "2"
+              - listitem [ref=e891]:
+                - text: europe-west4 (네덜란드)
+                - link [ref=e892] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e893]: "2"
+              - listitem [ref=e894]: europe-west8 (밀라노)
+              - listitem [ref=e895]:
+                - text: europe-west9 (파리)
+                - link [ref=e896] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e897]: "2"
+              - listitem [ref=e898]: me-west1 (텔아비브)
+              - listitem [ref=e899]: northamerica-south1 (멕시코)
+              - listitem [ref=e900]:
+                - text: us-central1 (아이오와)
+                - link [ref=e901] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e902]: "2"
+              - listitem [ref=e903]: us-east1 (사우스캐롤라이나)
+              - listitem [ref=e904]: us-east4 (북 버지니아)
+              - listitem [ref=e905]: us-east5 (콜럼버스)
+              - listitem [ref=e906]:
+                - text: us-south1 (댈러스)
+                - link [ref=e907] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e908]: "2"
+              - listitem [ref=e909]:
+                - text: us-west1 (오리건)
+                - link [ref=e910] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e911]: "2"
+              - listitem [ref=e912]: us-west8 (피닉스)
+          - generic [ref=e915]:
+            - heading [level=3] [ref=e916]:
+              - paragraph [ref=e918]: 등급 2 가격 적용
+            - list [ref=e921]:
+              - listitem [ref=e922]: asia-east2 (홍콩)
+              - listitem [ref=e923]: asia-northeast3 (대한민국 서울)
+              - listitem [ref=e924]: asia-southeast1 (싱가포르)
+              - listitem [ref=e925]: asia-southeast2 (자카르타)
+              - listitem [ref=e926]: asia-south2 (인도 델리)
+              - listitem [ref=e927]: australia-southeast1 (시드니)
+              - listitem [ref=e928]: australia-southeast2 (멜버른)
+              - listitem [ref=e929]: europe-central2 (폴란드 바르샤바)
+              - listitem [ref=e930]:
+                - text: europe-west10 (베를린)
+                - link [ref=e931] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e932]: "2"
+              - listitem [ref=e933]: europe-west12 (토리노)
+              - listitem [ref=e934]:
+                - text: europe-west2 (영국 런던)
+                - link [ref=e935] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e936]: "2"
+              - listitem [ref=e937]:
+                - text: europe-west3 (독일 프랑크푸르트)
+                - link [ref=e938] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e939]: "2"
+              - listitem [ref=e940]:
+                - text: europe-west6 (스위스 취리히)
+                - link [ref=e941] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e942]: "2"
+              - listitem [ref=e943]: me-central1 (도하)
+              - listitem [ref=e944]: me-central2 (담맘)
+              - listitem [ref=e945]:
+                - text: northamerica-northeast1 (몬트리올)
+                - link [ref=e946] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e947]: "2"
+              - listitem [ref=e948]:
+                - text: northamerica-northeast2 (토론토)
+                - link [ref=e949] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e950]: "2"
+              - listitem [ref=e951]:
+                - text: southamerica-east1 (브라질 상파울루)
+                - link [ref=e952] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e953]: "2"
+              - listitem [ref=e954]:
+                - text: southamerica-west1 (칠레 산티아고)
+                - link [ref=e955] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: 낮은 CO
+                  - subscript [ref=e956]: "2"
+              - listitem [ref=e957]: us-west2 (로스앤젤레스)
+              - listitem [ref=e958]: us-west3 (솔트레이크시티)
+              - listitem [ref=e959]: us-west4 (라스베이거스)
+        - generic [ref=e960]:
+          - heading "청구 가능한 인스턴스 시간:" [level=2] [ref=e964]
+          - generic [ref=e970]:
+            - paragraph [ref=e971]:
+              - text: 모든 Cloud Run 인스턴스에서 집계된 청구 가능한 시간이 Cloud Monitoring 측정항목으로 노출됩니다. 자세한 내용은
+              - link "container/billable_instance_time 측정항목" [ref=e972] [cursor=pointer]:
+                - /url: https://cloud.google.com/monitoring/api/metrics_gcp#gcp-run
+              - text: 을 참조하세요.
+            - paragraph [ref=e973]:
+              - text: 청구 가능한 인스턴스 시간은 100밀리초 단위로 반올림되며 Cloud Run 서비스의
+              - link "결제" [ref=e974] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/configuring/cpu-allocation
+              - text: 구성(CPU 할당)에 따라 달라집니다.
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img "청구 가능한 인스턴스 시간:"
+          - generic [ref=e977]:
+            - heading [level=3] [ref=e978]:
+              - paragraph [ref=e980]: 요청 기반 결제 방식의 서비스에 대한 청구 가능한 인스턴스 시간
+            - generic [ref=e982]:
+              - paragraph [ref=e983]: 기본적으로 Cloud Run은 다음과 같은 경우에만 인스턴스에 할당된 CPU 및 메모리의 요금을 청구합니다.
+              - list [ref=e984]:
+                - listitem [ref=e985]:
+                  - text: 인스턴스가
+                  - link "시작" [ref=e986] [cursor=pointer]:
+                    - /url: https://cloud.google.com/run/docs/reference/container-contract#startup
+                  - text: 됩니다.
+                - listitem [ref=e987]:
+                  - text: 인스턴스가 정상적으로
+                  - link "종료" [ref=e988] [cursor=pointer]:
+                    - /url: https://cloud.google.com/run/docs/reference/container-contract#instance-shutdown
+                  - text: 될 때 (SIGTERM 신호 처리).
+                - listitem [ref=e989]: 인스턴스에서 하나 이상의 요청을 처리 중일 때. 청구 가능 인스턴스 시간은 다음 다이어그램과 같이 첫 번째 요청 시작 시 시작되고 마지막 요청 종료 시 끝납니다.
+              - paragraph [ref=e990]:
+                - link "최소 인스턴스 수를 설정" [ref=e991] [cursor=pointer]:
+                  - /url: https://cloud.google.com/run/docs/configuring/min-instances
+                - text: 한 경우 이러한 인스턴스가 요청을 처리하지 않을 때 다른 '유휴' 요율로 요금이 청구됩니다. 위의 표를 참고하세요.
+          - generic [ref=e994]:
+            - heading [level=3] [ref=e995]:
+              - paragraph [ref=e997]: 인스턴스 기반 결제 서비스의 청구 가능한 인스턴스 시간
+            - paragraph [ref=e1000]:
+              - link "인스턴스 기반 결제" [ref=e1001] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/configuring/cpu-allocation
+              - text: 를 선택하면 컨테이너가 시작된 시점부터 종료 시점까지(최소 1분으로 함) 모든 Cloud Run 컨테이너 인스턴스의 전체 기간에 대한 요금이 청구됩니다.
+          - generic [ref=e1004]:
+            - heading [level=3] [ref=e1005]:
+              - paragraph [ref=e1007]: Cloud Run 작업의 청구 가능한 인스턴스 시간
+            - paragraph [ref=e1010]:
+              - text: Cloud Run 작업은 시작된 인스턴스의 전체 수명 동안
+              - link "인스턴스 기반 청구" [ref=e1011] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/configuring/cpu-allocation
+              - text: 요율로 청구되며, 최소 청구 시간은 1분입니다.
+        - generic [ref=e1012]:
+          - heading "가격 책정 예시" [level=2] [ref=e1016]
+          - generic [ref=e1020]:
+            - heading [level=3] [ref=e1021]:
+              - paragraph [ref=e1023]: "예 1: 공개 API/웹사이트 - 외부 애플리케이션 데이터 액세스"
+            - generic [ref=e1025]:
+              - paragraph [ref=e1026]: 유럽 서부 1 (벨기에)에서 요청 기반 결제로 Cloud Run 서비스를 배포하여 웹사이트, 웹 앱, API 또는 모바일 백엔드를 제공한다고 가정해 보겠습니다. 서비스는 월 1,000만 건의 요청을 수신하며 요청당 평균 지연 시간은 400밀리초입니다. 이 서비스는 vCPU 1개, 512MiB의 메모리, 인스턴스당 최대 동시 요청 20개로 구성됩니다. 트래픽 패턴은 24시간 주기를 따르며, 요청 볼륨은 12시간 동안 종 모양 곡선 분포로 변동합니다.
+              - paragraph [ref=e1027]: 이 워크로드의 월별 예상 비용은 $13.69입니다. vCPU/메모리 무료 등급이 없었다면 비용은 $18.91이 되었을 것입니다.
+              - paragraph [ref=e1028]:
+                - text: 이러한 계산을 자세히 이해하고 설정 및 사용량 추정치를 조정하려면
+                - link "가격 계산기" [ref=e1029] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVEyT1dRek5EUXdNQzFoWlRVMUxUUXhOMkV0WVRkak5pMWhOamcxT1dJNVlUWXdNV0lRQVE9PRAcGiRBMDJCNDgwMi0yMkEzLTQxNTgtQTM5Qy0zOEI1QTQyNTdFMUI
+                - text: 를 사용하세요.
+          - generic [ref=e1032]:
+            - heading [level=3] [ref=e1033]:
+              - paragraph [ref=e1035]: "예 2: 단일 동시 실행 - CPU 집약적/스레드로부터 안전하지 않은 앱, 인스턴스당 요청 1개"
+            - generic [ref=e1037]:
+              - paragraph [ref=e1038]: CPU 사용량이 많고 스레드로부터 안전하지 않은 애플리케이션을 위해 요청 기반 결제를 사용하여 europe-west1 (벨기에)에 Cloud Run 서비스를 배포했다고 가정해 보겠습니다. 이 애플리케이션은 한 번에 하나의 요청을 처리합니다. 서비스는 월 1,000만 건의 요청을 수신하며 요청당 평균 지연 시간은 400밀리초입니다. 이 서비스는 1개의 vCPU와 512MiB의 메모리로 구성됩니다.
+              - paragraph [ref=e1039]: 이 워크로드의 월별 예상 비용은 $81.72입니다. vCPU/메모리 무료 등급이 없었다면 비용은 $86.49가 되었을 것입니다.
+              - paragraph [ref=e1040]:
+                - text: 이러한 계산을 자세히 이해하고 설정 및 사용량 추정치를 조정하려면
+                - link "가격 계산기" [ref=e1041] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVJrTnpreU5ERTRZaTAzTm1Zd0xUUTJNREl0T0dKaU55MHpabUl3TnpVek5tSTFNemNRQVE9PRAcGiQ3MTMxODdGOC03QTc5LTRFMTItQTRGMi01NzI2NDU1QUQzNkI
+                - text: 를 사용하세요.
+          - generic [ref=e1044]:
+            - heading [level=3] [ref=e1045]:
+              - paragraph [ref=e1047]: "예 3: AI 추론 엔드포인트 - Ollama를 사용한 로컬 모델 서빙"
+            - generic [ref=e1049]:
+              - paragraph [ref=e1050]: 유럽 서부 1 (벨기에)에 실시간 GPU 가속 LLM 또는 이미지 생성을 제공하기 위해 Cloud Run 서비스를 배포했다고 가정해 보겠습니다. 이 서비스는 4개의 vCPU, 16GiB의 메모리, NVIDIA-L4 (영역 중복 없음)로 구성됩니다. 이 서비스는 일일 최대 2개의 인스턴스에 도달하며 트래픽 패턴은 24시간 주기를 따릅니다. 요청 볼륨은 12시간 동안 종 모양의 곡선 분포로 변동합니다.
+              - paragraph [ref=e1051]: 이 워크로드의 월별 예상 비용은 $822.40입니다. vCPU/메모리 무료 등급이 없었다면 비용은 $827.62가 되었을 것입니다.
+              - paragraph [ref=e1052]:
+                - text: 이러한 계산을 자세히 이해하고 설정 및 사용량 추정치를 조정하려면
+                - link "가격 계산기" [ref=e1053] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVEzTTJWak56VXhZUzFsWW1ZMkxUUTFOMkV0T1RJMllTMDNNVFUxTURReU1HSXhaallRQVE9PRAcGiRDODU2N0I5Qy03MUVGLTRGNzYtQjQwQy05ODhBNzQ4QUE0NjI
+                - text: 를 사용하세요.
+          - generic [ref=e1056]:
+            - heading [level=3] [ref=e1057]:
+              - paragraph [ref=e1059]: "예 4: 서버리스 함수 - 업로드 시 이미지 크기 조정을 위한 경량 FaaS"
+            - generic [ref=e1061]:
+              - paragraph [ref=e1062]: "이벤트 트리거 코드 실행 (예: 파일 업로드, HTTP 요청)을 제공하기 위해 요청 기반 결제 방식의 Cloud Run 서비스를 europe-west1 (벨기에)에 배포했다고 가정해 보겠습니다. 서비스는 월 1,000만 건의 요청을 수신하며 요청당 평균 지연 시간은 200밀리초입니다. 이 서비스는 vCPU 0.167개, 256MiB의 메모리, 인스턴스당 최대 동시 요청 1개로 구성됩니다."
+              - paragraph [ref=e1063]: 이 워크로드의 월별 예상 비용은 $7.25입니다. vCPU/메모리 무료 등급이 없었다면 비용은 $12.47이 됩니다.
+              - paragraph [ref=e1064]:
+                - text: 이러한 계산을 자세히 이해하고 설정 및 사용량 추정치를 조정하려면
+                - link "가격 계산기" [ref=e1065] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVJrTldZME1qQmlOeTB3WmpJNUxUUm1ORFV0T0dOaU1pMDJZak01WTJVNU9ERm1NMlVRQVE9PRAcGiQzOUQ3OEI5OS1FNzlCLTQ4NDMtQkVGNi1BOUVCQjIxQzBBODc
+                - text: 를 사용하세요.
+          - generic [ref=e1068]:
+            - heading [level=3] [ref=e1069]:
+              - paragraph [ref=e1071]: "예 5: 일괄 작업 처리 - 대규모의 예약된 데이터 변환"
+            - generic [ref=e1073]:
+              - paragraph [ref=e1074]: "대규모 예약 데이터 변환 (예: 보고서)을 처리하기 위해 europe-west1 (벨기에)에 Cloud Run 작업을 배포했다고 가정해 보겠습니다. 작업은 시간당 한 번 (월 730회) 실행되며, 각 실행은 1분 동안 지속됩니다. 이 작업은 vCPU 1개, 메모리 512MiB, 실행당 작업 1개로 구성됩니다."
+              - paragraph [ref=e1075]: 이 워크로드의 월간 예상 비용은 $0.00입니다. vCPU/메모리 무료 등급이 없었다면 비용은 $0.45가 되었을 것입니다.
+              - paragraph [ref=e1076]:
+                - text: 이러한 계산을 자세히 이해하고 설정 및 사용량 추정치를 조정하려면
+                - link "가격 계산기" [ref=e1077] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVExT0RnNVpUZGtOUzFoTlRCbUxUUTBaV010WWpGaFl5MW1NRFF6TlRabVl6Vm1NRFlRQVE9PRAcGiRCQzU5NUQxRC0zNkFGLTQxQTAtQjY5QS0wRTRGQjU2MkE1NTU
+                - text: 를 사용하세요.
+          - generic [ref=e1080]:
+            - heading [level=3] [ref=e1081]:
+              - paragraph [ref=e1083]: "예 6: 백그라운드 작업자 - 집약적인 작업의 비동기 오프로딩"
+            - generic [ref=e1085]:
+              - paragraph [ref=e1086]: "기본 애플리케이션의 응답성을 유지하기 위해 장기 실행되거나 리소스 사용량이 많은 작업 (예: 대량 이메일, 동영상 처리)을 오프로드하기 위해 europe-west1 (벨기에)에 Cloud Run 작업자 풀을 배포했다고 가정해 보겠습니다. 작업자 풀은 한 달 내내 단일 인스턴스를 실행하도록 구성되어 있습니다. 이 작업자 풀은 vCPU 1개와 512MiB의 메모리로 구성됩니다."
+              - paragraph [ref=e1087]: 이 워크로드의 월별 예상 비용은 $11.61입니다. vCPU/메모리 무료 등급이 없었다면 비용은 $16.83이 됩니다.
+              - paragraph [ref=e1088]:
+                - text: 이러한 계산을 자세히 이해하고 설정 및 사용량 추정치를 조정하려면
+                - link "가격 계산기" [ref=e1089] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVF4TlRGallXUTRaQzB3WkRFNUxUUTRaRGN0T0dWallpMHpaREUxTXpNMFkySTVaRFFRQVE9PRAcGiRENzU2OTFDRi04RjNBLTQzRUMtOThBNy0wOTNDRkRCRjBDN0Y
+                - text: 를 사용하세요.
+        - generic [ref=e1093]:
+          - heading "소스 배포 및 함수" [level=2] [ref=e1094]
+          - generic [ref=e1097]:
+            - paragraph [ref=e1098]:
+              - text: Cloud Run의
+              - link "소스 배포" [ref=e1099] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/deploying-source-code
+              - text: 및
+              - link "함수" [ref=e1100] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/deploy-functions
+              - text: 는 Cloud Run 서비스로 작동하며 위의 조건에 따라 요금이 청구됩니다.
+            - paragraph [ref=e1101]:
+              - text: 소스에서 배포하거나 함수를 만들 때 Cloud Run은 Cloud Build를 사용하여 소스 코드 또는 함수를 실행 가능한 이미지로 변환합니다. 이미지는 Cloud Build에서 생성되고 Artifact Registry에 저장됩니다. Artifact Registry에는 자체
+              - link "무료 등급 스토리지" [ref=e1102] [cursor=pointer]:
+                - /url: https://cloud.google.com/artifact-registry/pricing#storage
+              - text: 가 있습니다. 소스 코드 또는 함수를 Artifact Registry에 배포하고 Artifact Registry 무료 등급 사용량을 초과하면 함수 배포에 대한 요금이 청구됩니다. Cloud Run 사용이 무료 등급에 해당하는 경우에도 마찬가지입니다.
+            - paragraph [ref=e1103]:
+              - text: Cloud Build 및 Artifact Registry의 가격은 Cloud Run 가격에 포함되지 않습니다. 해당 서비스의 가격 책정을 검토하려면
+              - link "Cloud Build 가격 책정" [ref=e1104] [cursor=pointer]:
+                - /url: https://cloud.google.com/build/pricing
+              - text: 및
+              - link "Artifact Registry 가격 책정" [ref=e1105] [cursor=pointer]:
+                - /url: https://cloud.google.com/artifact-registry/pricing
+              - text: 페이지를 참조하세요.
+            - paragraph [ref=e1106]:
+              - text: Cloud Run은 이벤트 전송에 Eventarc를 사용합니다. Eventarc 가격 책정은 위의 Cloud Run 가격 책정에 포함되어 있지 않습니다.
+              - link "Eventarc 가격 책정" [ref=e1107] [cursor=pointer]:
+                - /url: https://cloud.google.com/eventarc/pricing
+              - text: 페이지에서 가격 책정을 검토합니다.
+            - paragraph [ref=e1108]:
+              - text: Cloud Run Functions (1세대)의 가격은 Cloud Run 가격에 포함되지 않습니다.
+              - link "Cloud Run Functions (1세대) 가격 책정" [ref=e1109] [cursor=pointer]:
+                - /url: https://cloud.google.com/functions/pricing-1stgen
+              - text: 에서 가격을 검토합니다.
+      - generic [ref=e1113]:
+        - heading "다음 단계" [level=2] [ref=e1114]
+        - list [ref=e1117]:
+          - listitem [ref=e1118]:
+            - link "Cloud Run 문서" [ref=e1119] [cursor=pointer]:
+              - /url: https://cloud.google.com/run/docs
+            - text: 읽어보기
+          - listitem [ref=e1120]:
+            - link "Cloud Run" [ref=e1121] [cursor=pointer]:
+              - /url: https://cloud.google.com/run/docs/quickstarts
+            - text: 시작하기
+          - listitem [ref=e1122]:
+            - link "가격 계산기" [ref=e1123] [cursor=pointer]:
+              - /url: https://cloud.google.com/products/calculator
+            - text: 사용해 보기
+          - listitem [ref=e1124]:
+            - link "Cloud Run 솔루션 및 사용 사례" [ref=e1125] [cursor=pointer]:
+              - /url: https://cloud.google.com/architecture?text=Cloud%20Run
+            - text: 알아보기
+      - generic [ref=e1130]:
+        - heading "커스텀 견적 요청" [level=2] [ref=e1132]
+        - generic [ref=e1134]:
+          - generic [ref=e1135]: Google Cloud의 사용한 만큼만 지불하는 가격 책정 방식을 사용하면 사용한 서비스에 대한 요금만 지불하면 됩니다. 영업팀에 문의하여 조직에 대한 커스텀 견적을 받아 보세요.
+          - generic [ref=e1139] [cursor=pointer]:
+            - generic [aria-hidden] [ref=e1140]: 영업팀에 문의
+            - link "영업팀에 문의" [ref=e1141]:
+              - /url: https://cloud.google.com/contact?direct=true
+  - banner [ref=e1142]:
+    - generic [ref=e1145]:
+      - link [ref=e1147] [cursor=pointer]:
+        - /url: https://cloud.google.com/
+        - img "Google Cloud" [ref=e1148]
+      - generic [ref=e1149]:
+        - navigation [ref=e1152]:
+          - text: chevron_left
+          - link "개요" [ref=e1154] [cursor=pointer]:
+            - /url: https://cloud.google.com/why-google-cloud
+          - link "솔루션" [ref=e1156] [cursor=pointer]:
+            - /url: https://cloud.google.com/solutions
+          - link "제품" [ref=e1158] [cursor=pointer]:
+            - /url: https://cloud.google.com/products
+          - link "가격 책정" [ref=e1160] [cursor=pointer]:
+            - /url: https://cloud.google.com/pricing
+          - link "리소스" [ref=e1162] [cursor=pointer]:
+            - /url: https://cloud.google.com/docs/get-started
+          - text: chevron_right
+        - generic [ref=e1166]:
+          - generic [aria-hidden]:
+            - generic [aria-hidden]: 
+          - textbox "Search" [ref=e1167]
+      - generic [ref=e1168]:
+        - link "Docs" [ref=e1170] [cursor=pointer]:
+          - /url: https://cloud.google.com/docs
+        - link "지원" [ref=e1172] [cursor=pointer]:
+          - /url: https://cloud.google.com/support-hub
+      - link "로그인" [ref=e1175] [cursor=pointer]:
+        - /url: https://accounts.google.com/AccountChooser?continue=https://cloud.google.com/run/pricing&hl=ko&prompt=select_account&service=cloudconsole
+  - contentinfo [ref=e1176]:
+    - generic [ref=e1177]:
+      - navigation "Footer Links" [ref=e1179]:
+        - list [ref=e1180]:
+          - listitem [ref=e1181]:
+            - heading "Google을 선택해야 하는 이유" [level=3] [ref=e1182]
+            - list [ref=e1183]:
+              - listitem [ref=e1184]:
+                - link "Google Cloud 선택" [ref=e1185] [cursor=pointer]:
+                  - /url: https://cloud.google.com/why-google-cloud
+              - listitem [ref=e1186]:
+                - link "신뢰 및 보안" [ref=e1187] [cursor=pointer]:
+                  - /url: https://cloud.google.com/trust-center
+              - listitem [ref=e1188]:
+                - link "최신 인프라 클라우드" [ref=e1189] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/modern-infrastructure
+              - listitem [ref=e1190]:
+                - link "멀티 클라우드" [ref=e1191] [cursor=pointer]:
+                  - /url: https://cloud.google.com/multicloud
+              - listitem [ref=e1192]:
+                - link "글로벌 인프라" [ref=e1193] [cursor=pointer]:
+                  - /url: https://cloud.google.com/infrastructure
+              - listitem [ref=e1194]:
+                - link "위치" [ref=e1195] [cursor=pointer]:
+                  - /url: https://cloud.google.com/about/locations
+              - listitem [ref=e1196]:
+                - link "고객 및 우수사례" [ref=e1197] [cursor=pointer]:
+                  - /url: https://cloud.google.com/customers
+              - listitem [ref=e1198]:
+                - link "애널리스트 보고서" [ref=e1199] [cursor=pointer]:
+                  - /url: https://cloud.google.com/analyst-reports
+              - listitem [ref=e1200]:
+                - link "백서" [ref=e1201] [cursor=pointer]:
+                  - /url: https://cloud.google.com/whitepapers
+              - listitem [ref=e1202]:
+                - link "블로그" [ref=e1203] [cursor=pointer]:
+                  - /url: https://cloud.google.com/blog/ko
+          - listitem [ref=e1204]:
+            - heading "제품 및 가격 책정" [level=3] [ref=e1205]
+            - list [ref=e1206]:
+              - listitem [ref=e1207]:
+                - link "Google Cloud 가격 책정" [ref=e1208] [cursor=pointer]:
+                  - /url: https://cloud.google.com/pricing
+              - listitem [ref=e1209]:
+                - link "Google Workspace 가격 책정" [ref=e1210] [cursor=pointer]:
+                  - /url: https://workspace.google.com/pricing.html
+              - listitem [ref=e1211]:
+                - link "모든 제품 보기" [ref=e1212] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products
+          - listitem [ref=e1213]:
+            - heading "솔루션" [level=3] [ref=e1214]
+            - list [ref=e1215]:
+              - listitem [ref=e1216]:
+                - link "인프라 현대화" [ref=e1217] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/infrastructure-modernization/
+              - listitem [ref=e1218]:
+                - link "데이터베이스" [ref=e1219] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/databases
+              - listitem [ref=e1220]:
+                - link "애플리케이션 현대화" [ref=e1221] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/application-modernization
+              - listitem [ref=e1222]:
+                - link "스마트 분석" [ref=e1223] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/data-analytics-and-ai
+              - listitem [ref=e1224]:
+                - link "인공지능" [ref=e1225] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/ai
+              - listitem [ref=e1226]:
+                - link "보안" [ref=e1227] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/security
+              - listitem [ref=e1228]:
+                - link "생산성 및 작업 방식의 혁신" [ref=e1229] [cursor=pointer]:
+                  - /url: https://workspace.google.com/enterprise
+              - listitem [ref=e1230]:
+                - link "업종별 솔루션" [ref=e1231] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/#industry-solutions
+              - listitem [ref=e1232]:
+                - link "DevOps 솔루션" [ref=e1233] [cursor=pointer]:
+                  - /url: https://cloud.google.com/devops
+              - listitem [ref=e1234]:
+                - link "중소기업용 솔루션" [ref=e1235] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions#section-14
+              - listitem [ref=e1236]:
+                - link "모든 솔루션 보기" [ref=e1237] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions
+          - listitem [ref=e1238]:
+            - heading "리소스" [level=3] [ref=e1239]
+            - list [ref=e1240]:
+              - listitem [ref=e1241]:
+                - link "Google Cloud 제휴 프로그램" [ref=e1242] [cursor=pointer]:
+                  - /url: https://cloud.google.com/affiliate-program
+              - listitem [ref=e1243]:
+                - link "Google Cloud 문서" [ref=e1244] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/
+              - listitem [ref=e1245]:
+                - link "Google Cloud 빠른 시작" [ref=e1246] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/docs/get-started/
+              - listitem [ref=e1247]:
+                - link "Google Cloud Marketplace" [ref=e1248] [cursor=pointer]:
+                  - /url: https://cloud.google.com/marketplace
+              - listitem [ref=e1249]:
+                - link "클라우드 컴퓨팅 알아보기" [ref=e1250] [cursor=pointer]:
+                  - /url: https://cloud.google.com/discover
+              - listitem [ref=e1251]:
+                - link "지원" [ref=e1252] [cursor=pointer]:
+                  - /url: https://cloud.google.com/support-hub
+              - listitem [ref=e1253]:
+                - link "코드 샘플" [ref=e1254] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/docs/samples
+              - listitem [ref=e1255]:
+                - link "클라우드 아키텍처 센터" [ref=e1256] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/architecture
+              - listitem [ref=e1257]:
+                - link "학습" [ref=e1258] [cursor=pointer]:
+                  - /url: https://cloud.google.com/learn/training
+              - listitem [ref=e1259]:
+                - link "인증" [ref=e1260] [cursor=pointer]:
+                  - /url: https://cloud.google.com/learn/certification
+              - listitem [ref=e1261]:
+                - link "Google Developers" [ref=e1262] [cursor=pointer]:
+                  - /url: https://developers.google.com
+              - listitem [ref=e1263]:
+                - link "Google Cloud for Startups" [ref=e1264] [cursor=pointer]:
+                  - /url: https://cloud.google.com/startup
+              - listitem [ref=e1265]:
+                - link "시스템 상태" [ref=e1266] [cursor=pointer]:
+                  - /url: https://status.cloud.google.com
+              - listitem [ref=e1267]:
+                - link "출시 노트" [ref=e1268] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/release-notes
+          - listitem [ref=e1269]:
+            - heading "참여" [level=3] [ref=e1270]
+            - list [ref=e1271]:
+              - listitem [ref=e1272]:
+                - link "영업팀에 문의" [ref=e1273] [cursor=pointer]:
+                  - /url: https://cloud.google.com/contact
+              - listitem [ref=e1274]:
+                - link "파트너 찾기" [ref=e1275] [cursor=pointer]:
+                  - /url: https://cloud.google.com/partners
+              - listitem [ref=e1276]:
+                - link "파트너 되기" [ref=e1277] [cursor=pointer]:
+                  - /url: https://cloud.google.com/partners/become-a-partner
+              - listitem [ref=e1278]:
+                - link "이벤트" [ref=e1279] [cursor=pointer]:
+                  - /url: https://cloud.google.com/events
+              - listitem [ref=e1280]:
+                - link "팟캐스트" [ref=e1281] [cursor=pointer]:
+                  - /url: https://cloud.google.com/podcasts
+              - listitem [ref=e1282]:
+                - link "Developer Center" [ref=e1283] [cursor=pointer]:
+                  - /url: https://cloud.google.com/developers
+              - listitem [ref=e1284]:
+                - link "보도자료 코너" [ref=e1285] [cursor=pointer]:
+                  - /url: https://www.googlecloudpresscorner.com
+              - listitem [ref=e1286]:
+                - link "Google Cloud의 YouTube 채널" [ref=e1287] [cursor=pointer]:
+                  - /url: https://www.youtube.com/googlecloud
+              - listitem [ref=e1288]:
+                - link "Google Cloud Tech의 YouTube 채널" [ref=e1289] [cursor=pointer]:
+                  - /url: https://www.youtube.com/googlecloudplatform
+              - listitem [ref=e1290]:
+                - link "Twitter 팔로우" [ref=e1291] [cursor=pointer]:
+                  - /url: https://twitter.com/googlecloud
+              - listitem [ref=e1292]:
+                - link "사용자 연구 참여" [ref=e1293] [cursor=pointer]:
+                  - /url: https://userresearch.google.com/?reserved=1&utm_source=website&Q_Language=en&utm_medium=own_srch&utm_campaign=CloudWebFooter&utm_term=0&utm_content=0&productTag=clou&campaignDate=jul19&pType=devel&referral_code=jk212693
+              - listitem [ref=e1294]:
+                - link "Google Cloud 채용 정보" [ref=e1295] [cursor=pointer]:
+                  - /url: https://careers.google.com/cloud
+              - listitem [ref=e1296]:
+                - link "Google Cloud 커뮤니티" [ref=e1297] [cursor=pointer]:
+                  - /url: https://discuss.google.dev/c/google-cloud/14
+      - navigation "Utility links" [ref=e1299]:
+        - list [ref=e1300]:
+          - listitem [ref=e1301]:
+            - link "Google 정보" [ref=e1302] [cursor=pointer]:
+              - /url: https://about.google
+          - listitem [ref=e1303]:
+            - text: "|"
+            - link "개인정보처리방침" [ref=e1304] [cursor=pointer]:
+              - /url: https://policies.google.com/privacy
+          - listitem [ref=e1305]:
+            - text: "|"
+            - link "사이트 약관" [ref=e1306] [cursor=pointer]:
+              - /url: https://policies.google.com/terms
+          - listitem [ref=e1307]:
+            - text: "|"
+            - link "Google Cloud 약관" [ref=e1308] [cursor=pointer]:
+              - /url: https://cloud.google.com/product-terms
+          - text: "|"
+          - listitem [ref=e1309]:
+            - text: "|"
+            - 'link "Google의 기후 행동 30년: 동참하기" [ref=e1310] [cursor=pointer]':
+              - /url: https://cloud.google.com/sustainability
+          - listitem [ref=e1311]:
+            - generic [ref=e1312]: Google Cloud 뉴스레터 구독하기
+            - generic [ref=e1316] [cursor=pointer]:
+              - text: 구독
+              - link "구독" [ref=e1317]:
+                - /url: https://cloud.google.com/newsletter
+        - combobox "‪한국어‬" [ref=e1321] [cursor=pointer]:
+          - generic [aria-hidden]: language
+          - generic [aria-hidden]:
+            - generic: ‪한국어‬

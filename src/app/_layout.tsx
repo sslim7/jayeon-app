@@ -94,6 +94,13 @@ export default function RootLayout() {
     if (!ready) return;
     if (!authed || !ENV.webShell) return;
     if (pathname === '/shell') return;
+    // 🔧 측정용 예외(→ `components/asr-bench.tsx`). 측정이 끝나면 이 줄을 지운다.
+    //
+    // 🔴 이 가드가 없으면 받아쓰기 화면은 **열리자마자 웹뷰로 튕긴다.** 껍데기 모드에서는
+    // 로그인 뒤 모든 경로를 /shell 로 되돌리는데, 그 화면은 네이티브 모듈을 써야 해서
+    // 웹뷰 안에 있을 수 없는 유일한 예외다. 증상이 「메뉴를 눌러도 문자 보내기가 뜬다」라서
+    // 원인이 이동이 아니라 **되돌림**이라는 것이 화면에 전혀 드러나지 않는다.
+    if (pathname === '/asr-bench') return;
     router.replace('/shell');
   }, [ready, authed, pathname]);
 

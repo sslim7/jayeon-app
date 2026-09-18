@@ -1,0 +1,1384 @@
+- generic [active] [ref=f8e1]:
+  - generic [ref=f8e7]:
+    - navigation "Page Contents" [ref=f8e8]:
+      - list [ref=f8e11]:
+        - listitem [ref=f8e12]:
+          - link "Cloud Run pricing" [ref=f8e13] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#cloud-run-pricing
+        - listitem [ref=f8e14]:
+          - link "Pricing considerations" [ref=f8e15] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#pricing-considerations
+        - listitem [ref=f8e16]:
+          - link "Pricing tables" [ref=f8e17] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#tables
+        - listitem [ref=f8e18]:
+          - link "Services (Instance-based billing)" [ref=f8e19] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#services-instance-based-billing
+        - listitem [ref=f8e20]:
+          - link "Services (Requests-based billing)" [ref=f8e21] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#services-requests-based-billing
+        - listitem [ref=f8e22]:
+          - link "Jobs" [ref=f8e23] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#jobs
+        - listitem [ref=f8e24]:
+          - link "Delayed Jobs" [ref=f8e25] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#delayed-jobs
+        - listitem [ref=f8e26]:
+          - link "Worker pools" [ref=f8e27] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#worker-pools
+        - listitem [ref=f8e28]:
+          - link "Instances" [ref=f8e29] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#instances
+        - listitem [ref=f8e30]:
+          - link "Ephemeral Disk" [ref=f8e31] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#ephemeral-disk
+        - listitem [ref=f8e32]:
+          - link "Regional price tiers" [ref=f8e33] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#tiers
+        - listitem [ref=f8e34]:
+          - link "Billable instance time" [ref=f8e35] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#billable-time
+        - listitem [ref=f8e36]:
+          - link "Pricing Examples" [ref=f8e37] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#pricing-examples
+        - listitem [ref=f8e38]:
+          - link "Source deployments and functions" [ref=f8e39] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#source-deployments-and-functions
+        - listitem [ref=f8e40]:
+          - link "What's next" [ref=f8e41] [cursor=pointer]:
+            - /url: /run/pricing?hl=en#whats-next
+    - generic [ref=f8e44]:
+      - generic [ref=f8e48]:
+        - heading "Cloud Run pricing" [level=2] [ref=f8e49]
+        - generic [ref=f8e51]:
+          - paragraph [ref=f8e52]: Cloud Run charges you only for the resources you use, rounded up to the nearest 100 millisecond. Your total Cloud Run bill will be the sum of the resource usage in the pricing table after the free tier is applied.
+          - paragraph [ref=f8e53]:
+            - text: When setting
+            - link "concurrency" [ref=f8e54] [cursor=pointer]:
+              - /url: https://cloud.google.com/run/docs/about-concurrency
+            - text: higher than one request at a time, multiple requests can share the allocated CPU and memory of an instance.
+          - paragraph [ref=f8e55]:
+            - text: Outbound internet data transfer uses the
+            - link "Premium Network Service Tier" [ref=f8e56] [cursor=pointer]:
+              - /url: https://cloud.google.com/network-tiers/docs/overview#premium_tier
+            - text: and is charged at
+            - link "Google Cloud networking pricing" [ref=f8e57] [cursor=pointer]:
+              - /url: https://cloud.google.com/vpc/network-pricing
+            - text: with a free tier of 1GiB free data transfer within North America per month.
+          - paragraph [ref=f8e58]:
+            - text: Data transfer to Virtual Private Cloud networks is billed as Data transfer from a VM and charged at
+            - link "Virtual Private Cloud data transfer rates" [ref=f8e59] [cursor=pointer]:
+              - /url: https://cloud.google.com/vpc/network-pricing#egress
+            - text: . Serverless VPC Access connectors also charge for the compute required to run them. See
+            - link "Serverless VPC Access pricing" [ref=f8e60] [cursor=pointer]:
+              - /url: https://cloud.google.com/vpc/network-pricing#serverless-vpc-pricing
+            - text: .
+          - paragraph [ref=f8e61]:
+            - text: There is no charge for data transfer to Google Cloud resources in the same region (for example for traffic from one Cloud Run service to another Cloud Run service). There is no charge for data transfer to
+            - link "Media CDN" [ref=f8e62] [cursor=pointer]:
+              - /url: https://cloud.google.com/media-cdn/docs
+            - text: ","
+            - link "Cloud CDN" [ref=f8e63] [cursor=pointer]:
+              - /url: https://cloud.google.com/cdn/docs
+            - text: and
+            - link "Cloud Load Balancing" [ref=f8e64] [cursor=pointer]:
+              - /url: https://cloud.google.com/load-balancing
+            - text: .
+      - generic [ref=f8e67]:
+        - generic [ref=f8e68]:
+          - generic [ref=f8e71]:
+            - heading "Pricing considerations" [level=2] [ref=f8e72]
+            - generic [ref=f8e75]:
+              - paragraph [ref=f8e76]: "When evaluating the pricing of Cloud Run, consider the following:"
+              - list [ref=f8e77]:
+                - listitem [ref=f8e78]: "On-demand and pay per use: Cloud Run provides on-demand capacity and automatically scales instances. Cloud Run does not require pre-provisioning infrastructure to accommodate for anticipated peak usage. Container instances billed by Cloud Run are used container instances."
+                - listitem [ref=f8e79]:
+                  - text: "Total cost of ownership: While Cloud Run charges for compute costs, Cloud Run provides more value. For example, Cloud Run offers"
+                  - link "zonal redundancy" [ref=f8e80] [cursor=pointer]:
+                    - /url: https://cloud.google.com/run/docs/zonal-redundancy
+                  - text: ", requires low operations because"
+                  - link "Site Reliability Engineers" [ref=f8e81] [cursor=pointer]:
+                    - /url: https://sre.google/
+                  - text: do a lot in the background, makes you and your team more productive via its simplicity.
+                - listitem [ref=f8e82]:
+                  - text: "Committed use discounts: The cost of any continuous use of Cloud Run can be lowered by purchasing"
+                  - link "Committed use discounts" [ref=f8e83] [cursor=pointer]:
+                    - /url: https://docs.cloud.google.com/run/cud
+                  - text: . For example, if your Cloud Run service always has one or more active instances, you can lower its cost by committing to at least this amount. Compute flexible committed use discounts apply across GKE, Compute Engine and Cloud Run.
+              - paragraph [ref=f8e84]:
+                - text: Read more about
+                - link "cost optimization" [ref=f8e85] [cursor=pointer]:
+                  - /url: https://cloud.google.com/architecture/framework/cost-optimization
+                - text: .
+          - generic [ref=f8e88]:
+            - heading [level=3] [ref=f8e89]:
+              - paragraph [ref=f8e91]: Pricing calculator
+            - paragraph [ref=f8e94]:
+              - text: You can use the
+              - link "Google Cloud pricing calculator" [ref=f8e95] [cursor=pointer]:
+                - /url: https://cloud.google.com/products/calculator
+              - text: to estimate the cost of using Cloud Run.
+        - generic [ref=f8e96]:
+          - generic [ref=f8e99]:
+            - heading "Pricing tables" [level=2] [ref=f8e100]
+            - generic [ref=f8e103]:
+              - paragraph [ref=f8e104]:
+                - text: The following pricing tables use the
+                - emphasis [ref=f8e105]: GiB-second
+                - text: unit. A GiB-second means for example running a 1 gibibyte instance for 1 second, or running a 256 mebibyte instance for 4 seconds. The same principle applies for the
+                - emphasis [ref=f8e106]: vCPU-second
+                - text: unit. CUD refers to
+                - link "committed use discounts" [ref=f8e107] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/run/cud
+                - text: .
+              - paragraph [ref=f8e108]:
+                - text: The free tier usage is aggregated across
+                - link "projects" [ref=f8e109] [cursor=pointer]:
+                  - /url: https://cloud.google.com/resource-manager/docs/creating-managing-projects
+                - text: by
+                - link "billing account" [ref=f8e110] [cursor=pointer]:
+                  - /url: https://cloud.google.com/billing/docs/how-to/manage-billing-account
+                - text: and resets every month; you are billed only for usage past the free tier. The free tier is applied as a spending based discount using Tier 1 pricing.
+              - paragraph [ref=f8e111]:
+                - text: Cloud Run pricing depends on the
+                - link "selected region" [ref=f8e112] [cursor=pointer]:
+                  - /url: /run/pricing#tiers
+                - text: . Pricing for Cloud Run services also depends on the
+                - link "billing" [ref=f8e113] [cursor=pointer]:
+                  - /url: https://cloud.google.com/run/docs/configuring/billing-settings
+                - text: configuration.
+              - paragraph [ref=f8e114]:
+                - text: If you pay in a currency other than USD, the prices listed in your currency on
+                - link "Cloud Platform SKUs" [ref=f8e115] [cursor=pointer]:
+                  - /url: https://cloud.google.com/skus/
+                - text: apply.
+          - generic [ref=f8e118]:
+            - heading [level=3] [ref=f8e119]:
+              - paragraph [ref=f8e121]: Services (Instance-based billing)
+            - generic [ref=f8e123]:
+              - paragraph [ref=f8e124]:
+                - text: Services with
+                - link "instance-based billing" [ref=f8e125] [cursor=pointer]:
+                  - /url: https://cloud.google.com/run/docs/configuring/cpu-allocation
+              - paragraph [ref=f8e126]: "Free tier (based on us-central1 pricing):"
+              - list [ref=f8e127]:
+                - listitem [ref=f8e128]: CPU - First 240,000 vCPU-seconds free per month
+                - listitem [ref=f8e129]: RAM - First 450,000 GiB-seconds free per month
+          - generic [ref=f8e130]:
+            - generic [ref=f8e131]:
+              - combobox [ref=f8e134] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=f8e137]:
+                - text: Show discount options
+                - switch "Show discount options" [checked] [ref=f8e140] [cursor=pointer]
+            - region "Services (Instance-based billing)" [ref=f8e145]:
+              - table [ref=f8e146]:
+                - row [ref=f8e147]:
+                  - columnheader [ref=f8e148]:
+                    - paragraph [ref=f8e150]: Resource
+                  - columnheader [ref=f8e151]:
+                    - generic [ref=f8e152]:
+                      - paragraph [ref=f8e153]: Default (USD)
+                      - superscript [ref=f8e154]: "*"
+                      - button "tooltip" [ref=f8e156] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e158]: info
+                  - columnheader [ref=f8e160]:
+                    - generic [ref=f8e161]:
+                      - text: Cloud Run CUD - 1 Year
+                      - superscript [ref=f8e162]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e164] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e166]: info
+                  - columnheader [ref=f8e168]:
+                    - generic [ref=f8e169]:
+                      - text: Cloud Run CUD - 3 Year
+                      - superscript [ref=f8e170]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e172] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e174]: info
+                  - columnheader [ref=f8e176]:
+                    - generic [ref=f8e177]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=f8e178]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e180] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e182]: info
+                  - columnheader [ref=f8e184]:
+                    - generic [ref=f8e185]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=f8e186]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e188] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e190]: info
+                - rowgroup [ref=f8e192]:
+                  - row [ref=f8e193]:
+                    - cell [ref=f8e194]:
+                      - paragraph [ref=f8e195]: CPU (per vCPU-second)
+                    - cell "$0.000018" [ref=f8e196]
+                    - cell "$0.00001494" [ref=f8e197]
+                    - cell "$0.00001494" [ref=f8e198]
+                    - cell "$0.00001296" [ref=f8e199]
+                    - cell "$0.00000972" [ref=f8e200]
+                  - row [ref=f8e201]:
+                    - cell [ref=f8e202]:
+                      - paragraph [ref=f8e203]: Memory (per GiB-second)
+                    - cell "$0.000002" [ref=f8e204]
+                    - cell "$0.00000166" [ref=f8e205]
+                    - cell "$0.00000166" [ref=f8e206]
+                    - cell "$0.00000144" [ref=f8e207]
+                    - cell "$0.00000108" [ref=f8e208]
+                  - row [ref=f8e209]:
+                    - cell [ref=f8e210]:
+                      - paragraph [ref=f8e211]: GPU Type NVIDIA-L4 No zonal redundancy (per Second)
+                    - cell "$0.0001867" [ref=f8e212]
+                    - cell "-" [ref=f8e213]
+                    - cell "-" [ref=f8e214]
+                    - cell "-" [ref=f8e215]
+                    - cell "-" [ref=f8e216]
+                  - row [ref=f8e217]:
+                    - cell [ref=f8e218]:
+                      - paragraph [ref=f8e219]: GPU Type NVIDIA-L4 Zonal redundancy (per Second)
+                    - cell "$0.0002909" [ref=f8e220]
+                    - cell "-" [ref=f8e221]
+                    - cell "-" [ref=f8e222]
+                    - cell "-" [ref=f8e223]
+                    - cell "-" [ref=f8e224]
+                  - row [ref=f8e225]:
+                    - cell [ref=f8e226]:
+                      - paragraph [ref=f8e227]: GPU Type NVIDIA RTX Pro 6000 No zonal redundancy (per Second)
+                    - cell "$0.00036522" [ref=f8e228]
+                    - cell "-" [ref=f8e229]
+                    - cell "-" [ref=f8e230]
+                    - cell "-" [ref=f8e231]
+                    - cell "-" [ref=f8e232]
+                  - row [ref=f8e233]:
+                    - cell [ref=f8e234]:
+                      - paragraph [ref=f8e235]: GPU Type NVIDIA RTX Pro 6000 Zonal redundancy (per Second)
+                    - cell "$0.00056913" [ref=f8e236]
+                    - cell "-" [ref=f8e237]
+                    - cell "-" [ref=f8e238]
+                    - cell "-" [ref=f8e239]
+                    - cell "-" [ref=f8e240]
+          - generic [ref=f8e241]:
+            - generic [ref=f8e242]:
+              - superscript [ref=f8e243]: "*"
+              - text: Each consumption model has a unique ID. You may need to opt-in to be eligible for consumption model discounts. Click
+              - link "here" [ref=f8e244] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: to learn more.
+            - paragraph [ref=f8e245]: Cloud Run CUDs apply only to Cloud Run resources. For more flexibility, please use Compute Flexible CUDs.
+            - paragraph [ref=f8e246]:
+              - emphasis [ref=f8e247]: Flexible CUD
+              - text: refers to
+              - link [ref=f8e248] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#flexible_cuds
+                - emphasis [ref=f8e249]: Compute Flexible Committed Use Discounts
+              - text: .
+          - generic [ref=f8e252]:
+            - heading [level=3] [ref=f8e253]:
+              - paragraph [ref=f8e255]: Services (Requests-based billing)
+            - generic [ref=f8e257]:
+              - paragraph [ref=f8e258]:
+                - text: Services with
+                - link "request-based" [ref=f8e259] [cursor=pointer]:
+                  - /url: https://cloud.google.com/run/docs/configuring/cpu-allocation
+                - text: billing during
+                - link "billed instance" [ref=f8e260] [cursor=pointer]:
+                  - /url: /run/pricing#billable-time
+                - text: time
+              - paragraph [ref=f8e261]: "Free tier (based on us-central1 active pricing):"
+              - list [ref=f8e262]:
+                - listitem [ref=f8e263]: CPU - First 180,000 vCPU-seconds free per month
+                - listitem [ref=f8e264]: RAM - First 360,000 GiB-seconds free per month
+                - listitem [ref=f8e265]: Requests - 2 million requests free per month
+          - generic [ref=f8e266]:
+            - generic [ref=f8e267]:
+              - combobox [ref=f8e270] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=f8e273]:
+                - text: Show discount options
+                - switch "Show discount options" [checked] [ref=f8e276] [cursor=pointer]
+            - region "Services (Requests-based billing)" [ref=f8e281]:
+              - table [ref=f8e282]:
+                - row [ref=f8e283]:
+                  - columnheader [ref=f8e284]:
+                    - paragraph [ref=f8e286]: Resource
+                  - columnheader [ref=f8e287]:
+                    - paragraph [ref=f8e289]: Type
+                  - columnheader [ref=f8e290]:
+                    - generic [ref=f8e291]:
+                      - paragraph [ref=f8e292]: Default (USD)
+                      - superscript [ref=f8e293]: "*"
+                      - button "tooltip" [ref=f8e295] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e297]: info
+                  - columnheader [ref=f8e299]:
+                    - generic [ref=f8e300]:
+                      - text: Cloud Run CUD - 1 Year
+                      - superscript [ref=f8e301]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e303] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e305]: info
+                  - columnheader [ref=f8e307]:
+                    - generic [ref=f8e308]:
+                      - text: Cloud Run CUD - 3 Year
+                      - superscript [ref=f8e309]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e311] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e313]: info
+                  - columnheader [ref=f8e315]:
+                    - generic [ref=f8e316]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=f8e317]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e319] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e321]: info
+                  - columnheader [ref=f8e323]:
+                    - generic [ref=f8e324]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=f8e325]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e327] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e329]: info
+                - rowgroup [ref=f8e331]:
+                  - row [ref=f8e332]:
+                    - cell [ref=f8e333]:
+                      - paragraph [ref=f8e334]: CPU (per vCPU-second)
+                    - cell [ref=f8e335]:
+                      - paragraph [ref=f8e336]: Active time
+                      - paragraph [ref=f8e337]
+                    - cell "$0.000024" [ref=f8e338]
+                    - cell "$0.00001992" [ref=f8e339]
+                    - cell "$0.00001992" [ref=f8e340]
+                    - cell "$0.00001992" [ref=f8e341]
+                    - cell "$0.00001992" [ref=f8e342]
+                  - row [ref=f8e343]:
+                    - cell [ref=f8e344]:
+                      - paragraph [ref=f8e345]:
+                        - text: Idle time (Min instance
+                        - superscript [ref=f8e346]: "1"
+                        - text: )
+                      - paragraph [ref=f8e347]
+                    - cell "$0.0000025" [ref=f8e348]
+                    - cell "$0.000002075" [ref=f8e349]
+                    - cell "$0.000002075" [ref=f8e350]
+                    - cell "$0.000002075" [ref=f8e351]
+                    - cell "$0.000002075" [ref=f8e352]
+                  - row [ref=f8e353]:
+                    - cell [ref=f8e354]:
+                      - paragraph [ref=f8e355]: Memory (per GiB-second)
+                    - cell [ref=f8e356]:
+                      - paragraph [ref=f8e357]: Active time
+                    - cell "$0.0000025" [ref=f8e358]
+                    - cell "$0.000002075" [ref=f8e359]
+                    - cell "$0.000002075" [ref=f8e360]
+                    - cell "$0.000002075" [ref=f8e361]
+                    - cell "$0.000002075" [ref=f8e362]
+                  - row [ref=f8e363]:
+                    - cell [ref=f8e364]:
+                      - paragraph [ref=f8e365]:
+                        - text: Idle time (Min instance
+                        - superscript [ref=f8e366]: "1"
+                        - text: )
+                    - cell "$0.0000025" [ref=f8e367]
+                    - cell "$0.000002075" [ref=f8e368]
+                    - cell "$0.000002075" [ref=f8e369]
+                    - cell "$0.000002075" [ref=f8e370]
+                    - cell "$0.000002075" [ref=f8e371]
+                  - row [ref=f8e372]:
+                    - cell [ref=f8e373]:
+                      - paragraph [ref=f8e374]: Requests (per 1,000,000)
+                    - cell [ref=f8e375]:
+                      - paragraph [ref=f8e376]: N/A
+                    - cell "$0.40" [ref=f8e377]
+                    - cell "$0.332" [ref=f8e378]
+                    - cell "$0.332" [ref=f8e379]
+                    - cell "$0.332" [ref=f8e380]
+                    - cell "$0.332" [ref=f8e381]
+          - generic [ref=f8e382]:
+            - generic [ref=f8e383]:
+              - superscript [ref=f8e384]: "*"
+              - text: Each consumption model has a unique ID. You may need to opt-in to be eligible for consumption model discounts. Click
+              - link "here" [ref=f8e385] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: to learn more.
+            - paragraph [ref=f8e386]:
+              - superscript [ref=f8e387]: "1"
+              - emphasis [ref=f8e388]: idle min instance
+              - text: refers to
+              - link [ref=f8e389] [cursor=pointer]:
+                - /url: /run/pricing#billable-time
+                - emphasis [ref=f8e390]: idle billable time
+              - text: for instances kept warm using
+              - link "minimum instances" [ref=f8e391] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/configuring/min-instances
+              - text: . Idle instances that are not minimum instances are not charged.
+            - paragraph [ref=f8e392]:
+              - text: Requests are only billed when they reach the container after successfully being
+              - link "authenticated" [ref=f8e393] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/authenticating/overview
+              - text: ", requests denied by IAM policy are not billed."
+            - paragraph [ref=f8e394]: Cloud Run CUDs apply only to Cloud Run resources. For more flexibility, please use Compute Flexible CUDs.
+            - paragraph [ref=f8e395]:
+              - emphasis [ref=f8e396]: CUD
+              - text: refers to
+              - link [ref=f8e397] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#applicable-usage
+                - emphasis [ref=f8e398]: committed use discounts
+              - text: .
+          - generic [ref=f8e401]:
+            - heading [level=3] [ref=f8e402]:
+              - paragraph [ref=f8e404]: Jobs
+            - generic [ref=f8e406]:
+              - paragraph [ref=f8e407]: "Free tier (based on us-central1 pricing):"
+              - list [ref=f8e408]:
+                - listitem [ref=f8e409]: CPU - First 240,000 vCPU-seconds free per month
+                - listitem [ref=f8e410]: RAM - First 450,000 GiB-seconds free per month
+          - generic [ref=f8e411]:
+            - generic [ref=f8e412]:
+              - combobox [ref=f8e415] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=f8e418]:
+                - text: Show discount options
+                - switch "Show discount options" [checked] [ref=f8e421] [cursor=pointer]
+            - region "Jobs" [ref=f8e426]:
+              - table [ref=f8e427]:
+                - row [ref=f8e428]:
+                  - columnheader [ref=f8e429]:
+                    - paragraph [ref=f8e431]: Resource
+                  - columnheader [ref=f8e432]:
+                    - generic [ref=f8e433]:
+                      - paragraph [ref=f8e434]: Default (USD)
+                      - superscript [ref=f8e435]: "*"
+                      - button "tooltip" [ref=f8e437] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e439]: info
+                  - columnheader [ref=f8e441]:
+                    - generic [ref=f8e442]:
+                      - text: Cloud Run CUD - 1 Year
+                      - superscript [ref=f8e443]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e445] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e447]: info
+                  - columnheader [ref=f8e449]:
+                    - generic [ref=f8e450]:
+                      - text: Cloud Run CUD - 3 Year
+                      - superscript [ref=f8e451]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e453] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e455]: info
+                  - columnheader [ref=f8e457]:
+                    - generic [ref=f8e458]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=f8e459]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e461] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e463]: info
+                  - columnheader [ref=f8e465]:
+                    - generic [ref=f8e466]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=f8e467]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e469] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e471]: info
+                - rowgroup [ref=f8e473]:
+                  - row [ref=f8e474]:
+                    - cell [ref=f8e475]:
+                      - paragraph [ref=f8e476]: CPU (per vCPU-second)
+                    - cell "$0.000018" [ref=f8e477]
+                    - cell "$0.00001494" [ref=f8e478]
+                    - cell "$0.00001494" [ref=f8e479]
+                    - cell "$0.00001296" [ref=f8e480]
+                    - cell "$0.00000972" [ref=f8e481]
+                  - row [ref=f8e482]:
+                    - cell [ref=f8e483]:
+                      - paragraph [ref=f8e484]: Memory (per GiB-second)
+                    - cell "$0.000002" [ref=f8e485]
+                    - cell "$0.00000166" [ref=f8e486]
+                    - cell "$0.00000166" [ref=f8e487]
+                    - cell "$0.00000144" [ref=f8e488]
+                    - cell "$0.00000108" [ref=f8e489]
+                  - row [ref=f8e490]:
+                    - cell [ref=f8e491]:
+                      - paragraph [ref=f8e492]: GPU Type NVIDIA-L4 No zonal redundancy (per Second)
+                    - cell "$0.0001867" [ref=f8e493]
+                    - cell "-" [ref=f8e494]
+                    - cell "-" [ref=f8e495]
+                    - cell "-" [ref=f8e496]
+                    - cell "-" [ref=f8e497]
+                  - row [ref=f8e498]:
+                    - cell [ref=f8e499]:
+                      - paragraph [ref=f8e500]: GPU Type NVIDIA RTX Pro 6000 Non zonal redundancy (per Second)
+                    - cell "$0.00036522" [ref=f8e501]
+                    - cell "-" [ref=f8e502]
+                    - cell "-" [ref=f8e503]
+                    - cell "-" [ref=f8e504]
+                    - cell "-" [ref=f8e505]
+          - generic [ref=f8e506]:
+            - generic [ref=f8e507]:
+              - superscript [ref=f8e508]: "*"
+              - text: Each consumption model has a unique ID. You may need to opt-in to be eligible for consumption model discounts. Click
+              - link "here" [ref=f8e509] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: to learn more.
+            - paragraph [ref=f8e510]: Cloud Run CUDs apply only to Cloud Run resources. For more flexibility, please use Compute Flexible CUDs.
+            - paragraph [ref=f8e511]:
+              - emphasis [ref=f8e512]: Flexible CUD
+              - text: refers to
+              - link [ref=f8e513] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#flexible_cuds
+                - emphasis [ref=f8e514]: Compute Flexible Committed Use Discounts
+              - text: .
+          - generic [ref=f8e517]:
+            - heading [level=3] [ref=f8e518]:
+              - paragraph [ref=f8e520]: Delayed Jobs
+            - generic [ref=f8e522]:
+              - paragraph [ref=f8e523]: "Free tier (based on us-central1 pricing):"
+              - list [ref=f8e524]:
+                - listitem [ref=f8e525]: CPU - First 342,857 vCPU-seconds free per month
+                - listitem [ref=f8e526]: RAM - First 642,857 GiB-seconds free per month
+          - generic [ref=f8e527]:
+            - generic [ref=f8e528]:
+              - combobox [ref=f8e531] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=f8e534]:
+                - text: Show discount options
+                - switch "Show discount options" [checked] [ref=f8e537] [cursor=pointer]
+            - region "Delayed Jobs" [ref=f8e542]:
+              - table [ref=f8e543]:
+                - row [ref=f8e544]:
+                  - columnheader [ref=f8e545]:
+                    - paragraph [ref=f8e547]: Resource
+                  - columnheader [ref=f8e548]:
+                    - generic [ref=f8e549]:
+                      - paragraph [ref=f8e550]:
+                        - text: Default (USD)
+                        - superscript [ref=f8e551]: "*"
+                      - button "tooltip" [ref=f8e553] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e555]: info
+                  - columnheader [ref=f8e557]:
+                    - generic [ref=f8e558]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=f8e559]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e561] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e563]: info
+                  - columnheader [ref=f8e565]:
+                    - generic [ref=f8e566]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=f8e567]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e569] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e571]: info
+                - rowgroup [ref=f8e573]:
+                  - row [ref=f8e574]:
+                    - cell [ref=f8e575]:
+                      - paragraph [ref=f8e576]: CPU (per vCPU-second)
+                    - cell "$0.0000126 / 1 second" [ref=f8e577]
+                    - cell "$0.000009072 / 1 second" [ref=f8e578]
+                    - cell "$0.000006804 / 1 second" [ref=f8e579]
+                  - row [ref=f8e580]:
+                    - cell [ref=f8e581]:
+                      - paragraph [ref=f8e582]: Memory (per GiB-second)
+                    - cell "$0.0000014 / 1 gibibyte second" [ref=f8e583]
+                    - cell "$0.000001008 / 1 gibibyte second" [ref=f8e584]
+                    - cell "$0.000000756 / 1 gibibyte second" [ref=f8e585]
+          - generic [ref=f8e586]:
+            - generic [ref=f8e587]:
+              - superscript [ref=f8e588]: "*"
+              - text: Each consumption model has a unique ID. You may need to opt-in to be eligible for consumption model discounts. Click
+              - link "here" [ref=f8e589] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: to learn more.
+            - paragraph [ref=f8e590]: "Note: Delayed Jobs Prices are dynamic and can change up to once every 30 days."
+            - paragraph [ref=f8e591]: Cloud Run CUDs apply only to Cloud Run resources. For more flexibility, please use Compute Flexible CUDs.
+            - paragraph [ref=f8e592]:
+              - emphasis [ref=f8e593]: Flexible CUD
+              - text: refers to
+              - link [ref=f8e594] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#flexible_cuds
+                - emphasis [ref=f8e595]: Compute Flexible Committed Use Discounts
+              - text: .
+          - generic [ref=f8e598]:
+            - heading [level=3] [ref=f8e599]:
+              - paragraph [ref=f8e601]: Worker pools
+            - generic [ref=f8e603]:
+              - paragraph [ref=f8e604]: "Free tier (based on us-central1 pricing):"
+              - list [ref=f8e605]:
+                - listitem [ref=f8e606]: CPU - First 384,204 vCPU-seconds free per month
+                - listitem [ref=f8e607]: RAM - First 728,744 GiB-seconds free per month
+          - generic [ref=f8e608]:
+            - generic [ref=f8e609]:
+              - combobox [ref=f8e612] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=f8e615]:
+                - text: Show discount options
+                - switch "Show discount options" [checked] [ref=f8e618] [cursor=pointer]
+            - region "Worker pools" [ref=f8e623]:
+              - table [ref=f8e624]:
+                - row [ref=f8e625]:
+                  - columnheader [ref=f8e626]:
+                    - paragraph [ref=f8e628]: Resource
+                  - columnheader [ref=f8e629]:
+                    - generic [ref=f8e630]:
+                      - paragraph [ref=f8e631]: Default (USD)
+                      - superscript [ref=f8e632]: "*"
+                      - button "tooltip" [ref=f8e634] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e636]: info
+                  - columnheader [ref=f8e638]:
+                    - generic [ref=f8e639]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=f8e640]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e642] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e644]: info
+                  - columnheader [ref=f8e646]:
+                    - generic [ref=f8e647]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=f8e648]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e650] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e652]: info
+                - rowgroup [ref=f8e654]:
+                  - row [ref=f8e655]:
+                    - cell [ref=f8e656]:
+                      - paragraph [ref=f8e657]: CPU (per vCPU-second)
+                    - cell "$0.000011244" [ref=f8e658]
+                    - cell "$0.000008096" [ref=f8e659]
+                    - cell "$0.000006072" [ref=f8e660]
+                  - row [ref=f8e661]:
+                    - cell [ref=f8e662]:
+                      - paragraph [ref=f8e663]: Memory (per GiB-second)
+                    - cell "$0.000001235" [ref=f8e664]
+                    - cell "$0.000000889" [ref=f8e665]
+                    - cell "$0.000000667" [ref=f8e666]
+                  - row [ref=f8e667]:
+                    - cell [ref=f8e668]:
+                      - paragraph [ref=f8e669]: GPU Type NVIDIA-L4 No zonal redundancy (per Second)
+                    - cell "$0.0001867" [ref=f8e670]
+                    - cell "-" [ref=f8e671]
+                    - cell "-" [ref=f8e672]
+                  - row [ref=f8e673]:
+                    - cell [ref=f8e674]:
+                      - paragraph [ref=f8e675]: GPU Type NVIDIA-L4 Zonal redundancy (Per Second)
+                    - cell "$0.0002909" [ref=f8e676]
+                    - cell "-" [ref=f8e677]
+                    - cell "-" [ref=f8e678]
+                  - row [ref=f8e679]:
+                    - cell [ref=f8e680]:
+                      - paragraph [ref=f8e681]: GPU Type NVIDIA RTX Pro 6000 No zonal redundancy (per Second)
+                    - cell "$0.00036522" [ref=f8e682]
+                    - cell "-" [ref=f8e683]
+                    - cell "-" [ref=f8e684]
+                  - row [ref=f8e685]:
+                    - cell [ref=f8e686]:
+                      - paragraph [ref=f8e687]: GPU Type NVIDIA RTX Pro 6000 Zonal redundancy (per Second)
+                    - cell "$0.00056913" [ref=f8e688]
+                    - cell "-" [ref=f8e689]
+                    - cell "-" [ref=f8e690]
+          - generic [ref=f8e691]:
+            - generic [ref=f8e692]:
+              - superscript [ref=f8e693]: "*"
+              - text: Each consumption model has a unique ID. You may need to opt-in to be eligible for consumption model discounts. Click
+              - link "here" [ref=f8e694] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: to learn more.
+            - paragraph [ref=f8e695]:
+              - text: If you pay in a currency other than USD, the prices listed in your currency on
+              - link "Cloud Platform SKUs" [ref=f8e696] [cursor=pointer]:
+                - /url: https://cloud.google.com/skus/
+              - text: apply.
+            - paragraph [ref=f8e697]:
+              - emphasis [ref=f8e698]: Flexible CUD
+              - text: refers to
+              - link [ref=f8e699] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#flexible_cuds
+                - emphasis [ref=f8e700]: Compute Flexible Committed Use Discounts
+              - text: .
+          - heading [level=3] [ref=f8e704]:
+            - paragraph [ref=f8e706]: Instances
+          - generic [ref=f8e707]:
+            - generic [ref=f8e708]:
+              - combobox [ref=f8e711] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=f8e714]:
+                - text: Show discount options
+                - switch "Show discount options" [checked] [ref=f8e717] [cursor=pointer]
+            - region "Instances" [ref=f8e722]:
+              - table [ref=f8e723]:
+                - row [ref=f8e724]:
+                  - columnheader [ref=f8e725]:
+                    - paragraph [ref=f8e727]: Resource
+                  - columnheader [ref=f8e728]:
+                    - generic [ref=f8e729]:
+                      - paragraph [ref=f8e730]: Default (USD)
+                      - superscript [ref=f8e731]: "*"
+                      - button "tooltip" [ref=f8e733] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e735]: info
+                  - columnheader [ref=f8e737]:
+                    - generic [ref=f8e738]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=f8e739]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e741] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e743]: info
+                  - columnheader [ref=f8e745]:
+                    - generic [ref=f8e746]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=f8e747]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e749] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e751]: info
+                - rowgroup [ref=f8e753]:
+                  - row [ref=f8e754]:
+                    - cell [ref=f8e755]:
+                      - paragraph [ref=f8e756]: CPU (per vCPU-second)
+                    - cell "$0.00000027" [ref=f8e757]
+                    - cell "$0.000000194" [ref=f8e758]
+                    - cell "$0.000000146" [ref=f8e759]
+                  - row [ref=f8e760]:
+                    - cell [ref=f8e761]:
+                      - paragraph [ref=f8e762]: Memory (per GiB-second)
+                    - cell "$0.00000193" [ref=f8e763]
+                    - cell "$0.00000139" [ref=f8e764]
+                    - cell "$0.000001042" [ref=f8e765]
+          - generic [ref=f8e766]:
+            - generic [ref=f8e767]:
+              - superscript [ref=f8e768]: "*"
+              - text: Each consumption model has a unique ID. You may need to opt-in to be eligible for consumption model discounts. Click
+              - link "here" [ref=f8e769] [cursor=pointer]:
+                - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+              - text: to learn more.
+            - paragraph [ref=f8e770]:
+              - text: If you pay in a currency other than USD, the prices listed in your currency on
+              - link "Cloud Platform SKUs" [ref=f8e771] [cursor=pointer]:
+                - /url: https://cloud.google.com/skus/
+              - text: apply.
+            - paragraph [ref=f8e772]:
+              - emphasis [ref=f8e773]: Flexible CUD
+              - text: refers to
+              - emphasis [ref=f8e774]
+              - link [ref=f8e775] [cursor=pointer]:
+                - /url: https://docs.cloud.google.com/run/cud#flexible_cuds
+                - emphasis [ref=f8e776]: Compute Flexible Committed Use Discounts.
+          - heading [level=3] [ref=f8e780]:
+            - paragraph [ref=f8e782]: Ephemeral Disk
+          - generic [ref=f8e783]:
+            - generic [ref=f8e784]:
+              - combobox [ref=f8e787] [cursor=pointer]:
+                - generic: Iowa (us-central1)
+              - generic [ref=f8e789]:
+                - generic [ref=f8e790]:
+                  - text: Show discount options
+                  - switch "Show discount options" [checked] [ref=f8e793] [cursor=pointer]
+                - radiogroup "Duration" [ref=f8e798]:
+                  - generic [ref=f8e799]:
+                    - radio "Hourly" [checked] [ref=f8e800] [cursor=pointer]
+                    - radio "Monthly" [ref=f8e808] [cursor=pointer]
+            - region "Ephemeral Disk" [ref=f8e816]:
+              - table [ref=f8e817]:
+                - row [ref=f8e818]:
+                  - columnheader [ref=f8e819]:
+                    - paragraph [ref=f8e821]: Resource
+                  - columnheader [ref=f8e822]:
+                    - generic [ref=f8e823]:
+                      - paragraph [ref=f8e824]: Default USD
+                      - superscript [ref=f8e825]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e827] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e829]: info
+                  - columnheader [ref=f8e831]:
+                    - generic [ref=f8e832]:
+                      - text: Compute Flexible CUD - 1 Year
+                      - superscript [ref=f8e833]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e835] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e837]: info
+                  - columnheader [ref=f8e839]:
+                    - generic [ref=f8e840]:
+                      - text: Compute Flexible CUD - 3 Year
+                      - superscript [ref=f8e841]: "*"
+                      - text: (USD)
+                      - button "tooltip" [ref=f8e843] [cursor=pointer]:
+                        - generic [aria-hidden] [ref=f8e845]: info
+                - rowgroup [ref=f8e847]:
+                  - row [ref=f8e848]:
+                    - cell [ref=f8e849]:
+                      - paragraph [ref=f8e850]: Ephemeral Disk
+                    - cell "$0.000109589 / 1 gibibyte hour" [ref=f8e851]
+                    - cell "$0.000078904 / 1 gibibyte hour" [ref=f8e852]
+                    - cell "$0.000059178 / 1 gibibyte hour" [ref=f8e853]
+          - generic [ref=f8e855]:
+            - superscript [ref=f8e856]: "*"
+            - text: Each consumption model has a unique ID. You may need to opt-in to be eligible for consumption model discounts. Click
+            - link "here" [ref=f8e857] [cursor=pointer]:
+              - /url: https://cloud.google.com/docs/cuds-multiprice#how-to-opt-in
+            - text: to learn more.
+        - generic [ref=f8e858]:
+          - heading "Regional price tiers" [level=2] [ref=f8e862]
+          - generic [ref=f8e866]:
+            - heading [level=3] [ref=f8e867]:
+              - paragraph [ref=f8e869]: Subject to Tier 1 pricing
+            - list [ref=f8e872]:
+              - listitem [ref=f8e873]: africa-south1 (Johannesburg)
+              - listitem [ref=f8e874]: asia-east1 (Taiwan)
+              - listitem [ref=f8e875]: asia-northeast1 (Tokyo)
+              - listitem [ref=f8e876]: asia-northeast2 (Osaka)
+              - listitem [ref=f8e877]: asia-south1 (Mumbai, India)
+              - listitem [ref=f8e878]: asia-southeast3 (Bangkok)
+              - listitem [ref=f8e879]: asia-southeast4 (Kuala Lumpur)
+              - listitem [ref=f8e880]:
+                - text: europe-north1 (Finland)
+                - link [ref=f8e881] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e882]: "2"
+              - listitem [ref=f8e883]:
+                - text: europe-north2 (Stockholm)
+                - link [ref=f8e884] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e885]: "2"
+              - listitem [ref=f8e886]:
+                - text: europe-southwest1 (Madrid)
+                - link [ref=f8e887] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e888]: "2"
+              - listitem [ref=f8e889]:
+                - text: europe-west1 (Belgium)
+                - link [ref=f8e890] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e891]: "2"
+              - listitem [ref=f8e892]:
+                - text: europe-west4 (Netherlands)
+                - link [ref=f8e893] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e894]: "2"
+              - listitem [ref=f8e895]: europe-west8 (Milan)
+              - listitem [ref=f8e896]:
+                - text: europe-west9 (Paris)
+                - link [ref=f8e897] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e898]: "2"
+              - listitem [ref=f8e899]: me-west1 (Tel Aviv)
+              - listitem [ref=f8e900]: northamerica-south1 (Mexico)
+              - listitem [ref=f8e901]:
+                - text: us-central1 (Iowa)
+                - link [ref=f8e902] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e903]: "2"
+              - listitem [ref=f8e904]: us-east1 (South Carolina)
+              - listitem [ref=f8e905]: us-east4 (Northern Virginia)
+              - listitem [ref=f8e906]: us-east5 (Columbus)
+              - listitem [ref=f8e907]:
+                - text: us-south1 (Dallas)
+                - link [ref=f8e908] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e909]: "2"
+              - listitem [ref=f8e910]:
+                - text: us-west1 (Oregon)
+                - link [ref=f8e911] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e912]: "2"
+              - listitem [ref=f8e913]: us-west8 (Phoenix)
+          - generic [ref=f8e916]:
+            - heading [level=3] [ref=f8e917]:
+              - paragraph [ref=f8e919]: Subject to Tier 2 pricing
+            - list [ref=f8e922]:
+              - listitem [ref=f8e923]: asia-east2 (Hong Kong)
+              - listitem [ref=f8e924]: asia-northeast3 (Seoul, South Korea)
+              - listitem [ref=f8e925]: asia-southeast1 (Singapore)
+              - listitem [ref=f8e926]: asia-southeast2 (Jakarta)
+              - listitem [ref=f8e927]: asia-south2 (Delhi, India)
+              - listitem [ref=f8e928]: australia-southeast1 (Sydney)
+              - listitem [ref=f8e929]: australia-southeast2 (Melbourne)
+              - listitem [ref=f8e930]: europe-central2 (Warsaw, Poland)
+              - listitem [ref=f8e931]:
+                - text: europe-west10 (Berlin)
+                - link [ref=f8e932] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e933]: "2"
+              - listitem [ref=f8e934]: europe-west12 (Turin)
+              - listitem [ref=f8e935]:
+                - text: europe-west2 (London, UK)
+                - link [ref=f8e936] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e937]: "2"
+              - listitem [ref=f8e938]:
+                - text: europe-west3 (Frankfurt, Germany)
+                - link [ref=f8e939] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e940]: "2"
+              - listitem [ref=f8e941]:
+                - text: europe-west6 (Zurich, Switzerland)
+                - link [ref=f8e942] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e943]: "2"
+              - listitem [ref=f8e944]: me-central1 (Doha)
+              - listitem [ref=f8e945]: me-central2 (Dammam)
+              - listitem [ref=f8e946]:
+                - text: northamerica-northeast1 (Montreal)
+                - link [ref=f8e947] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e948]: "2"
+              - listitem [ref=f8e949]:
+                - text: northamerica-northeast2 (Toronto)
+                - link [ref=f8e950] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e951]: "2"
+              - listitem [ref=f8e952]:
+                - text: southamerica-east1 (Sao Paulo, Brazil)
+                - link [ref=f8e953] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e954]: "2"
+              - listitem [ref=f8e955]:
+                - text: southamerica-west1 (Santiago, Chile)
+                - link [ref=f8e956] [cursor=pointer]:
+                  - /url: https://cloud.google.com/sustainability/region-carbon#region-picker
+                  - text: Low CO
+                  - subscript [ref=f8e957]: "2"
+              - listitem [ref=f8e958]: us-west2 (Los Angeles)
+              - listitem [ref=f8e959]: us-west3 (Salt Lake City)
+              - listitem [ref=f8e960]: us-west4 (Las Vegas)
+        - generic [ref=f8e961]:
+          - heading "Billable instance time" [level=2] [ref=f8e965]
+          - generic [ref=f8e971]:
+            - paragraph [ref=f8e972]:
+              - text: The billable time aggregated from all Cloud Run instances is exposed as a Cloud Monitoring metric. See
+              - link "container/billable_instance_time metric" [ref=f8e973] [cursor=pointer]:
+                - /url: https://cloud.google.com/monitoring/api/metrics_gcp#gcp-run
+              - text: for more details.
+            - paragraph [ref=f8e974]:
+              - text: Billable instance time is rounded up to the nearest 100 milliseconds and depends on the
+              - link "billing" [ref=f8e975] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/configuring/cpu-allocation
+              - text: "configuration of your Cloud Run service:"
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img "Billable instance time"
+          - generic [ref=f8e978]:
+            - heading [level=3] [ref=f8e979]:
+              - paragraph [ref=f8e981]: Billable instance time for services with Request-based billing
+            - generic [ref=f8e983]:
+              - paragraph [ref=f8e984]: "By default, Cloud Run only charges for the CPU and memory allocated to an instance when:"
+              - list [ref=f8e985]:
+                - listitem [ref=f8e986]:
+                  - text: The instance is
+                  - link "starting" [ref=f8e987] [cursor=pointer]:
+                    - /url: https://cloud.google.com/run/docs/reference/container-contract#startup
+                  - text: .
+                - listitem [ref=f8e988]:
+                  - text: The instance is gracefully
+                  - link "shutting down" [ref=f8e989] [cursor=pointer]:
+                    - /url: https://cloud.google.com/run/docs/reference/container-contract#instance-shutdown
+                  - text: (handling the SIGTERM signal).
+                - listitem [ref=f8e990]: "At least one request is being processed by the instance. Billable instance time begins with the start of the first request and ends at the end of the last request, as shown in the following diagram:"
+              - paragraph [ref=f8e991]:
+                - text: If you
+                - link "set a minimum number of instances" [ref=f8e992] [cursor=pointer]:
+                  - /url: https://cloud.google.com/run/docs/configuring/min-instances
+                - text: ", you are also billed at a different \"idle\" rate when these instances are not processing requests. See the table above."
+          - generic [ref=f8e995]:
+            - heading [level=3] [ref=f8e996]:
+              - paragraph [ref=f8e998]: Billable instance time for services with Instance-based billing
+            - paragraph [ref=f8e1001]:
+              - text: When you opt-into having
+              - link "Instance-based billing" [ref=f8e1002] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/configuring/cpu-allocation
+              - text: ", you are billed for the entire lifetime any Cloud Run container instances: from the time the container is started to when it is terminated, with a minimum of 1 minute."
+          - generic [ref=f8e1005]:
+            - heading [level=3] [ref=f8e1006]:
+              - paragraph [ref=f8e1008]: Billable instance time for Cloud Run jobs
+            - paragraph [ref=f8e1011]:
+              - text: Cloud Run jobs are billed at the
+              - link "Instance-based billing" [ref=f8e1012] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/configuring/cpu-allocation
+              - text: rate, for the entire lifetime of any instance started, with a minimum of 1 minute.
+        - generic [ref=f8e1013]:
+          - heading "Pricing Examples" [level=2] [ref=f8e1017]
+          - generic [ref=f8e1021]:
+            - heading [level=3] [ref=f8e1022]:
+              - paragraph [ref=f8e1024]: "Example 1: Public API/Website – External Application Data Access"
+            - generic [ref=f8e1026]:
+              - paragraph [ref=f8e1027]: Let's assume that you deployed a Cloud Run service with request-based billing in europe-west1 (Belgium) to serve websites, web apps, APIs, or mobile backends. Your service receives 10 million requests per month with an average per-request latency of 400 milliseconds. This service is configured with 1 vCPU, 512 MiB of memory and 20 maximum concurrent requests per instance. The traffic pattern follows a 24-hour cycle, with request volume fluctuating over 12 hours in a bell curve distribution.
+              - paragraph [ref=f8e1028]: Your estimated monthly cost for this workload is $13.69. Without the vCPU/Memory free tier, the cost would be $18.91.
+              - paragraph [ref=f8e1029]:
+                - text: To understand these calculations in detail and to adjust settings and usage estimates, use the
+                - link "Pricing Calculator" [ref=f8e1030] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVEyT1dRek5EUXdNQzFoWlRVMUxUUXhOMkV0WVRkak5pMWhOamcxT1dJNVlUWXdNV0lRQVE9PRAcGiRBMDJCNDgwMi0yMkEzLTQxNTgtQTM5Qy0zOEI1QTQyNTdFMUI
+                - text: .
+          - generic [ref=f8e1033]:
+            - heading [level=3] [ref=f8e1034]:
+              - paragraph [ref=f8e1036]: "Example 2: Single Concurrency - CPU-intensive/non-thread-safe app, one request per instance"
+            - generic [ref=f8e1038]:
+              - paragraph [ref=f8e1039]: Let's assume that you deployed a Cloud Run service in europe-west1 (Belgium) using request-based billing for a CPU-intensive, non-thread-safe application that processes one request at a time. Your service receives 10 million requests per month with an average per-request latency of 400 milliseconds. This service is configured with 1 vCPU and 512 MiB of memory.
+              - paragraph [ref=f8e1040]: Your estimated monthly cost for this workload is $81.72. Without the vCPU/Memory free tier, the cost would be $86.49.
+              - paragraph [ref=f8e1041]:
+                - text: To understand these calculations in detail and to adjust settings and usage estimates, use the
+                - link "Pricing Calculator" [ref=f8e1042] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVJrTnpreU5ERTRZaTAzTm1Zd0xUUTJNREl0T0dKaU55MHpabUl3TnpVek5tSTFNemNRQVE9PRAcGiQ3MTMxODdGOC03QTc5LTRFMTItQTRGMi01NzI2NDU1QUQzNkI
+                - text: .
+          - generic [ref=f8e1045]:
+            - heading [level=3] [ref=f8e1046]:
+              - paragraph [ref=f8e1048]: "Example 3: AI Inference Endpoint - Local model serving with Ollama"
+            - generic [ref=f8e1050]:
+              - paragraph [ref=f8e1051]: Let's assume that you deployed a Cloud Run service in europe-west1 (Belgium) to serve real-time, GPU-accelerated LLM or image generation. This service is configured with 4 vCPU, 16 GiB of memory and NVIDIA-L4 (No zonal redundancy). This service reaches a daily peak of 2 instances and the traffic pattern follows a 24-hour cycle, with request volume fluctuating over 12 hours in a bell curve distribution.
+              - paragraph [ref=f8e1052]: Your estimated monthly cost for this workload is $822.40. Without the vCPU/Memory free tier, the cost would be $827.62.
+              - paragraph [ref=f8e1053]:
+                - text: To understand these calculations in detail and to adjust settings and usage estimates, use the
+                - link "Pricing Calculator" [ref=f8e1054] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVEzTTJWak56VXhZUzFsWW1ZMkxUUTFOMkV0T1RJMllTMDNNVFUxTURReU1HSXhaallRQVE9PRAcGiRDODU2N0I5Qy03MUVGLTRGNzYtQjQwQy05ODhBNzQ4QUE0NjI
+                - text: .
+          - generic [ref=f8e1057]:
+            - heading [level=3] [ref=f8e1058]:
+              - paragraph [ref=f8e1060]: "Example 4: Serverless Function - Lightweight FaaS for image resizing on upload"
+            - generic [ref=f8e1062]:
+              - paragraph [ref=f8e1063]: Let's assume that you deployed a Cloud Run service with request-based billing in europe-west1 (Belgium) to serve event-triggered code execution (e.g., file upload, HTTP request). Your service receives 10 million requests per month with an average per-request latency of 200 milliseconds. This service is configured with 0.167 vCPU, 256 MiB of memory and 1 maximum concurrent requests per instance.
+              - paragraph [ref=f8e1064]: Your estimated monthly cost for this workload is $7.25. Without the vCPU/Memory free tier, the cost would be $12.47.
+              - paragraph [ref=f8e1065]:
+                - text: To understand these calculations in detail and to adjust settings and usage estimates, use the
+                - link "Pricing Calculator" [ref=f8e1066] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVJrTldZME1qQmlOeTB3WmpJNUxUUm1ORFV0T0dOaU1pMDJZak01WTJVNU9ERm1NMlVRQVE9PRAcGiQzOUQ3OEI5OS1FNzlCLTQ4NDMtQkVGNi1BOUVCQjIxQzBBODc
+                - text: .
+          - generic [ref=f8e1069]:
+            - heading [level=3] [ref=f8e1070]:
+              - paragraph [ref=f8e1072]: "Example 5: Batch Job Processing - Large-scale, scheduled data transformations"
+            - generic [ref=f8e1074]:
+              - paragraph [ref=f8e1075]: Let's assume that you deployed a Cloud Run job in europe-west1 (Belgium) to process large-scale, scheduled data transformations (e.g., reports). Your job is launched once per hour (730 per month) with each execution lasting 1 minute. This job is configured with 1 vCPU, 512 MiB of memory and 1 task per execution.
+              - paragraph [ref=f8e1076]: Your estimated monthly cost for this workload is $0.00. Without the vCPU/Memory free tier, the cost would be $0.45.
+              - paragraph [ref=f8e1077]:
+                - text: To understand these calculations in detail and to adjust settings and usage estimates, use the
+                - link "Pricing Calculator" [ref=f8e1078] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVExT0RnNVpUZGtOUzFoTlRCbUxUUTBaV010WWpGaFl5MW1NRFF6TlRabVl6Vm1NRFlRQVE9PRAcGiRCQzU5NUQxRC0zNkFGLTQxQTAtQjY5QS0wRTRGQjU2MkE1NTU
+                - text: .
+          - generic [ref=f8e1081]:
+            - heading [level=3] [ref=f8e1082]:
+              - paragraph [ref=f8e1084]: "Example 6: Background Worker - Asynchronous offloading of intensive operations"
+            - generic [ref=f8e1086]:
+              - paragraph [ref=f8e1087]: Let's assume that you deployed a Cloud Run worker pool in europe-west1 (Belgium) to offload long-running or heavy tasks (e.g., bulk emails, video processing) to keep the main application responsive. Your worker pool is configured to run a single instance for an entire month. This worker pool is configured with 1 vCPU and 512 MiB of memory.
+              - paragraph [ref=f8e1088]: Your estimated monthly cost for this workload is $11.61. Without the vCPU/Memory free tier, the cost would be $16.83.
+              - paragraph [ref=f8e1089]:
+                - text: To understand these calculations in detail and to adjust settings and usage estimates, use the
+                - link "Pricing Calculator" [ref=f8e1090] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products/calculator?dl=CjhDaVF4TlRGallXUTRaQzB3WkRFNUxUUTRaRGN0T0dWallpMHpaREUxTXpNMFkySTVaRFFRQVE9PRAcGiRENzU2OTFDRi04RjNBLTQzRUMtOThBNy0wOTNDRkRCRjBDN0Y
+                - text: .
+        - generic [ref=f8e1094]:
+          - heading "Source deployments and functions" [level=2] [ref=f8e1095]
+          - generic [ref=f8e1098]:
+            - paragraph [ref=f8e1099]:
+              - text: Cloud Run
+              - link "deployments from source" [ref=f8e1100] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/deploying-source-code
+              - text: and
+              - link "functions" [ref=f8e1101] [cursor=pointer]:
+                - /url: https://cloud.google.com/run/docs/deploy-functions
+              - text: operate as Cloud Run services and are billed accordingly based on the conditions above.
+            - paragraph [ref=f8e1102]:
+              - text: When deploying from source or creating a function, Cloud Run uses Cloud Build to convert your source code or function into an executable image. The images are created in Cloud Build and stored in Artifact Registry. Artifact Registry has its own
+              - link "free tier of storage" [ref=f8e1103] [cursor=pointer]:
+                - /url: https://cloud.google.com/artifact-registry/pricing#storage
+              - text: . If you deploy your source code or function to Artifact Registry and exceed the Artifact Registry free tier usage, you will incur charges for deploying your functions, even when your use of Cloud Run falls within the free tier.
+            - paragraph [ref=f8e1104]:
+              - text: Pricing for Cloud Build and Artifact Registry is not included in Cloud Run pricing. To review pricing for these services, see the
+              - link "Cloud Build Pricing" [ref=f8e1105] [cursor=pointer]:
+                - /url: https://cloud.google.com/build/pricing
+              - text: and
+              - link "Artifact Registry Pricing" [ref=f8e1106] [cursor=pointer]:
+                - /url: https://cloud.google.com/artifact-registry/pricing
+              - text: pages.
+            - paragraph [ref=f8e1107]:
+              - text: Cloud Run uses Eventarc for event delivery. Pricing for Eventarc is not included in the Cloud Run pricing above. Review pricing on the
+              - link "Eventarc Pricing" [ref=f8e1108] [cursor=pointer]:
+                - /url: https://cloud.google.com/eventarc/pricing
+              - text: page.
+            - paragraph [ref=f8e1109]:
+              - text: Pricing for Cloud Run functions (1st gen) functions is not included in Cloud Run pricing. Review the pricing in
+              - link "Cloud Run functions (1st gen) pricing" [ref=f8e1110] [cursor=pointer]:
+                - /url: https://cloud.google.com/functions/pricing-1stgen
+              - text: .
+      - generic [ref=f8e1114]:
+        - heading "What's next" [level=2] [ref=f8e1115]
+        - list [ref=f8e1118]:
+          - listitem [ref=f8e1119]:
+            - text: Read the
+            - link "Cloud Run documentation" [ref=f8e1120] [cursor=pointer]:
+              - /url: https://cloud.google.com/run/docs
+            - text: .
+          - listitem [ref=f8e1121]:
+            - text: Get started with
+            - link "Cloud Run" [ref=f8e1122] [cursor=pointer]:
+              - /url: https://cloud.google.com/run/docs/quickstarts
+            - text: .
+          - listitem [ref=f8e1123]:
+            - text: Try the
+            - link "Pricing calculator" [ref=f8e1124] [cursor=pointer]:
+              - /url: https://cloud.google.com/products/calculator
+            - text: .
+          - listitem [ref=f8e1125]:
+            - text: Learn about
+            - link "Cloud Run solutions and use cases" [ref=f8e1126] [cursor=pointer]:
+              - /url: https://cloud.google.com/architecture?text=Cloud%20Run
+            - text: .
+      - generic [ref=f8e1131]:
+        - heading "Request a custom quote" [level=2] [ref=f8e1133]
+        - generic [ref=f8e1135]:
+          - generic [ref=f8e1136]: With Google Cloud's pay-as-you-go pricing, you only pay for the services you use. Connect with our sales team to get a custom quote for your organization.
+          - generic [ref=f8e1140] [cursor=pointer]:
+            - generic [aria-hidden] [ref=f8e1141]: Contact sales
+            - link "Contact sales" [ref=f8e1142]:
+              - /url: https://cloud.google.com/contact?direct=true
+  - banner [ref=f8e1143]:
+    - generic [ref=f8e1146]:
+      - link [ref=f8e1148] [cursor=pointer]:
+        - /url: https://cloud.google.com/
+        - img "Google Cloud" [ref=f8e1149]
+      - generic [ref=f8e1150]:
+        - navigation [ref=f8e1153]:
+          - text: chevron_left
+          - link "Overview" [ref=f8e1155] [cursor=pointer]:
+            - /url: https://cloud.google.com/why-google-cloud
+          - link "Solutions" [ref=f8e1157] [cursor=pointer]:
+            - /url: https://cloud.google.com/solutions
+          - link "Products" [ref=f8e1159] [cursor=pointer]:
+            - /url: https://cloud.google.com/products
+          - link "Pricing" [ref=f8e1161] [cursor=pointer]:
+            - /url: https://cloud.google.com/pricing
+          - link "Resources" [ref=f8e1163] [cursor=pointer]:
+            - /url: https://cloud.google.com/docs/get-started
+          - text: chevron_right
+        - generic [ref=f8e1167]:
+          - generic [aria-hidden]:
+            - generic [aria-hidden]: 
+          - generic [ref=f8e1168]:
+            - generic [aria-hidden]: search
+            - generic:
+              - combobox "Search"
+            - button "Search" [ref=f8e1170] [cursor=pointer]: send
+      - generic [ref=f8e1171]:
+        - link "Docs" [ref=f8e1173] [cursor=pointer]:
+          - /url: https://cloud.google.com/docs
+        - link "Support" [ref=f8e1175] [cursor=pointer]:
+          - /url: https://cloud.google.com/support-hub
+      - link "Sign in" [ref=f8e1178] [cursor=pointer]:
+        - /url: https://accounts.google.com/AccountChooser?continue=https://cloud.google.com/run/pricing?hl%3Den&hl=en&prompt=select_account&service=cloudconsole
+  - contentinfo [ref=f8e1179]:
+    - generic [ref=f8e1180]:
+      - navigation "Footer Links" [ref=f8e1182]:
+        - list [ref=f8e1183]:
+          - listitem [ref=f8e1184]:
+            - heading "Why Google" [level=3] [ref=f8e1185]
+            - list [ref=f8e1186]:
+              - listitem [ref=f8e1187]:
+                - link "Choosing Google Cloud" [ref=f8e1188] [cursor=pointer]:
+                  - /url: https://cloud.google.com/why-google-cloud
+              - listitem [ref=f8e1189]:
+                - link "Trust and security" [ref=f8e1190] [cursor=pointer]:
+                  - /url: https://cloud.google.com/trust-center
+              - listitem [ref=f8e1191]:
+                - link "Modern Infrastructure Cloud" [ref=f8e1192] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/modern-infrastructure
+              - listitem [ref=f8e1193]:
+                - link "Multicloud" [ref=f8e1194] [cursor=pointer]:
+                  - /url: https://cloud.google.com/multicloud
+              - listitem [ref=f8e1195]:
+                - link "Global infrastructure" [ref=f8e1196] [cursor=pointer]:
+                  - /url: https://cloud.google.com/infrastructure
+              - listitem [ref=f8e1197]:
+                - link "Locations" [ref=f8e1198] [cursor=pointer]:
+                  - /url: https://cloud.google.com/about/locations
+              - listitem [ref=f8e1199]:
+                - link "Customers and case studies" [ref=f8e1200] [cursor=pointer]:
+                  - /url: https://cloud.google.com/customers
+              - listitem [ref=f8e1201]:
+                - link "Analyst reports" [ref=f8e1202] [cursor=pointer]:
+                  - /url: https://cloud.google.com/analyst-reports
+              - listitem [ref=f8e1203]:
+                - link "Whitepapers" [ref=f8e1204] [cursor=pointer]:
+                  - /url: https://cloud.google.com/whitepapers
+              - listitem [ref=f8e1205]:
+                - link "Blog" [ref=f8e1206] [cursor=pointer]:
+                  - /url: https://cloud.google.com/blog
+          - listitem [ref=f8e1207]:
+            - heading "Products and pricing" [level=3] [ref=f8e1208]
+            - list [ref=f8e1209]:
+              - listitem [ref=f8e1210]:
+                - link "Google Cloud pricing" [ref=f8e1211] [cursor=pointer]:
+                  - /url: https://cloud.google.com/pricing
+              - listitem [ref=f8e1212]:
+                - link "Google Workspace pricing" [ref=f8e1213] [cursor=pointer]:
+                  - /url: https://workspace.google.com/pricing.html
+              - listitem [ref=f8e1214]:
+                - link "See all products" [ref=f8e1215] [cursor=pointer]:
+                  - /url: https://cloud.google.com/products
+          - listitem [ref=f8e1216]:
+            - heading "Solutions" [level=3] [ref=f8e1217]
+            - list [ref=f8e1218]:
+              - listitem [ref=f8e1219]:
+                - link "Infrastructure modernization" [ref=f8e1220] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/infrastructure-modernization/
+              - listitem [ref=f8e1221]:
+                - link "Databases" [ref=f8e1222] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/databases
+              - listitem [ref=f8e1223]:
+                - link "Application modernization" [ref=f8e1224] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/application-modernization
+              - listitem [ref=f8e1225]:
+                - link "Smart analytics" [ref=f8e1226] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/data-analytics-and-ai
+              - listitem [ref=f8e1227]:
+                - link "Artificial Intelligence" [ref=f8e1228] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/ai
+              - listitem [ref=f8e1229]:
+                - link "Security" [ref=f8e1230] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/security
+              - listitem [ref=f8e1231]:
+                - link "Productivity & work transformation" [ref=f8e1232] [cursor=pointer]:
+                  - /url: https://workspace.google.com/enterprise
+              - listitem [ref=f8e1233]:
+                - link "Industry solutions" [ref=f8e1234] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions/#industry-solutions
+              - listitem [ref=f8e1235]:
+                - link "DevOps solutions" [ref=f8e1236] [cursor=pointer]:
+                  - /url: https://cloud.google.com/devops
+              - listitem [ref=f8e1237]:
+                - link "Small business solutions" [ref=f8e1238] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions#section-14
+              - listitem [ref=f8e1239]:
+                - link "See all solutions" [ref=f8e1240] [cursor=pointer]:
+                  - /url: https://cloud.google.com/solutions
+          - listitem [ref=f8e1241]:
+            - heading "Resources" [level=3] [ref=f8e1242]
+            - list [ref=f8e1243]:
+              - listitem [ref=f8e1244]:
+                - link "Google Cloud Affiliate Program" [ref=f8e1245] [cursor=pointer]:
+                  - /url: https://cloud.google.com/affiliate-program
+              - listitem [ref=f8e1246]:
+                - link "Google Cloud documentation" [ref=f8e1247] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/
+              - listitem [ref=f8e1248]:
+                - link "Google Cloud quickstarts" [ref=f8e1249] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/docs/get-started/
+              - listitem [ref=f8e1250]:
+                - link "Google Cloud Marketplace" [ref=f8e1251] [cursor=pointer]:
+                  - /url: https://cloud.google.com/marketplace
+              - listitem [ref=f8e1252]:
+                - link "Learn about cloud computing" [ref=f8e1253] [cursor=pointer]:
+                  - /url: https://cloud.google.com/discover
+              - listitem [ref=f8e1254]:
+                - link "Support" [ref=f8e1255] [cursor=pointer]:
+                  - /url: https://cloud.google.com/support-hub
+              - listitem [ref=f8e1256]:
+                - link "Code samples" [ref=f8e1257] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/docs/samples
+              - listitem [ref=f8e1258]:
+                - link "Cloud Architecture Center" [ref=f8e1259] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/architecture
+              - listitem [ref=f8e1260]:
+                - link "Training" [ref=f8e1261] [cursor=pointer]:
+                  - /url: https://cloud.google.com/learn/training
+              - listitem [ref=f8e1262]:
+                - link "Certifications" [ref=f8e1263] [cursor=pointer]:
+                  - /url: https://cloud.google.com/learn/certification
+              - listitem [ref=f8e1264]:
+                - link "Google for Developers" [ref=f8e1265] [cursor=pointer]:
+                  - /url: https://developers.google.com
+              - listitem [ref=f8e1266]:
+                - link "Google Cloud for Startups" [ref=f8e1267] [cursor=pointer]:
+                  - /url: https://cloud.google.com/startup
+              - listitem [ref=f8e1268]:
+                - link "System status" [ref=f8e1269] [cursor=pointer]:
+                  - /url: https://status.cloud.google.com
+              - listitem [ref=f8e1270]:
+                - link "Release Notes" [ref=f8e1271] [cursor=pointer]:
+                  - /url: https://docs.cloud.google.com/release-notes
+          - listitem [ref=f8e1272]:
+            - heading "Engage" [level=3] [ref=f8e1273]
+            - list [ref=f8e1274]:
+              - listitem [ref=f8e1275]:
+                - link "Contact sales" [ref=f8e1276] [cursor=pointer]:
+                  - /url: https://cloud.google.com/contact
+              - listitem [ref=f8e1277]:
+                - link "Find a Partner" [ref=f8e1278] [cursor=pointer]:
+                  - /url: https://cloud.google.com/partners
+              - listitem [ref=f8e1279]:
+                - link "Become a Partner" [ref=f8e1280] [cursor=pointer]:
+                  - /url: https://cloud.google.com/partners/become-a-partner
+              - listitem [ref=f8e1281]:
+                - link "Events" [ref=f8e1282] [cursor=pointer]:
+                  - /url: https://cloud.google.com/events
+              - listitem [ref=f8e1283]:
+                - link "Podcasts" [ref=f8e1284] [cursor=pointer]:
+                  - /url: https://cloud.google.com/podcasts
+              - listitem [ref=f8e1285]:
+                - link "Developer Center" [ref=f8e1286] [cursor=pointer]:
+                  - /url: https://cloud.google.com/developers
+              - listitem [ref=f8e1287]:
+                - link "Press Corner" [ref=f8e1288] [cursor=pointer]:
+                  - /url: https://www.googlecloudpresscorner.com
+              - listitem [ref=f8e1289]:
+                - link "Google Cloud on YouTube" [ref=f8e1290] [cursor=pointer]:
+                  - /url: https://www.youtube.com/googlecloud
+              - listitem [ref=f8e1291]:
+                - link "Google Cloud Tech on YouTube" [ref=f8e1292] [cursor=pointer]:
+                  - /url: https://www.youtube.com/googlecloudplatform
+              - listitem [ref=f8e1293]:
+                - link "Follow on X" [ref=f8e1294] [cursor=pointer]:
+                  - /url: https://x.com/googlecloud
+              - listitem [ref=f8e1295]:
+                - link "Join User Research" [ref=f8e1296] [cursor=pointer]:
+                  - /url: https://userresearch.google.com/?reserved=1&utm_source=website&Q_Language=en&utm_medium=own_srch&utm_campaign=CloudWebFooter&utm_term=0&utm_content=0&productTag=clou&campaignDate=jul19&pType=devel&referral_code=jk212693
+              - listitem [ref=f8e1297]:
+                - link "We're hiring. Join Google Cloud!" [ref=f8e1298] [cursor=pointer]:
+                  - /url: https://careers.google.com/cloud
+              - listitem [ref=f8e1299]:
+                - link "Community forums" [ref=f8e1300] [cursor=pointer]:
+                  - /url: https://discuss.google.dev/c/google-cloud/14
+      - navigation "Utility links" [ref=f8e1302]:
+        - list [ref=f8e1303]:
+          - listitem [ref=f8e1304]:
+            - link "About Google" [ref=f8e1305] [cursor=pointer]:
+              - /url: https://about.google
+          - listitem [ref=f8e1306]:
+            - text: "|"
+            - link "Privacy" [ref=f8e1307] [cursor=pointer]:
+              - /url: https://policies.google.com/privacy
+          - listitem [ref=f8e1308]:
+            - text: "|"
+            - link "Site terms" [ref=f8e1309] [cursor=pointer]:
+              - /url: https://policies.google.com/terms
+          - listitem [ref=f8e1310]:
+            - text: "|"
+            - link "Google Cloud terms" [ref=f8e1311] [cursor=pointer]:
+              - /url: https://cloud.google.com/product-terms
+          - text: "|"
+          - listitem [ref=f8e1312]:
+            - text: "|"
+            - 'link "Our third decade of climate action: join us" [ref=f8e1313] [cursor=pointer]':
+              - /url: https://cloud.google.com/sustainability
+          - listitem [ref=f8e1314]:
+            - generic [ref=f8e1315]: Sign up for the Google Cloud newsletter
+            - generic [ref=f8e1319] [cursor=pointer]:
+              - text: Subscribe
+              - link "Subscribe" [ref=f8e1320]:
+                - /url: https://cloud.google.com/newsletter
+        - combobox "‪English‬" [ref=f8e1324] [cursor=pointer]:
+          - generic [aria-hidden]: language
+          - generic [aria-hidden]:
+            - generic: ‪English‬
