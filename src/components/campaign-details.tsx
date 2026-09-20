@@ -22,16 +22,26 @@ import {
 } from '@/lib/sms-capability';
 import { getCapabilities, requestPermissions, type SmsCapabilities } from '@/lib/sms-device';
 import { smsDispatch } from '@/lib/sms-dispatch';
-import type { SendChoice, SendPrompt } from '@/lib/sms-runner';
+import { blockedByOther, type SendChoice, type SendPrompt } from '@/lib/sms-runner';
+import {
+  countOutcomes,
+  hasClosedUnsent,
+  recipientOutcome,
+  retryTargets,
+  unsentTargets,
+} from '@/lib/sms-outcome';
 import type { Campaign, CampaignRecipient } from '@/types/sms';
-function uncertain(r: CampaignRecipient) {
-  return (
-    r.status === 'UNKNOWN' ||
-    r.status === 'SENDING' ||
-    (r.status === 'FAILED' && ['OUTCOME_UNKNOWN', 'PARTIAL_SENT'].includes(r.errorCode ?? ''))
-  );
-}
-export function CampaignDetails({ id }: { id: string }) {
+/** 나갔는지 확인되지 않은 사람. 「실패」와도 「미발송」과도 다른 세 번째 칸이다. */
+const uncertain = (r: CampaignRecipient) => recipientOutcome(r) === 'REVIEW';
+export function CampaignDetails({ id, onOpenCampaign }: {
+  id: string;
+  /**
+   * 다른 캠페인이 발송을 잡고 있을 때 그 화면으로 가는 길. 🔴 **라우트 화면만 준다** —
+   * 발송 이력 시트(`campaign-history-sheet.tsx`) 안에서는 모달 뒤로 이동해 버려서 아무 일도
+   * 일어나지 않은 것처럼 보인다. 그쪽에서는 「중단」이 빠져나갈 길이다.
+   */
+  onOpenCampaign?: (campaignId: string) => void;
+}) {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [rows, setRows] = useState<CampaignRecipient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +63,15 @@ export function CampaignDetails({ id }: { id: string }) {
   // 창을 띄운 쪽이 기다리는 promise 의 마침표. 창이 사라지면 반드시 한 번 불러야 한다 —
   // 안 부르면 발송 루프가 claim 한 사람을 쥔 채로 영원히 멈춘다.
   const answer = useRef<((choice: SendChoice) => void) | null>(null);
+  /*
+    이 화면이 아직 살아 있는가.
+
+    🔴 떠난 화면은 확인창을 띄울 수 없다. 그런데 루프는 다음 사람에서 또 `confirm` 을 부르고,
+    그 약속은 아무도 풀어 주지 않아 **발송이 통째로 매달린다** — 화면을 떠난 뒤 돌아왔더니
+    모든 캠페인이 「다른 문자 발송 중」으로 막혀 있던 길이 이것이다. 떠난 뒤의 물음에는 곧장
+    「중단」으로 답한다.
+  */
+  const live = useRef(true);
   const settle = useCallback((choice: SendChoice) => {
     const pending = answer.current;
     if (!pending) return;
@@ -61,7 +80,10 @@ export function CampaignDetails({ id }: { id: string }) {
     pending(choice);
   }, []);
   // 화면을 떠나면 남은 한 건은 「중단」으로 닫는다. 결과 없이 매달린 대상을 남기지 않는다.
-  useEffect(() => () => settle('stop'), [settle]);
+  useEffect(() => {
+    live.current = true;
+    return () => { live.current = false; settle('stop'); };
+  }, [settle]);
   const dispatch = useSyncExternalStore(
     smsDispatch.subscribe,
     smsDispatch.getSnapshot,
@@ -69,6 +91,20 @@ export function CampaignDetails({ id }: { id: string }) {
   );
   const running = dispatch.running;
   const mine = dispatch.campaignId === id;
+  /** 다른 캠페인이 잡고 있는가. 잡고 있다면 여기서 빠져나갈 길(중단·열기)을 함께 받는다. */
+  const blocked = blockedByOther(dispatch, id);
+  const blockedId = blocked?.campaignId ?? null;
+  /** 무엇을 멈추는지 밝히기 위한 이름. ⚠️ 남의 발송을 이름도 모른 채 멈추게 하지 않는다. */
+  const [otherCampaign, setOtherCampaign] = useState<{ id: string; title: string } | null>(null);
+  // 읽어 둔 이름이 지금 막고 있는 캠페인의 것일 때만 쓴다 — 다른 캠페인 이름을 걸어 두면 엉뚱한 발송을 멈추게 된다.
+  const otherTitle = otherCampaign?.id === blockedId ? otherCampaign.title : '';
+  /**
+   * 중단을 되묻는 중인 캠페인. 손가락이 스친 것으로 25명짜리 발송이 멈추면 안 된다.
+   * 🔴 boolean 이 아니라 **누구에 대한 물음인지**를 담는다 — 발송이 끝나거나 다른 캠페인으로
+   * 바뀌면 물음이 저절로 무효가 된다.
+   */
+  const [confirmStopId, setConfirmStopId] = useState<string | null>(null);
+  const confirmStop = !!blockedId && confirmStopId === blockedId;
   const load = useCallback(async () => {
     if (!id) return;
     try {
@@ -93,6 +129,17 @@ export function CampaignDetails({ id }: { id: string }) {
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [dispatch.currentRecipientId, dispatch.running, load]);
+  // 발송이 끝났으면 남아 있던 확인창을 거둔다. 끝난 뒤의 물음은 답할 곳이 없다.
+  useEffect(() => {
+    if (!running) settle('stop');
+  }, [running, settle]);
+  useEffect(() => {
+    if (!blockedId) return;
+    let active = true;
+    // 제목을 못 읽어도 막힌 사실과 중단 버튼은 그대로 보여 준다 — 이름은 거들 뿐이다.
+    smsApi.get(blockedId).then((c) => { if (active) setOtherCampaign({ id: blockedId, title: c.title }); }).catch(() => {});
+    return () => { active = false; };
+  }, [blockedId]);
   const applyCapability = useCallback((c: SmsCapabilities) => {
     setCapability(c);
     setSim((prev) =>
@@ -122,7 +169,14 @@ export function CampaignDetails({ id }: { id: string }) {
       setBusy(false);
     }
   }
-  async function run(retry = false) {
+  /*
+    보낼 사람을 고르는 두 가지 길.
+
+    `resume` 은 아직 안 보낸 사람 전부다 — 대기 중인 사람과 내가 통과·중단으로 닫은 사람을
+    **한 번에** 보낸다. 닫힌 사람은 서버에서 FAILED 라 되돌려야 보낼 수 있어 목록으로 넘기고,
+    닫힌 사람이 하나도 없으면(안드로이드의 보통 경우) 목록 없이 예전 그대로 돈다.
+  */
+  async function run(mode: 'resume' | 'retry' = 'resume') {
     if (lock.current || running || !available) return;
     lock.current = true;
     setBusy(true);
@@ -133,11 +187,14 @@ export function CampaignDetails({ id }: { id: string }) {
         subject: campaign?.title,
         ...(perMessage
           ? { confirm: (target: SendPrompt) => new Promise<SendChoice>((resolve) => {
+            if (!live.current) { resolve('stop'); return; }
             answer.current = resolve;
             setPrompt(target);
           }) }
           : {}),
-        ...(retry ? { retryRecipientIds: retryIds } : {}),
+        ...(mode === 'retry'
+          ? { retryRecipientIds: retryIds }
+          : hasClosedUnsent(rows) ? { retryRecipientIds: resumeIds } : {}),
       });
       await load();
     } catch (e) {
@@ -147,22 +204,36 @@ export function CampaignDetails({ id }: { id: string }) {
       setBusy(false);
     }
   }
-  // 발송 중단만 한다. 캠페인 취소(CANCELLED) 경로는 이 화면에서 뺐다 — 발송이 이미 끝났으면 멈출 것이 없다.
+  /*
+    발송 중단만 한다. 캠페인 취소(CANCELLED) 경로는 이 화면에서 뺐다 — 발송이 이미 끝났으면
+    멈출 것이 없다.
+
+    🔴 **내 캠페인이 아니어도 멈출 수 있다.** 러너는 싱글턴이라 어느 화면에서 불러도 같은
+    흐름이 멈춘다. 예전에는 자기 캠페인일 때만 이 버튼을 세워서, 다른 캠페인이 잡고 있으면
+    앱을 껐다 켜는 것 말고는 빠져나갈 길이 없었다.
+  */
   async function stop() {
-    if (!(running && mine)) return;
+    if (!running) return;
+    setConfirmStopId(null);
     try {
       // 확인창이 떠 있으면 루프가 답을 기다리는 중이다. 먼저 닫아야 중단이 실제로 진행된다.
+      // 다른 화면의 확인창은 러너의 `stop()` 이 끊는다 — 여기서는 닿을 수 없다.
       settle('stop');
-      await smsDispatch.stop();
+      smsDispatch.stop();
       await load();
     } catch (e) {
       setError(smsError(e));
     }
   }
-  const sent = rows.filter((r) => r.status === 'SENT').length;
-  const failed = rows.filter((r) => r.status === 'FAILED').length;
-  const ready = rows.filter((r) => r.status === 'READY').length;
-  const unknown = rows.filter(uncertain).length;
+  /*
+    🔴 **「실패」와 「미발송」을 갈라 센다.** 서버 status 는 `SENT|FAILED` 둘뿐이라 통과·중단·시트
+    취소까지 전부 FAILED 로 들어오는데, 그것을 실패로 세면 「보내려다 안 간 것」과 「아예 안 보낸
+    것」이 한 칸에 섞인다. 가르는 근거는 사유 코드다(→ `lib/sms-outcome.ts`).
+  */
+  const counts = countOutcomes(rows);
+  const sent = counts.sent;
+  const failed = counts.failed;
+  const unknown = counts.review;
   const current = rows.find((r) => r.id === dispatch.currentRecipientId);
   const attachmentSupported = !campaign?.attachments?.length || !!capability?.mmsSupported;
   const available = dispatchReady(capability, sim, attachmentSupported);
@@ -174,13 +245,25 @@ export function CampaignDetails({ id }: { id: string }) {
   const sending = rows.some((r) => r.status === 'SENDING');
   // 발송 중 지금 보내는 1건(SENDING)은 곧 확정되니 제외한다. 그 밖의 미확정은 자동 동기화로 안 풀릴 수 있어 직접 다시 확인할 길을 둔다.
   const unresolved = rows.some((r) => uncertain(r) && !(running && r.status === 'SENDING'));
-  // 수신자 목록을 없애며 개별 선택도 없앴다. 확실히 실패한 행은 전부 다시 보낸다 — 결과 미확정 행은 중복 발송 위험이 있어 빼는 규칙은 그대로다.
-  const retryIds = rows.filter((r) => r.status === 'FAILED' && !uncertain(r)).map((r) => r.id);
+  /*
+    수신자 목록을 없애며 개별 선택도 없앴다. 확실히 실패한 행은 전부 다시 보내고, 결과 미확정
+    행은 중복 발송 위험이 있어 빼는 규칙은 그대로다.
+
+    🔴 **두 목록은 한 사람도 겹치지 않는다.** 예전에는 중단·통과로 닫힌 사람이 「실패 다시
+    보내기」에 들어가 「미발송 계속 보내기」와 나란히 서서, 어느 쪽을 눌러야 하는지 알 수 없었다.
+  */
+  const resumeIds = unsentTargets(rows);
+  const retryIds = retryTargets(rows);
   const retryable = retryIds.length > 0;
-  // 수신자별 카드가 없으니 오류 사유는 대표 1건만 요약한다. 같은 사유가 반복되는 경우가 대부분이다.
-  const errorMessages = [...new Set(rows.filter((r) => r.status === 'FAILED' || uncertain(r)).map((r) => r.errorMessage).filter((m): m is string => !!m))];
+  // 수신자별 카드가 없으니 사유는 대표 1건만 요약한다. 같은 사유가 반복되는 경우가 대부분이다.
+  const reasons = (pick: (r: CampaignRecipient) => boolean) =>
+    [...new Set(rows.filter(pick).map((r) => r.errorMessage).filter((m): m is string => !!m))];
+  const errorMessages = reasons((r) => recipientOutcome(r) === 'FAILED' || uncertain(r));
+  // ⚠️ 미발송 사유는 빨간 글씨로 적지 않는다 — 고장이 아니라 사람이 그렇게 정한 결과다.
+  // 그 안에서 「누가 통과이고 누가 중단인지」는 이 줄이 알려 준다.
+  const unsentMessages = reasons((r) => recipientOutcome(r) === 'UNSENT');
   // 발송이 끝나면 SIM·권한 설정이 더는 할 일이 아니다. 남아 있으면 「끝났는데 또 뭘 골라야 하나」로 읽혀 헷갈렸다.
-  const needsLine = running || ready > 0 || retryable;
+  const needsLine = running || resumeIds.length > 0 || retryable;
   // 평소에는 진입 시 자동 sync와 3초 load로 충분하다. 결과가 확정되지 않은 행이 남았을 때만 폰 journal을 다시 서버에 맞춘다.
   function recheck() {
     if (running || busy) return;
@@ -224,13 +307,19 @@ export function CampaignDetails({ id }: { id: string }) {
                 }}
               />
             </View>
+            {/* 🔴 「실패」는 보냈는데 안 간 사람, 「미발송」은 아직 안 보낸 사람이다. 섞으면 무엇을 해야 하는지 알 수 없다. */}
             <Text selectable style={s.body}>
-              성공 {sent} · 실패 {failed} · 대기 {ready}
+              성공 {sent} · 실패 {failed} · 미발송 {resumeIds.length}
             </Text>
             {errorMessages.length ? (
               <Notice
                 error
                 message={errorMessages.length > 1 ? `${errorMessages[0]} 외 사유 ${errorMessages.length - 1}가지` : errorMessages[0]}
+              />
+            ) : null}
+            {unsentMessages.length ? (
+              <Notice
+                message={unsentMessages.length > 1 ? `${unsentMessages[0]} 외 사유 ${unsentMessages.length - 1}가지` : unsentMessages[0]}
               />
             ) : null}
             {unknown ? (
@@ -358,27 +447,62 @@ export function CampaignDetails({ id }: { id: string }) {
                 />
               </>
             ) : (
-              <Notice message="다른 문자를 발송 중입니다. 완료 또는 중단 후 발송할 수 있어요." />
+              /*
+                🔴 **막아 놓고 나갈 길을 주지 않던 자리.** 예전에는 「다른 문자를 발송 중입니다」
+                한 줄뿐이라, 그 발송을 멈출 수도 찾아갈 수도 없어 앱을 껐다 켜는 것이 유일한
+                탈출구였다 — 사용자가 알 길이 없는 탈출구는 없는 것과 같다.
+
+                ⚠️ 그렇다고 남의 발송을 손가락 한 번에 멈추게 하지도 않는다. **무엇을 멈추는지
+                이름으로 밝히고** 한 번 더 묻는다.
+              */
+              <View style={s.card}>
+                <Text style={s.subtitle}>다른 문자를 발송 중이에요</Text>
+                <Notice message={`${otherTitle ? `「${otherTitle}」` : '다른 문자'} 발송이 끝나거나 중단돼야 이 문자를 보낼 수 있어요.`} />
+                {blocked?.canOpen && blockedId && onOpenCampaign ? (
+                  <SmsButton
+                    label="발송 중인 문자 열기"
+                    secondary
+                    onPress={() => onOpenCampaign(blockedId)}
+                  />
+                ) : null}
+                {confirmStop ? (
+                  <>
+                    <Notice error message={`${otherTitle ? `「${otherTitle}」` : '다른 문자'} 발송을 지금 멈출까요? 이미 보낸 문자는 취소되지 않고, 남은 사람은 미발송으로 남아 나중에 이어 보낼 수 있어요.`} />
+                    <ButtonRow>
+                      <SmsButton fill secondary danger label="중단합니다" onPress={() => void stop()} />
+                      <SmsButton fill secondary label="그대로 두기" onPress={() => setConfirmStopId(null)} />
+                    </ButtonRow>
+                  </>
+                ) : (
+                  <SmsButton
+                    label={dispatch.stopping ? '중단하는 중…' : '그 발송 중단하기'}
+                    secondary
+                    danger
+                    disabled={dispatch.stopping}
+                    onPress={() => setConfirmStopId(blockedId)}
+                  />
+                )}
+              </View>
             )
           ) : (
             <>
               {/* 브라우저에서는 보낼 수 없으니 비활성 버튼 대신 위의 「Android 앱에서 사용할 수 있습니다」 안내 하나만 남긴다. */}
-              {ready > 0 && !browserOnly ? (
+              {resumeIds.length > 0 && !browserOnly ? (
                 <SmsButton
                   label={
                     campaign.status === 'READY'
-                      ? `${ready}명에게 발송하기`
-                      : `미발송 ${ready}건 계속 보내기`
+                      ? `${resumeIds.length}명에게 발송하기`
+                      : `미발송 ${resumeIds.length}건 보내기`
                   }
                   disabled={!available || busy || sending}
-                  onPress={() => void run()}
+                  onPress={() => void run('resume')}
                 />
               ) : null}
               {retryable && !browserOnly ? (
                 <SmsButton
                   label={`실패 ${retryIds.length}건 다시 보내기`}
                   disabled={!available || busy || sending}
-                  onPress={() => void run(true)}
+                  onPress={() => void run('retry')}
                 />
               ) : null}
             </>

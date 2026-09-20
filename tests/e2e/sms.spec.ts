@@ -170,11 +170,47 @@ test('수신자 번호 정규화·수정·삭제', async ({ page }) => {
 test('웹은 문자를 준비하고 조회하지만 SMS를 발송하지 않는다', async ({ page }) => {
   const state = await setup(page); await compose(page);
   await expect(page.getByRole('heading', { name: '9월 모임 안내' })).toBeVisible();
-  await expect(page.getByText(/이 기능은 Android 앱에서/)).toBeVisible();
+  await expect(page.getByText(/이 기능은 Android·iPhone 앱에서/)).toBeVisible();
   await expect(page.getByRole('button', { name: '2명에게 발송하기', exact: true })).toHaveCount(0);
   await expect(page.getByText('첨부 발송을 지원하는 최신 Android 앱을 설치해 주세요.')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '닫기', exact: true })).toBeVisible();
   expect(state.targets.every(r => r.status === 'READY')).toBeTruthy();
+});
+
+test('문자 작성 화면은 닫기로 흐름을 그만두고 문자 보내기로 돌아온다', async ({ page }) => {
+  const state = await setup(page);
+  await prepareCompose(page);
+  await page.getByLabel('발송 제목').fill('그만둘 문자');
+  /*
+   * 🔴 **나갈 길이 하나도 없던 자리다.** 「수신자 선택으로 돌아가기」는 흐름 안에서 한 걸음
+   * 물러서는 것이고, 화면을 벗어나는 버튼은 아예 없었다. 시트들과 같은 자리(오른쪽 위)에
+   * 두되 낭독기에는 무엇을 닫는지 밝힌다 — 폰 폭에서도 선다.
+   */
+  const close = page.getByRole('button', { name: '문자 작성 닫기', exact: true });
+  await expect(close).toBeVisible();
+  await close.click();
+  await expect(page.getByText('2명에게 보내려던 문자를 그만뒀어요. 문자는 보내지 않았어요.', { exact: true })).toBeVisible();
+  // 그만뒀으니 고른 사람도 쓰던 내용도 남지 않는다. 화면에도 서버에도.
+  await expect(page.getByRole('checkbox', { name: /김철수/ })).not.toBeChecked();
+  await expect(page.getByRole('button', { name: '발송하기', exact: true })).toBeDisabled();
+  await expect(page.getByLabel('발송 제목')).toHaveCount(0);
+  expect(state.campaigns).toHaveLength(0);
+});
+test('발송 상세의 닫기는 들어온 곳으로 돌아가고 그곳의 말로 안내한다', async ({ page }) => {
+  await setup(page);
+  await compose(page);
+  // 문자 보내기 흐름에서 만든 문자는 출처를 달고 열린다.
+  await expect(page).toHaveURL(/\/sms\/c\d+\?from=send$/);
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  /*
+   * 🔴 실기기에서 여기가 「예약 문자 보내기」로 나갔고, 거기 남아 있던 「2명의 예약을 취소했어요」가
+   * 그대로 보였다 — 예약은 손도 대지 않았는데. 돌아갈 곳도 할 말도 출처가 정한다
+   * (→ `src/lib/sms-origin.ts`).
+   */
+  await expect(page).toHaveURL(/\/sms\/new\?closed=detail$/);
+  await expect(page.getByText('문자 보내기로 돌아왔어요. 준비한 문자는 「발송 이력」에 남아 있어요.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/예약을 취소했어요/)).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: /김철수/ })).toBeVisible();
 });
 test('생성 응답 유실과 새로고침에도 같은 문자를 확인한다', async ({ page }) => {
   const state = await setup(page); state.failCreate = true; await compose(page);
@@ -189,16 +225,20 @@ test('모의 Android 발송은 명시 클릭 후 순차 저장하고 SENT를 다
   const send = page.getByRole('button', { name: '2명에게 발송하기', exact: true });
   await expect(send).toBeEnabled(); expect(state.results).toHaveLength(0);
   await send.click();
-  await expect(page.getByText('성공 2 · 실패 0 · 대기 0', { exact: true })).toBeVisible();
+  await expect(page.getByText('성공 2 · 실패 0 · 미발송 0', { exact: true })).toBeVisible();
   expect(state.results).toEqual(['cr0', 'cr1']);
   await page.reload();
-  await expect(page.getByText('성공 2 · 실패 0 · 대기 0', { exact: true })).toBeVisible();
+  await expect(page.getByText('성공 2 · 실패 0 · 미발송 0', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('test.sms.calls') || '[]'))).toEqual(['cr0', 'cr1']);
   await expect(page.getByRole('button', { name: '발송 중단', exact: true })).toHaveCount(0);
   await expect(page.getByText('발신 SIM 회선', { exact: true })).toHaveCount(0);
   const statuses = state.campaigns.map((c) => c.status);
   await page.getByRole('button', { name: '닫기', exact: true }).click();
-  await expect(page).toHaveURL(/\/sms\/new$/);
+  // 🔴 닫기는 **들어온 곳**으로 돌아간다. 스택 기록으로 추측하던 시절에는 문자 보내기에서
+  // 들어왔는데 예약함으로 나가면서 「n명의 예약을 취소했어요」까지 보여 줬다(→ `lib/sms-origin.ts`).
+  await expect(page).toHaveURL(/\/sms\/new\?closed=detail$/);
+  await expect(page.getByText('문자 보내기로 돌아왔어요. 준비한 문자는 「발송 이력」에 남아 있어요.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/예약을 취소했어요/)).toHaveCount(0);
   expect(state.campaigns.map((c) => c.status)).toEqual(statuses);
 });
 test('결과 저장 실패는 다음 발송을 막고 재접속은 결과만 복원한다', async ({ page }) => {
@@ -207,10 +247,10 @@ test('결과 저장 실패는 다음 발송을 막고 재접속은 결과만 복
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('test.sms.calls') || '[]').length)).toBe(1);
   await expect(page.getByRole('button', { name: '결과 다시 확인', exact: true })).toBeEnabled();
   state.failSave = false; await page.reload();
-  await expect(page.getByText('성공 1 · 실패 0 · 대기 1', { exact: true })).toBeVisible();
+  await expect(page.getByText('성공 1 · 실패 0 · 미발송 1', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('test.sms.calls') || '[]'))).toEqual(['cr0']);
-  await page.getByRole('button', { name: '미발송 1건 계속 보내기', exact: true }).click();
-  await expect(page.getByText('성공 2 · 실패 0 · 대기 0', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '미발송 1건 보내기', exact: true }).click();
+  await expect(page.getByText('성공 2 · 실패 0 · 미발송 0', { exact: true })).toBeVisible();
 });
 
 test('삭제된 수신자 생성 거절은 잠금을 해제하고 없는 선택을 제거한다', async ({ page }) => {
@@ -404,7 +444,7 @@ test('이미지 템플릿을 편집하고 이미지 단독 MMS를 모의 발송�
   expect(state.targets[0]).toMatchObject({ attachments: [{ name: '새명함.png' }] });
   expect(state.templates[0].attachments[0].name).toBe('명함.png');
   await page.getByRole('button', { name: '1명에게 발송하기', exact: true }).click();
-  await expect(page.getByText('성공 1 · 실패 0 · 대기 0', { exact: true })).toBeVisible();
+  await expect(page.getByText('성공 1 · 실패 0 · 미발송 0', { exact: true })).toBeVisible();
   expect(state.targets[0].message).toBe('');
 });
 test('엑셀 추가·제외 미리보기를 확인한 뒤 확정 저장한다', async ({ page }) => {
@@ -632,7 +672,7 @@ test('미완료 캠페인은 이력 시트에서 복구하되 상세 열기만�
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('test.sms.calls') || '[]'))).toEqual([]);
   await expect(page).toHaveURL(/\/sms\/new$/);
   await send.click();
-  await expect(page.getByText('성공 2 · 실패 0 · 대기 0', { exact: true })).toBeVisible();
+  await expect(page.getByText('성공 2 · 실패 0 · 미발송 0', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '발송 이력으로 돌아가기', exact: true }).click();
   await page.getByRole('button', { name: '닫기', exact: true }).click();
   await expect(page.getByLabel('이름,전화번호 뒷자리 4자', { exact: true })).toBeEditable();
@@ -726,7 +766,7 @@ async function reserve(page: Page, names: RegExp[], template = '가을 안내') 
   await page.goto('/sms/new');
   for (const name of names) await page.getByRole('checkbox', { name }).click();
   await page.getByRole('button', { name: '예약하기', exact: true }).click();
-  await page.getByRole('checkbox', { name: template, exact: true }).click();
+  await page.getByRole('button', { name: `${template} 템플릿 선택`, exact: true }).click();
   await page.getByRole('button', { name: '예약 확인', exact: true }).click();
 }
 
@@ -739,7 +779,7 @@ test('선택한 수신자를 템플릿으로 예약하고 예약함에서 발송
   await expect(page.getByRole('heading', { name: '예약하기', exact: true })).toBeVisible();
   await expect(page.getByText('수신자 1명 선택', { exact: true })).toBeVisible();
   await page.screenshot({ path: `/tmp/nature-reserve-sheet-${test.info().project.name}.png`, animations: 'disabled' });
-  await page.getByRole('checkbox', { name: '가을 안내', exact: true }).click();
+  await page.getByRole('button', { name: '가을 안내 템플릿 선택', exact: true }).click();
   await page.getByRole('button', { name: '예약 확인', exact: true }).click();
   await expect(page.getByText('1명을 「가을 안내」 템플릿으로 예약했어요.', { exact: true })).toBeVisible();
   expect(state.campaigns).toHaveLength(1);
@@ -751,7 +791,7 @@ test('선택한 수신자를 템플릿으로 예약하고 예약함에서 발송
   // 이미 예약된 사람만 고르면 새 예약을 만들지 않는다.
   await page.getByRole('checkbox', { name: /김철수/ }).click();
   await page.getByRole('button', { name: '예약하기', exact: true }).click();
-  await page.getByRole('checkbox', { name: '가을 안내', exact: true }).click();
+  await page.getByRole('button', { name: '가을 안내 템플릿 선택', exact: true }).click();
   await page.getByRole('button', { name: '예약 확인', exact: true }).click();
   await expect(page.getByText('선택한 1명은 이미 예약되어 있어요. 새로 예약하지 않았어요.', { exact: true })).toBeVisible();
   expect(state.campaigns).toHaveLength(1);
@@ -768,8 +808,14 @@ test('선택한 수신자를 템플릿으로 예약하고 예약함에서 발송
   await row.click();
   await page.screenshot({ path: `/tmp/nature-reserved-screen-${test.info().project.name}.png`, animations: 'disabled' });
   await page.getByRole('button', { name: '발송', exact: true }).click();
-  await expect(page).toHaveURL(/\/sms\/c1$/);
+  await expect(page).toHaveURL(/\/sms\/c1\?from=reserved$/);
   await expect(page.getByRole('heading', { name: '가을 안내', exact: true })).toBeVisible();
+  expect(state.campaigns[0].status).toBe('READY');
+  // 예약함에서 들어왔으면 예약함으로 돌아가고, **예약을 취소한 것이 아니라고** 말한다.
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  await expect(page).toHaveURL(/\/sms\/reserved\?closed=detail$/);
+  await expect(page.getByText('예약 문자 보내기로 돌아왔어요. 예약을 취소한 것이 아니에요.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/예약을 취소했어요/)).toHaveCount(0);
   expect(state.campaigns[0].status).toBe('READY');
 });
 
@@ -913,7 +959,7 @@ test('같은 템플릿으로 다시 예약하면 기존 예약과 합치고 50�
     await page.getByRole('menuitem', { name: to, exact: true }).click();
     await page.getByRole('checkbox', { name: '전체 선택', exact: true }).click();
     await page.getByRole('button', { name: '예약하기', exact: true }).click();
-    await page.getByRole('checkbox', { name: '가을 안내', exact: true }).click();
+    await page.getByRole('button', { name: '가을 안내 템플릿 선택', exact: true }).click();
     await page.getByRole('button', { name: '예약 확인', exact: true }).click();
   }
   await page.goto('/sms/new');

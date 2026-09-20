@@ -7,6 +7,11 @@
   「중단」 뒤에 여기까지의 결과가 남아 있는지, 그리고 회선(SIM) 선택이 없는 것이 안드로이드
   보호 장치를 풀어 버리지는 않는지.
 
+  🔴 **갇히지 않는지도 여기서 본다.** 실기기에서 두 번 갇혔다. 한 번은 시트가 결과 없이
+  사라져 발송 루프가 `device.send` 앞에 선 채로 멈췄고, 한 번은 확인창을 띄운 화면을 떠나
+  답이 영영 오지 않았다. 둘 다 앱당 하나뿐인 러너를 `running: true` 로 잠가 **모든 캠페인**을
+  막았고, 앱을 껐다 켜는 것 말고는 나올 길이 없었다.
+
   실제 시트는 열 수 없으므로 판단만 순수 함수로 빼서 확인한다.
 */
 const assert = require('node:assert/strict');
@@ -27,9 +32,21 @@ function load(file, sandbox = { Error, Set }) {
 const runnerModule = load('src/lib/sms-runner.ts');
 const iosResult = load('modules/nature-sms/ios-result.ts');
 const capabilityModule = load('src/lib/sms-capability.ts');
-const { SmsRunner, USER_SKIPPED, USER_CANCELLED, knownNotSent, skippedResult } = runnerModule;
+const outcomeModule = load('src/lib/sms-outcome.ts');
+const {
+  SmsRunner, USER_SKIPPED, USER_CANCELLED, IOS_COMPOSER_ABANDONED, CANCELLED_BEFORE_SEND,
+  knownNotSent, skippedResult, blockedByOther,
+} = runnerModule;
 const { mapComposeOutcome } = iosResult;
 const { lineSelectable, composerConfirm, dispatchReady, dispatchSubscriptionId } = capabilityModule;
+const {
+  recipientOutcome, countOutcomes, unsentTargets, retryTargets, hasClosedUnsent, NOT_SENT_CODES,
+} = outcomeModule;
+
+// vm 밖에서 만든 객체와 비교하려면 realm 을 한 번 벗겨야 한다(프로토타입이 달라 deepEqual 이 막힌다).
+const plain = value => JSON.parse(JSON.stringify(value));
+const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+const idle = { campaignId: null, running: false, stopping: false, currentRecipientId: null, error: null };
 
 const target = { campaignRecipientId: 'r1', attemptId: 'a1', phone: '01012345678' };
 
@@ -236,4 +253,155 @@ test('발송 버튼은 iPhone 에서 SIM 을 고르지 않았다고 막히지 �
   assert.equal(dispatchSubscriptionId(iphone, 7), 0);
   assert.equal(dispatchSubscriptionId(android, 7), 7);
   assert.equal(dispatchSubscriptionId(android, null), 0);
+});
+
+/*
+  갇히지 않기 ①: 다른 캠페인이 잡고 있을 때.
+
+  러너는 앱당 하나뿐이라 한 캠페인이 잡으면 나머지 전부가 막힌다. 예전 화면은 「다른 문자를
+  발송 중입니다」 한 줄만 보여 주고 그 발송을 멈출 길도, 찾아갈 길도 주지 않았다.
+*/
+test('다른 문자가 잡고 있으면 빠져나갈 길을 함께 준다', () => {
+  assert.equal(blockedByOther(idle, 'c1'), null);
+  // 내 캠페인이 돌고 있는 것은 막힘이 아니다 — 그 화면에는 예전부터 중단 버튼이 있었다.
+  assert.equal(blockedByOther({ ...idle, running: true, campaignId: 'c1' }, 'c1'), null);
+  assert.deepEqual(plain(blockedByOther({ ...idle, running: true, campaignId: 'c2' }, 'c1')),
+    { campaignId: 'c2', canOpen: true, canStop: true });
+  // 🔴 어느 캠페인인지 몰라도 멈출 길은 있어야 한다. 막아 놓고 길을 안 주는 것이 결함이었다.
+  assert.deepEqual(plain(blockedByOther({ ...idle, running: true, campaignId: null }, 'c1')),
+    { campaignId: null, canOpen: false, canStop: true });
+});
+test('중단은 답이 오지 않는 확인창을 끊고 running 을 실제로 푼다', async () => {
+  const h = setup(3);
+  const asked = deferred();
+  // 확인창을 띄운 화면을 떠난 뒤라 답이 영영 오지 않는 상황. 예전에는 여기서 앱이 잠겼다.
+  const sending = h.runner.run('c1', {
+    subscriptionId: 0,
+    confirm: async () => { asked.resolve(); return new Promise(() => {}); },
+  });
+  await asked.promise;
+  assert.equal(h.runner.getSnapshot().running, true);
+  // 다른 화면에서 누른 중단. 러너는 싱글턴이라 같은 흐름을 멈춘다.
+  h.runner.stop();
+  await sending;
+  assert.equal(h.runner.getSnapshot().running, false);
+  assert.equal(h.runner.getSnapshot().stopping, false);
+  // 답을 못 받은 사람에게 문자가 나가지는 않았고, claim 한 채로 남지도 않는다.
+  assert.deepEqual(sends(h), []);
+  assert.equal(h.rows[0].errorCode, CANCELLED_BEFORE_SEND);
+  assert.equal(h.campaign.status, 'CANCELLED');
+  // 그리고 막혔던 발송을 다시 시작할 수 있다 — 앱을 껐다 켜지 않아도 된다.
+  await h.runner.run('c1', { subscriptionId: 0, confirm: async () => 'send' });
+  assert.deepEqual(sends(h), ['r1', 'r2']);
+});
+
+/*
+  갇히지 않기 ②: 시트가 결과 없이 사라졌을 때.
+
+  `didFinishWith` 델리게이트가 안 오면 네이티브의 Promise 가 영원히 매달리고 발송 루프는
+  `await device.send(...)` 앞에 선 채로 멈춘다. 네이티브가 그 약속을 거둬들이면
+  (→ `modules/nature-sms/ios/NatureSmsModule.swift`) 여기로 `abandoned` 가 온다.
+*/
+test('정리된 시트는 「모른다」가 아니라 「안 나갔다」로 남는다', () => {
+  const abandoned = mapComposeOutcome(target, 'abandoned');
+  assert.equal(abandoned.success, false);
+  assert.equal(abandoned.errorCode, IOS_COMPOSER_ABANDONED);
+  // 🔴 사람이 닫은 것도, 메시지 앱이 실패한 것도, 결과를 모르는 것도 아니다. 넷이 갈려야 한다.
+  assert.notEqual(abandoned.errorCode, USER_CANCELLED);
+  assert.notEqual(abandoned.errorCode, 'IOS_SEND_FAILED');
+  assert.notEqual(abandoned.errorCode, 'IOS_OUTCOME_UNKNOWN');
+  // 네이티브 표와 발송 루프가 같은 글자를 써야 한다 — 한쪽만 바뀌면 확인 필요로 덮인다.
+  assert.equal(iosResult.IOS_COMPOSER_ABANDONED, IOS_COMPOSER_ABANDONED);
+  assert.equal(knownNotSent(abandoned), true);
+  // 확인 필요가 아니므로 사람 손을 거치지 않고 다시 보낼 수 있다.
+  assert.equal(runnerModule.needsOutcomeReview({ status: 'FAILED', errorCode: IOS_COMPOSER_ABANDONED }), false);
+});
+test('매달린 약속이 정리되면 다음 사람으로 이어지고 다음 발송도 열린다', async () => {
+  const h = setup(3, { outcomes: ['abandoned', 'sent', 'sent'] });
+  await h.runner.run('c1', { subscriptionId: 0, confirm: async () => 'send' });
+  // 한 건이 사라졌다고 25명짜리 발송 전체가 서지 않는다.
+  assert.deepEqual(sends(h), ['r0', 'r1', 'r2']);
+  assert.equal(h.rows[0].status, 'FAILED');
+  assert.equal(h.rows[0].errorCode, IOS_COMPOSER_ABANDONED);
+  assert.notEqual(h.rows[0].errorCode, 'OUTCOME_UNKNOWN');
+  assert.equal(h.runner.getSnapshot().running, false);
+  // 정리된 사람은 미발송으로 남아 그대로 다시 보낼 수 있다.
+  assert.equal(recipientOutcome(h.rows[0]), 'UNSENT');
+  await h.runner.run('c1', { subscriptionId: 0, retryRecipientIds: [h.rows[0].id], confirm: async () => 'send' });
+  assert.deepEqual(sends(h), ['r0', 'r1', 'r2', 'r0']);
+  assert.equal(h.rows[0].status, 'SENT');
+});
+
+/*
+  실패와 미발송 가르기.
+
+  🔴 서버 status 는 `SENT|FAILED` 둘뿐이라 통과·중단·시트 취소까지 전부 FAILED 로 들어온다.
+  실기기에서 두 명짜리 캠페인을 처음부터 중단했더니 「성공 0 · 실패 1 · 대기 1」에 「미발송
+  계속 보내기」와 「실패 다시 보내기」가 나란히 서서, 어느 쪽을 눌러야 하는지 알 수 없었다.
+*/
+test('중단·통과·시트 취소·정리는 실패가 아니라 미발송이다', () => {
+  assert.equal(recipientOutcome({ status: 'SENT', errorCode: null }), 'SENT');
+  assert.equal(recipientOutcome({ status: 'READY', errorCode: null }), 'PENDING');
+  for (const code of [USER_SKIPPED, USER_CANCELLED, CANCELLED_BEFORE_SEND, IOS_COMPOSER_ABANDONED]) {
+    assert.equal(recipientOutcome({ status: 'FAILED', errorCode: code }), 'UNSENT', code);
+    // 두 파일이 같은 글자를 써야 한다. 한쪽만 바뀌면 그 사유가 조용히 「실패」로 돌아간다.
+    assert.ok(NOT_SENT_CODES.includes(code), code);
+  }
+  // 통신사·기기가 거절한 것은 그대로 실패다 — 이것만 「다시 보내기」가 가리킨다.
+  for (const code of ['IOS_SEND_FAILED', 'SMS_FAILED', 'GENERIC_FAILURE', null]) {
+    assert.equal(recipientOutcome({ status: 'FAILED', errorCode: code }), 'FAILED', String(code));
+  }
+  // 나갔는지 모르는 것은 어느 쪽도 아니다. 미발송으로 세면 이미 나간 문자를 다시 보내게 된다.
+  assert.equal(recipientOutcome({ status: 'UNKNOWN', errorCode: null }), 'REVIEW');
+  assert.equal(recipientOutcome({ status: 'SENDING', errorCode: null }), 'REVIEW');
+  assert.equal(recipientOutcome({ status: 'FAILED', errorCode: 'OUTCOME_UNKNOWN' }), 'REVIEW');
+  assert.equal(recipientOutcome({ status: 'FAILED', errorCode: 'PARTIAL_SENT' }), 'REVIEW');
+});
+test('두 버튼은 같은 사람을 가리키지 않는다', () => {
+  const rows = [
+    { id: 'r0', status: 'FAILED', errorCode: CANCELLED_BEFORE_SEND },
+    { id: 'r1', status: 'READY', errorCode: null },
+    { id: 'r2', status: 'FAILED', errorCode: 'IOS_SEND_FAILED' },
+    { id: 'r3', status: 'SENT', errorCode: null },
+    { id: 'r4', status: 'FAILED', errorCode: 'OUTCOME_UNKNOWN' },
+  ];
+  assert.deepEqual(plain(countOutcomes(rows)), { sent: 1, failed: 1, unsent: 2, review: 1 });
+  // 미발송은 대기와 내가 닫은 사람을 한 묶음으로 — 버튼 하나가 이 목록을 그대로 보낸다.
+  assert.deepEqual(plain(unsentTargets(rows)), ['r0', 'r1']);
+  assert.deepEqual(plain(retryTargets(rows)), ['r2']);
+  const overlap = unsentTargets(rows).filter(id => retryTargets(rows).includes(id));
+  assert.deepEqual(plain(overlap), []);
+  // 한 사람은 정확히 한 칸에만 든다. 어느 칸에도 없는 사람도 없다.
+  const counts = countOutcomes(rows);
+  assert.equal(counts.sent + counts.failed + counts.unsent + counts.review, rows.length);
+  assert.equal(hasClosedUnsent(rows), true);
+  assert.equal(hasClosedUnsent([{ id: 'r1', status: 'READY', errorCode: null }]), false);
+});
+test('안드로이드 사유는 예전과 같게 실패로 센다', () => {
+  // 🔴 안드로이드에는 통과도 한 건 확인창도 없다. 분류가 생겼다고 세는 값이 달라지면 안 된다.
+  const rows = [
+    { id: 'r0', status: 'SENT', errorCode: null },
+    { id: 'r1', status: 'FAILED', errorCode: 'SMS_FAILED' },
+    { id: 'r2', status: 'FAILED', errorCode: 'GENERIC_FAILURE' },
+    { id: 'r3', status: 'FAILED', errorCode: 'NO_SERVICE' },
+    { id: 'r4', status: 'READY', errorCode: null },
+  ];
+  assert.deepEqual(plain(countOutcomes(rows)), { sent: 1, failed: 3, unsent: 1, review: 0 });
+  assert.deepEqual(plain(retryTargets(rows)), ['r1', 'r2', 'r3']);
+  assert.deepEqual(plain(unsentTargets(rows)), ['r4']);
+  assert.equal(hasClosedUnsent(rows), false);
+});
+test('「미발송 보내기」는 대기와 내가 닫은 사람을 한 번에 보낸다', async () => {
+  const h = setup(3);
+  // 첫 사람에서 중단 → r0 은 닫히고(FAILED) r1·r2 는 대기로 남는다.
+  const choices = ['stop'];
+  await h.runner.run('c1', { subscriptionId: 0, confirm: async () => choices.shift() ?? 'send' });
+  assert.equal(recipientOutcome(h.rows[0]), 'UNSENT');
+  const resume = unsentTargets(h.rows);
+  assert.deepEqual(plain(resume), ['r0', 'r1', 'r2']);
+  // 다시 보낼 「실패」는 하나도 없다. 버튼도 하나만 선다.
+  assert.deepEqual(plain(retryTargets(h.rows)), []);
+  await h.runner.run('c1', { subscriptionId: 0, retryRecipientIds: resume, confirm: async () => 'send' });
+  assert.deepEqual(sends(h), ['r0', 'r1', 'r2']);
+  assert.ok(h.rows.every(r => r.status === 'SENT'));
 });

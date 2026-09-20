@@ -63,7 +63,9 @@
     "test:sms-ios": "node --test tests/sms-ios.test.cjs",
     "android:dev": "expo run:android --port 3103",
     "test:calls": "node --test tests/call-*.test.cjs",
-    "test:asr": "node --test tests/asr-*.test.cjs"
+    "test:asr": "node --test tests/asr-*.test.cjs",
+    "test:attach": "node --test tests/attachment-*.test.cjs",
+    "test:sms-origin": "node --test tests/sms-origin.test.cjs"
   },
   "private": true
 }
