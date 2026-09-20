@@ -32,6 +32,18 @@ public class NatureCallAudioModule: Module {
     // 추론 스레드 수를 정하려면 코어 수가 필요하다. JS 에는 이 값을 주는 API 가 없다.
     Function("cpuCount") { ProcessInfo.processInfo.activeProcessorCount }
 
+    /**
+     * AP 문자열 — **iOS 에서는 빈 값이다.**
+     *
+     * 🔴 이 값은 「퀄컴 Hexagon NPU 가 있는가」를 가리려고 있다. iOS 는 Metal 경로라 그
+     * 판정 자체가 필요 없고, 여기서 무엇을 돌려주든 JS 는 안드로이드에서만 본다.
+     *
+     * ⚠️ **그래도 함수를 둔다.** 한쪽에만 있는 함수는 JS 에 플랫폼 분기를 만들고, 그 분기는
+     * 언젠가 한쪽만 고쳐진다 — 이 파일 맨 위에 적어 둔 것과 같은 이유다. 빈 맵이면 JS 가
+     * 「모른다」로 읽고 벤치 실측으로 넘어간다.
+     */
+    Function("socInfo") { () -> [String: String] in [:] }
+
     // 통화 원본 사본·WAV·모델 파일은 iCloud 백업 대상에서 뺀다.
     AsyncFunction("excludeFromBackup") { (uri: String) in
       var url = try self.privateURL(uri)

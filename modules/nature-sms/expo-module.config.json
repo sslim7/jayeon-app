@@ -1,4 +1,5 @@
 {
-  "platforms": ["android"],
-  "android": { "modules": ["kr.redhead.nature.sms.NatureSmsModule"] }
+  "platforms": ["android", "apple"],
+  "android": { "modules": ["kr.redhead.nature.sms.NatureSmsModule"] },
+  "apple": { "modules": ["NatureSmsModule"] }
 }

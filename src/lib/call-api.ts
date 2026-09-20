@@ -1,5 +1,5 @@
 import { api } from '@/lib/api';
-import type { CallRecord } from '@/types/calls';
+import type { CallRecord, CallTranscript } from '@/types/calls';
 
 /**
  * 한 번에 받는 통화 수.
@@ -70,6 +70,21 @@ export interface CallUploadRequest {
   call: { file_name: string; duration: number | null; recorded_at: string };
 }
 
+/**
+ * **누가 받아쓰나.** `complete` 에 실어 보내는 값이다.
+ *
+ * ┌────────────────────────────────────────────────────────────────────────────┐
+ * │ 🔴 **`"server"` 와 「보내지 않음」은 서버에서 같은 뜻이다.** 그래서 앱도 서버 경로에서는  │
+ * │ 아예 싣지 않는다 — 기존 통화 등록의 요청 본문을 한 글자도 바꾸지 않기 위해서다.        │
+ * │ ⚠️ 서버는 모르는 값을 400 으로 거절한다. 이 두 낱말 밖의 값을 만들지 마라.            │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ *
+ * `"client"` 로 보내면 서버는 받아쓰기를 **하지 않고 기다린다**(`job_state=ASR_RUNNING`,
+ * `stage="기기에서 받아쓰는 중"`). 🔴 **6시간 안에 전사문이 닿지 않으면** 서버가
+ * `TRANSCRIPTION_FAILED` + `CLIENT_TRANSCRIPT_TIMEOUT` 로 정리한다.
+ */
+export type CallAsrMode = 'server' | 'client';
+
 export const callApi = {
   /** 서버 페이지 하나. 최신순이고 **거르기는 서버가 한다**(`q`). */
   async page({ q = '', cursor = null, limit = CALL_BATCH }: CallListQuery = {}): Promise<CallPage> {
@@ -124,14 +139,34 @@ export const callApi = {
    */
   uploadUrl: (id: string, body: CallUploadRequest) => api.post<CallUploadTicket>(`/calls/${encodeURIComponent(id)}/audio/upload-url`, body),
   /**
-   * 업로드가 끝났음을 알리고 큐에 넣는다. 본문은 없다.
+   * 업로드가 끝났음을 알리고 큐에 넣는다.
    *
    * 🔴 **이미 큐잉된 통화에 다시 불러도 200 이다**(서버가 지금 상태를 그대로 돌려준다).
    * 그래서 앱은 응답을 못 받았을 때 마음 놓고 다시 부를 수 있다.
    *
+   * 🔴 **`asr` 를 생략하면 본문 자체를 보내지 않는다.** 서버에서는 「생략」과 `"server"` 가
+   * 같은 뜻이지만, 서버 경로의 요청을 예전과 **한 바이트도 다르지 않게** 두는 편이
+   * 안전하다 — 값을 실어 보내기 시작하면 그 순간부터 서버 경로도 새 코드 위에 있게 된다.
+   *
    * 객체 확인(GCS stat)과 Firestore 쓰기가 함께 일어나므로 기본 한도보다 넉넉히 기다린다.
    */
-  complete: (id: string) => api.post<CallRecord>(`/calls/${encodeURIComponent(id)}/audio/complete`, undefined, { timeoutMs: 30_000 }),
+  complete: (id: string, asr?: CallAsrMode) => api.post<CallRecord>(`/calls/${encodeURIComponent(id)}/audio/complete`, asr ? { asr } : undefined, { timeoutMs: 30_000 }),
+  /**
+   * 폰에서 받아쓴 원문을 올린다. **서버는 이걸 받고서야 분석을 시작한다.**
+   *
+   * ┌────────────────────────────────────────────────────────────────────────────┐
+   * │ 🔴 **같은 요청을 두 번 보내도 두 번째도 200 이다.** 그래서 응답을 못 받았을 때는       │
+   * │ 마음 놓고 다시 보내면 된다 — 28분치 받아쓰기를 「보냈는지 모르겠다」는 이유로          │
+   * │ 버리는 것이 이 계약이 막으려는 일이다.                                          │
+   * └────────────────────────────────────────────────────────────────────────────┘
+   *
+   * ⚠️ 6시간이 지나 서버가 통화를 정리한 뒤에도 **늦게 도착한 전사문은 받아 준다.**
+   * 타임아웃을 봤다고 앱이 포기하면 안 된다.
+   *
+   * 본문이 최대 6 MiB 라 기본 한도로는 모자랄 수 있다(→ `lib/call-transcript.ts` 가 크기를
+   * 먼저 재고 거른다).
+   */
+  transcript: (id: string, body: CallTranscript) => api.post<CallRecord>(`/calls/${encodeURIComponent(id)}/transcript`, body, { timeoutMs: 60_000 }),
   /** 오디오를 다시 전사하지 않고 **분석만** 다시 돌린다. 전사가 가장 비싼 단계라 재사용한다. */
   reanalyze: (id: string) => api.post<CallRecord>(`/calls/${encodeURIComponent(id)}/reanalyze`, undefined, { timeoutMs: 30_000 }),
 };

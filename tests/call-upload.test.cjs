@@ -29,8 +29,9 @@ function setup(seed = {}) {
       if (seed.uploadUrlError) throw seed.uploadUrlError;
       return TICKET;
     },
-    complete: async id => {
-      log.push({ step: 'complete', id });
+    complete: async (id, asr) => {
+      // 🔴 두 번째 인자를 함께 적는다 — 「폰에서 받아쓴다」는 사실이 여기로만 전해진다.
+      log.push({ step: 'complete', id, asr });
       if (seed.completeError) throw seed.completeError;
       return { call_id: id, status: 'PREPARING', progress: 0.05, job_state: 'QUEUED' };
     },
@@ -193,4 +194,47 @@ test('브라우저가 알려 준 MIME 이 아니라 확장자로 형식을 정�
   assert.equal(audioContentType('recording', 'audio/wav; codecs=1'), 'audio/wav');
   assert.throws(() => audioContentType('notes.txt', 'text/plain'), /UNSUPPORTED_TYPE/);
   assert.throws(() => audioContentType('recording', ''), /UNSUPPORTED_TYPE/);
+});
+
+/*
+ * ── 폰에서 받아쓰는 통화(`asr: "client"`) ────────────────────────────────────
+ *
+ * 🔴 여기서 지키는 것은 **서버 경로가 한 글자도 바뀌지 않았다**는 사실이다. 체크를 끈
+ * 등록은 이 기능이 생기기 전과 똑같은 요청을 내야 한다 — 그것이 이 기능의 안전망이다.
+ */
+test('받아쓰기를 고르지 않으면 complete 에 본문을 싣지 않는다', async () => {
+  const { uploadCall, log } = setup();
+  await uploadCall(input(), { now: NOW });
+  const complete = log.find(entry => entry.step === 'complete');
+  // 서버에서는 「생략」과 `"server"` 가 같은 뜻이지만, 예전 요청 모양을 그대로 둔다.
+  assert.equal(complete.asr, undefined);
+});
+
+test('폰에서 받아쓰기로 등록하면 complete 에만 asr 가 실린다', async () => {
+  const { uploadCall, log } = setup();
+  const result = await uploadCall(input(), { now: NOW, asr: 'client' });
+  assert.deepEqual(log.map(entry => entry.step), ['upload-url', 'put', 'complete']);
+  // 🔴 **녹음은 어느 쪽이든 올라간다.** 받아쓰기를 누가 하느냐만 달라진다 — 업로드를
+  // 건너뛰면 나중에 통화를 다시 들을 수 없다.
+  assert.equal(log[1].step, 'put');
+  assert.equal(log[2].asr, 'client');
+  // 업로드 주소 요청은 받아쓰기와 무관하다. 여기에 끼워 넣으면 서버가 400 을 준다.
+  assert.equal('asr' in log[0].body, false);
+  assert.equal(result.record.status, 'PREPARING');
+});
+
+test('이미 큐잉된 통화를 다시 올릴 때도 asr 가 그대로 따라간다', async () => {
+  // 앞선 시도에서 업로드까지는 끝났는데 `complete` 응답을 못 받은 경우다.
+  const { uploadCall, log } = setup({ uploadUrlError: new ApiError(409, { code: 'CALL_ALREADY_QUEUED' }) });
+  await uploadCall(input(), { now: NOW, asr: 'client' });
+  assert.deepEqual(log.map(entry => entry.step), ['upload-url', 'complete']);
+  // 🔴 여기서 빠뜨리면 서버는 이 통화를 **서버 받아쓰기**로 잡고, 앱이 보낸 전사문은
+  // `CALL_NOT_CLIENT_ASR` 로 영원히 거절된다.
+  assert.equal(log[1].asr, 'client');
+});
+
+test('서버 받아쓰기로 등록한 통화는 재시도에서도 본문이 없다', async () => {
+  const { uploadCall, log } = setup({ uploadUrlError: new ApiError(409, { code: 'CALL_ALREADY_QUEUED' }) });
+  await uploadCall(input(), { now: NOW });
+  assert.equal(log[1].asr, undefined);
 });

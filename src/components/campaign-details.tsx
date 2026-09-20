@@ -2,6 +2,7 @@ import { formatPhone } from '@/lib/phone';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Text, View } from 'react-native';
 import {
+  ButtonRow,
   Choice,
   Loading,
   Notice,
@@ -13,8 +14,15 @@ import {
 import { AttachmentPreview } from '@/components/message-attachments';
 import { colors, radii } from '@/constants/theme';
 import { smsApi } from '@/lib/sms-api';
+import {
+  composerConfirm,
+  dispatchReady,
+  dispatchSubscriptionId,
+  lineSelectable,
+} from '@/lib/sms-capability';
 import { getCapabilities, requestPermissions, type SmsCapabilities } from '@/lib/sms-device';
 import { smsDispatch } from '@/lib/sms-dispatch';
+import type { SendChoice, SendPrompt } from '@/lib/sms-runner';
 import type { Campaign, CampaignRecipient } from '@/types/sms';
 function uncertain(r: CampaignRecipient) {
   return (
@@ -33,6 +41,27 @@ export function CampaignDetails({ id }: { id: string }) {
   const [sim, setSim] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
+  /*
+    iPhone 한 건 확인창.
+
+    🔴 **iPhone 은 앱이 문자를 직접 보내지 못한다.** 시스템 메시지 화면을 띄우고 사람이
+    「보내기」를 눌러야 나가므로, 다음 사람으로 넘어가기 전에 이 창에서 발송/통과/중단을
+    고르게 한다. 안드로이드는 이 창을 쓰지 않는다 — 운영 중인 흐름을 그대로 둔다
+    (갈림은 `Platform.OS` 가 아니라 단말이 알려 준 `composerConfirm` 으로 판단한다).
+  */
+  const [prompt, setPrompt] = useState<SendPrompt | null>(null);
+  // 창을 띄운 쪽이 기다리는 promise 의 마침표. 창이 사라지면 반드시 한 번 불러야 한다 —
+  // 안 부르면 발송 루프가 claim 한 사람을 쥔 채로 영원히 멈춘다.
+  const answer = useRef<((choice: SendChoice) => void) | null>(null);
+  const settle = useCallback((choice: SendChoice) => {
+    const pending = answer.current;
+    if (!pending) return;
+    answer.current = null;
+    setPrompt(null);
+    pending(choice);
+  }, []);
+  // 화면을 떠나면 남은 한 건은 「중단」으로 닫는다. 결과 없이 매달린 대상을 남기지 않는다.
+  useEffect(() => () => settle('stop'), [settle]);
   const dispatch = useSyncExternalStore(
     smsDispatch.subscribe,
     smsDispatch.getSnapshot,
@@ -94,14 +123,20 @@ export function CampaignDetails({ id }: { id: string }) {
     }
   }
   async function run(retry = false) {
-    if (lock.current || running || sim === null) return;
+    if (lock.current || running || !available) return;
     lock.current = true;
     setBusy(true);
     setError('');
     try {
       await smsDispatch.run(id, {
-        subscriptionId: sim,
+        subscriptionId: dispatchSubscriptionId(capability, sim),
         subject: campaign?.title,
+        ...(perMessage
+          ? { confirm: (target: SendPrompt) => new Promise<SendChoice>((resolve) => {
+            answer.current = resolve;
+            setPrompt(target);
+          }) }
+          : {}),
         ...(retry ? { retryRecipientIds: retryIds } : {}),
       });
       await load();
@@ -116,6 +151,8 @@ export function CampaignDetails({ id }: { id: string }) {
   async function stop() {
     if (!(running && mine)) return;
     try {
+      // 확인창이 떠 있으면 루프가 답을 기다리는 중이다. 먼저 닫아야 중단이 실제로 진행된다.
+      settle('stop');
       await smsDispatch.stop();
       await load();
     } catch (e) {
@@ -128,7 +165,10 @@ export function CampaignDetails({ id }: { id: string }) {
   const unknown = rows.filter(uncertain).length;
   const current = rows.find((r) => r.id === dispatch.currentRecipientId);
   const attachmentSupported = !campaign?.attachments?.length || !!capability?.mmsSupported;
-  const available = !!capability?.supported && capability.permissionGranted && sim !== null && attachmentSupported;
+  const available = dispatchReady(capability, sim, attachmentSupported);
+  // 한 건마다 시스템 화면을 거치는 단말인가(iPhone). 회선 선택 UI 유무도 여기서 갈린다.
+  const perMessage = composerConfirm(capability);
+  const chooseLine = lineSelectable(capability);
   // 데스크톱 브라우저처럼 발송 자체가 불가능한 곳. null(확인 중)과 구별한다 — 확인 중에는 버튼을 비활성으로 둔다.
   const browserOnly = capability?.supported === false;
   const sending = rows.some((r) => r.status === 'SENDING');
@@ -207,11 +247,41 @@ export function CampaignDetails({ id }: { id: string }) {
               </Text>
             ) : null}
           </View>
-          <Notice message="성공은 Android 발송 요청 성공이며 상대방의 수신·읽음 확인이 아닙니다." />
+          <Notice
+            message={perMessage
+              ? '성공은 iPhone 메시지 앱에 넘겼다는 뜻이며 상대방의 수신·읽음 확인이 아닙니다.'
+              : '성공은 Android 발송 요청 성공이며 상대방의 수신·읽음 확인이 아닙니다.'}
+          />
           {!needsLine ? null : capability === null ? (
-            <Notice message="Android SMS 기능을 확인하고 있어요." />
+            <Notice message="문자 발송 기능을 확인하고 있어요." />
+          ) : !chooseLine ? (
+            /*
+              🔴 iPhone 에는 회선을 고르는 API 가 없다. 그래서 SIM 선택 UI 자체를 감춘다 —
+              고를 수 없는 것을 보여 주면 「왜 안 골라지나」를 묻게 된다. 대신 iPhone 에서만
+              달라지는 세 가지(탭 두 번 · iMessage · 회선 고정)를 여기서 한 번 알린다.
+
+              브라우저(`supported: false` + 회선 정보 없음)보다 먼저 본다. 문자를 못 보내는
+              iPhone 에게 「Android 앱에서 쓰세요」라고 하면 고장으로 읽힌다.
+            */
+            <View style={s.card}>
+              <Text style={s.subtitle}>iPhone 에서 보내기</Text>
+              {!capability.supported ? (
+                <>
+                  <Notice error message="이 기기에서는 문자를 보낼 수 없어요. 회선(SIM)과 메시지 설정을 확인해 주세요." />
+                  <SmsButton
+                    label="문자 기능 다시 확인"
+                    secondary
+                    disabled={busy || running}
+                    onPress={() => void permission()}
+                  />
+                </>
+              ) : null}
+              <Notice message="한 건마다 iPhone 메시지 화면이 열립니다. 앱의 「발송」과 메시지 화면의 「보내기」로 탭이 두 번이에요 — 25명이면 50번입니다." />
+              <Notice message="상대가 아이폰이면 iMessage로 나갈 수 있어요. 그때는 문자 요금이 아니라 데이터로 나갑니다." />
+              <Notice message="iPhone은 발신 회선을 고를 수 없습니다. 기기에 설정된 기본 회선의 번호로 나갑니다." />
+            </View>
           ) : !capability.supported ? (
-            <Notice message="이 기능은 Android 앱에서 사용할 수 있습니다. 수신자 관리와 이력 조회는 여기서도 가능합니다." />
+            <Notice message="이 기능은 Android·iPhone 앱에서 사용할 수 있습니다. 수신자 관리와 이력 조회는 여기서도 가능합니다." />
           ) : (
             <View style={s.card}>
               <Text style={s.subtitle}>발신 SIM 회선</Text>
@@ -247,10 +317,33 @@ export function CampaignDetails({ id }: { id: string }) {
             </View>
           )}
           {/* 브라우저에서 보는 것만으로 「최신 앱을 설치하라」는 오류가 뜨면 고장으로 읽힌다. 실제 Android 앱에서 MMS 미지원일 때만 알린다. */}
-          {needsLine && capability?.supported && !attachmentSupported ? <Notice error message="첨부 발송을 지원하는 최신 Android 앱을 설치해 주세요." /> : null}
+          {needsLine && capability?.supported && !attachmentSupported ? (
+            <Notice
+              error
+              message={perMessage
+                ? '이 iPhone에서는 이미지 첨부를 보낼 수 없어요. 설정 › 메시지의 MMS 메시지를 확인해 주세요.'
+                : '첨부 발송을 지원하는 최신 Android 앱을 설치해 주세요.'}
+            />
+          ) : null}
           {running ? (
             mine ? (
               <>
+                {/* iPhone 한 건 확인창. 안드로이드에서는 prompt 가 없어 예전 그대로 중단 버튼만 남는다. */}
+                {prompt ? (
+                  <View style={s.card}>
+                    <Text style={s.meta} accessibilityLiveRegion="polite">
+                      {prompt.index} / {prompt.total} · {prompt.name} · {formatPhone(prompt.phone)}
+                    </Text>
+                    <Text selectable style={s.body}>{prompt.message}</Text>
+                    <ButtonRow>
+                      <SmsButton fill label="발송" onPress={() => settle('send')} />
+                      <SmsButton fill secondary label="통과" onPress={() => settle('skip')} />
+                      <SmsButton fill secondary danger label="중단" onPress={() => settle('stop')} />
+                    </ButtonRow>
+                    <Notice message="「발송」을 누르면 iPhone 메시지 화면이 열려요. 거기서 「보내기」를 한 번 더 눌러야 나갑니다." />
+                    <Notice message="「통과」는 이 사람을 건너뛰고 다음으로 갑니다. 「중단」은 여기까지 저장하고 멈춥니다." />
+                  </View>
+                ) : null}
                 <SmsButton
                   label={dispatch.stopping ? '현재 1건 저장 후 중단 중…' : '발송 중단'}
                   secondary
@@ -258,7 +351,11 @@ export function CampaignDetails({ id }: { id: string }) {
                   disabled={dispatch.stopping}
                   onPress={() => void stop()}
                 />
-                <Notice message="이미 Android에 전달한 문자는 취소할 수 없습니다. 현재 결과 저장 후 멈춥니다." />
+                <Notice
+                  message={perMessage
+                    ? '메시지 화면에서 이미 보낸 문자는 취소할 수 없습니다. 현재 결과 저장 후 멈춥니다.'
+                    : '이미 Android에 전달한 문자는 취소할 수 없습니다. 현재 결과 저장 후 멈춥니다.'}
+                />
               </>
             ) : (
               <Notice message="다른 문자를 발송 중입니다. 완료 또는 중단 후 발송할 수 있어요." />

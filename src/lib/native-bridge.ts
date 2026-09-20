@@ -41,8 +41,18 @@ export function postTokensToNative(
   // 껍데기 밖이다 — 토큰은 이미 이 앱의 SecureStore 에 있다.
 }
 
-/** 🔧 측정용. 껍데기 자신은 부를 일이 없다 — 짝을 맞추기 위한 빈 구현이다. */
+/** 껍데기 자신은 부를 일이 없다 — 화면은 이 앱의 라우터가 직접 연다. 짝을 맞추기 위한 빈 구현. */
 export function openNativeScreen(_path: string): void {}
+
+/**
+ * 껍데기 밖이다 — 늘 false.
+ *
+ * 🔴 **네이티브에서 참이면 안 된다.** 이 값으로 서는 입구는 「웹에서 네이티브 화면으로 가는
+ * 길」이라, 네이티브 화면 자신이 그 입구를 세우면 스스로를 다시 여는 줄이 된다.
+ */
+export function nativeShellCanOpen(_path: string): boolean {
+  return false;
+}
 
 export function postReadyToNative(): void {
   // 껍데기 밖이다 — 내릴 로딩 덮개가 없다.

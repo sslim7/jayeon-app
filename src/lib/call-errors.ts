@@ -74,6 +74,29 @@ const REASONS: Record<string, string> = {
   CALL_NO_TRANSCRIPT: '다시 분석할 통화 원문이 없습니다.',
   CALL_TOO_LARGE: '분석 데이터가 서버 저장 한도를 넘었습니다.',
   CALL_CONFLICT: '같은 ID의 다른 분석이 이미 저장되어 있습니다.',
+  /*
+    ── 폰에서 받아쓰는 통화(`asr: "client"`)에서만 나오는 코드 ─────
+
+    🔴 **네 개의 성격이 서로 다르다.** 하나는 「다시 보내면 된다」이고 셋은 「이 통화에
+    전사문을 보낼 길이 닫혔다」다. 한 덩어리로 「알 수 없는 오류」라고 말하면, 보내면
+    받아 줄 것을 포기하거나 받아 주지 않을 것을 계속 다시 보내게 된다.
+  */
+  /*
+    서버가 6시간을 기다리다 통화를 정리했다. ⚠️ **끝이 아니다** — 늦게 도착한 전사문도
+    받아 준다(서버 계약). 그래서 여기서만 「다시 보내라」고 말할 수 있다.
+  */
+  CLIENT_TRANSCRIPT_TIMEOUT: '기기에서 받아쓴 내용이 6시간 안에 서버에 닿지 않아 서버가 이 통화를 정리했습니다. 받아쓰기 화면을 다시 열면 지금이라도 보낼 수 있습니다.',
+  // 🔴 서버가 이 통화를 **서버 받아쓰기**로 잡고 있다. 몇 번을 보내도 받지 않는다.
+  CALL_NOT_CLIENT_ASR: '이 통화는 서버가 받아쓰도록 등록되어 있어, 기기에서 받아쓴 내용을 받지 않습니다.',
+  // 보낼 것이 이미 반영돼 있다. 실패처럼 보이지만 사용자가 할 일은 남아 있지 않다.
+  CALL_ALREADY_COMPLETED: '이미 분석이 끝난 통화입니다. 기기에서 받아쓴 내용은 더 보내지 않아도 됩니다.',
+  // 같은 결과를 다시 보내도 같은 답이 온다. 원인은 녹음 쪽이다.
+  CALL_EMPTY_TRANSCRIPT: '기기에서 받아쓴 내용이 비어 있습니다. 녹음에 사람 말소리가 없었을 수 있습니다.',
+  // ── 앱이 폰 받아쓰기 중에 만드는 코드 ─────────────────────────
+  ASR_LOCAL_UNSUPPORTED: '이 기기에서는 폰 받아쓰기를 할 수 없습니다. 서버로 보내 주세요.',
+  ASR_MODEL_MISSING: '받아쓰기 모델이 폰에 없습니다. 설정에서 내려받은 뒤 다시 열어 주세요.',
+  ASR_CONVERT_FAILED: '녹음을 받아쓰기용 형식(16kHz)으로 바꾸지 못했습니다.',
+  ASR_AUDIO_MISSING: '받아쓸 녹음 파일을 찾지 못했습니다. 통화를 다시 등록해 주세요.',
   // ── 앱이 업로드 중에 만드는 코드 ───────────────────────────────
   UNSUPPORTED_TYPE: '지원하지 않는 형식의 녹음 파일입니다.',
   FILE_TOO_LARGE: '녹음 파일이 100MB를 넘습니다.',
@@ -96,8 +119,13 @@ const REASONS: Record<string, string> = {
  * 요금을 쓴다. 반대로 AI 가 매번 다르게 답해서 갈리는 것(`EMPTY_ANALYSIS`)과 서버가
  * 시도 횟수를 다 쓴 것(`RETRIES_EXHAUSTED`)은 넣지 않는다 — 사람이 판단해 한 번 더
  * 돌릴 값어치가 있다.
+ *
+ * 🔴 **`CLIENT_TRANSCRIPT_TIMEOUT` 은 여기 없다.** 서버가 6시간 뒤 통화를 정리하긴 하지만
+ * **늦게 온 전사문도 받아 준다** — 여기 넣으면 앱이 이미 받아쓴 28분치를 「보내 봐야
+ * 소용없다」며 버리게 된다. 반대로 `CALL_NOT_CLIENT_ASR`·`CALL_ALREADY_COMPLETED`·
+ * `CALL_EMPTY_TRANSCRIPT` 는 몇 번을 보내도 같은 답이 오므로 여기 넣는다.
  */
-const PERMANENT_CODES = new Set(['UNSUPPORTED_TYPE', 'FILE_TOO_LARGE', 'EMPTY_FILE', 'INVALID_CONTACT', 'INVALID_RECORDED_AT', 'CALL_TOO_LARGE', 'CALL_NOT_FOUND', 'CALL_ALREADY_QUEUED', 'PERMANENT', 'CONTENT_FILTERED', 'TLS_REQUIRED', 'BUDGET_TOO_SMALL', 'EMPTY_TRANSCRIPT', 'TRANSCRIPT_TOO_LARGE', 'ANALYSIS_TOO_LARGE', 'RECORD_INVALID', 'INPUT_UNAVAILABLE', 'AUDIO_MISSING']);
+const PERMANENT_CODES = new Set(['UNSUPPORTED_TYPE', 'FILE_TOO_LARGE', 'EMPTY_FILE', 'INVALID_CONTACT', 'INVALID_RECORDED_AT', 'CALL_TOO_LARGE', 'CALL_NOT_FOUND', 'CALL_ALREADY_QUEUED', 'PERMANENT', 'CONTENT_FILTERED', 'TLS_REQUIRED', 'BUDGET_TOO_SMALL', 'EMPTY_TRANSCRIPT', 'TRANSCRIPT_TOO_LARGE', 'ANALYSIS_TOO_LARGE', 'RECORD_INVALID', 'INPUT_UNAVAILABLE', 'AUDIO_MISSING', 'CALL_NOT_CLIENT_ASR', 'CALL_ALREADY_COMPLETED', 'CALL_EMPTY_TRANSCRIPT', 'ASR_LOCAL_UNSUPPORTED', 'ASR_MODEL_MISSING', 'ASR_CONVERT_FAILED', 'ASR_AUDIO_MISSING']);
 
 /** 오류를 **정해진 코드로만** 바꾼다. 모르는 오류는 문구를 버리고 `UNKNOWN` 이다. */
 export function failureCode(error: unknown): string {

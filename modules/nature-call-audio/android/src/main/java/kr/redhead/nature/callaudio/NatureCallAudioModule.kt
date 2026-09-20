@@ -4,6 +4,7 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import android.os.Build
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
@@ -60,6 +61,33 @@ class NatureCallAudioModule : Module() {
 
     // 추론 스레드 수를 정하려면 코어 수가 필요하다. JS 에는 이 값을 주는 API 가 없다.
     Function("cpuCount") { Runtime.getRuntime().availableProcessors() }
+
+    /**
+     * AP 문자열 — **해석하지 않은 `Build.*` 원본.**
+     *
+     * ┌────────────────────────────────────────────────────────────────────────┐
+     * │ 🔴 **ggml-hexagon 은 퀄컴 Hexagon NPU 전용이다.** 엑시노스·미디어텍에서는     │
+     * │ 예외가 나지 않고 **조용히 CPU 로 내려가서** 28분 통화가 33분~3시간이 된다.     │
+     * │ 실패하지 않으므로 사용자는 「원래 느린 앱」이라고 생각하게 된다. 그래서 받아쓰기를 │
+     * │ 켜기 전에 이 값부터 본다(→ `src/lib/asr-capability-types.ts`).             │
+     * └────────────────────────────────────────────────────────────────────────┘
+     *
+     * 🔴 **여기서 「스냅드래곤인가」를 판정하지 않는다.** 판정을 네이티브에 두면 규칙을
+     * 고칠 때마다 앱을 다시 빌드해야 하고, `node --test` 로 확인할 수도 없다.
+     *
+     * ⚠️ `SOC_MANUFACTURER` 는 **API 31+** 에만 있다. 낮은 버전에서는 빈 문자열이고,
+     * JS 가 `HARDWARE`/`BOARD` 로 대신 짚는다. 알 수 없으면 `null` 대신 빈 문자열을
+     * 돌려준다 — 값이 섞인 맵을 넘기면 브리지 변환이 기기마다 다르게 굴어서다.
+     */
+    Function("socInfo") {
+      val modern = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+      mapOf(
+        "manufacturer" to (if (modern) Build.SOC_MANUFACTURER else null).orEmpty(),
+        "model" to (if (modern) Build.SOC_MODEL else null).orEmpty(),
+        "hardware" to Build.HARDWARE.orEmpty(),
+        "board" to Build.BOARD.orEmpty(),
+      )
+    }
 
     // 경로가 우리 앱 안인지만 확인하고 끝낸다. 확인마저 빼면 인터페이스가 거짓말이 된다.
     AsyncFunction("excludeFromBackup") { uri: String -> privateFile(uri); Unit }

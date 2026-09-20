@@ -78,12 +78,58 @@ export async function benchAsr(session: AsrSession, threads: number): Promise<As
   };
 }
 
+/**
+ * 받아쓴 **구간 하나** — 말한 시각과 그때 한 말.
+ *
+ * ┌────────────────────────────────────────────────────────────────────────────┐
+ * │ 🔴 **시각은 「이 호출의 창」을 0 으로 잰 ms 다.** 파일 처음부터의 시각이 **아니다.**    │
+ * │ 창을 옮겨 가며 부르는 쪽(`asr-local.ts`)이 오프셋을 더해 절대 시각으로 만든다 —       │
+ * │ `onProgress` 의 0~100 이 창 안의 값인 것과 같은 규칙이다.                        │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ *
+ * 🔴 **화자는 없다.** whisper 는 누가 말했는지 알려 주지 않는다. 없는 것을 빈 문자열로라도
+ * 채우지 않는다 — 채우는 순간 받는 쪽이 「모른다」와 「아무개다」를 구분할 수 없게 된다.
+ */
+export type AsrSegment = {
+  /** 창 시작으로부터의 시각(ms). */
+  startMs: number;
+  /** 창 시작으로부터의 끝 시각(ms). */
+  endMs: number;
+  text: string;
+};
+
 export type AsrTranscription = {
   text: string;
+  /** 구간별 결과. ⚠️ 빈 배열일 수 있다 — 무음 구간만 있는 창에서는 하나도 나오지 않는다. */
+  segments: AsrSegment[];
   /** 사용자가 멈춰서 끝난 것인지. 중간 결과를 「완성본」으로 착각하지 않게 한다. */
   aborted: boolean;
   elapsedMs: number;
 };
+
+/**
+ * whisper 가 준 구간을 **창 기준 ms** 로 옮긴다.
+ *
+ * ┌────────────────────────────────────────────────────────────────────────────┐
+ * │ 🔴 **`t0`/`t1` 은 10ms 단위이고, `offset` 이 이미 더해진 값이다.** 근거는 라이브러리가 │
+ * │ 품고 있는 whisper.cpp 다: `whisper_full_with_state` 가 `seek_start = offset_ms/10` 에서 │
+ * │ 시작하고 구간 시각을 `seek + 2*(…)` 로 만든다. 그래서 여기서 창 시작을 **빼서** 창    │
+ * │ 기준으로 되돌린다 — 더하는 자리는 `asr-local.ts` 한 곳뿐이어야 한다.                │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ⚠️ 라이브러리가 언젠가 창 기준 값을 주도록 바뀌면, 그때도 빼는 코드는 **실패하지 않고**
+ * 시각만 2분씩 앞당긴다 — 제일 나쁜 종류다. 그래서 빼기 전에 값으로 확인한다: 창 기준
+ * 값은 창 길이(≤120초)를 넘을 수 없으므로, 가장 이른 구간이 창 시작보다 뒤에 있으면 이미
+ * 더해진 값이 확실하다. 아니면 빼지 않는다.
+ */
+function windowSegments(raw: readonly { t0: number; t1: number; text: string }[], offsetMs: number): AsrSegment[] {
+  const earliest = raw.reduce((min, segment) => Math.min(min, segment.t0 * 10), Infinity);
+  const shift = Number.isFinite(earliest) && earliest >= offsetMs ? offsetMs : 0;
+  return raw
+    .map((segment) => ({ startMs: segment.t0 * 10 - shift, endMs: segment.t1 * 10 - shift, text: (segment.text ?? '').trim() }))
+    // 빈 구간은 버린다. 서버 스키마가 빈 글의 구간을 받지 않고, 화면에도 빈 말풍선이 선다.
+    .filter((segment) => segment.text.length > 0);
+}
 
 export type AsrTranscribeHandle = {
   promise: Promise<AsrTranscription>;
@@ -92,7 +138,23 @@ export type AsrTranscribeHandle = {
 };
 
 /**
- * 16kHz WAV 전체를 받아쓴다.
+ * 같은 WAV 파일의 **일부 구간**만 전사하라는 지정.
+ *
+ * ┌────────────────────────────────────────────────────────────────────────────┐
+ * │ 🔴 **이것이 있으니 파일을 자르지 않는다.** whisper.rn 의 `TranscribeOptions` 에는     │
+ * │ `offset`(ms)·`duration`(ms) 이 있다. 청크 WAV 를 따로 쓰거나 헤더를 다시 만드는      │
+ * │ 코드는 전부 불필요하고, 55MB 짜리 임시 파일을 14개 만들다 저장 공간을 터뜨린다.        │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ */
+export type AsrWindow = {
+  /** 파일 처음부터의 오프셋(ms). */
+  offsetMs: number;
+  /** 이 호출에서 처리할 길이(ms). */
+  durationMs: number;
+};
+
+/**
+ * 16kHz WAV 를 받아쓴다. `window` 를 주면 그 구간만, 주지 않으면 파일 전체다.
  *
  * 🔴 **고유명사 프롬프트를 넣지 않는다.** 맥북 실측에서 효과가 없었고 CER 은 오히려 미세하게
  * 나빠졌다(→ `docs/on-device-asr.md` 7절 ④). 게다가 whisper.rn 에는 `carryInitialPrompt` 가
@@ -102,23 +164,38 @@ export type AsrTranscribeHandle = {
  * 인사·잡음이면 엉뚱한 언어로 28분을 전사한다.
  *
  * ⚠️ `onProgress` 는 whisper.cpp 가 주는 0~100 이다. **우리가 시간으로 추정한 값이 아니다.**
+ * 🔴 `window` 를 주면 이 값은 **그 구간 안에서의** 0~100 이다. 파일 전체 진행률이 아니다 —
+ * 두 개를 섞으면 진행 막대가 청크마다 0 으로 되돌아간다(→ `asr-local.ts` 가 환산한다).
+ *
+ * ⚠️ `window` 는 **선택 인자다.** 기존 호출부(`asr-bench.tsx`)는 파일 전체를 한 번에 돌리고,
+ * 그 측정값이 문서의 기준이라 호출 모양이 바뀌면 안 된다.
+ *
+ * 🔴 **결과에는 글 전체와 구간이 함께 있다**(`segments`). 구간은 **더해진 값**이라 `text` 만
+ * 보던 호출부는 그대로 돌아간다 — 반대로 여기서 구간을 버리면 통화 원문 화면이 그릴 근거를
+ * 잃는다(실제로 그래서 저장된 원문이 화면에서 비어 보였다).
  */
 export function transcribeAsr(
   session: AsrSession,
   wavUri: string,
   threads: number,
   onProgress: (percent: number) => void,
+  window?: AsrWindow,
 ): AsrTranscribeHandle {
   const started = Date.now();
+  const offsetMs = window ? Math.max(0, Math.round(window.offsetMs)) : 0;
   const task = session.context.transcribe(wavUri, {
     language: 'ko',
     maxThreads: threads,
     onProgress,
+    // 창을 주지 않았으면 두 값을 아예 넣지 않는다. 0 을 넣어도 같은 뜻이지만, 옵션이
+    // 없는 호출과 있는 호출을 로그에서 구분할 수 있게 둔다.
+    ...(window ? { offset: offsetMs, duration: Math.max(0, Math.round(window.durationMs)) } : {}),
   });
   return {
     stop: () => { void task.stop().catch(() => {}); },
     promise: task.promise.then((result) => ({
       text: result.result ?? '',
+      segments: windowSegments(result.segments ?? [], offsetMs),
       aborted: !!result.isAborted,
       elapsedMs: Date.now() - started,
     })),

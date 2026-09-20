@@ -16,7 +16,7 @@
       "permissions": [
         "android.permission.POST_NOTIFICATIONS"
       ],
-      "package": "kr.redhead.nature",
+      "package": "kr.redhead.natureapp",
       "versionCode": 1,
       "intentFilters": [
         {
@@ -79,7 +79,7 @@
       "reactCompiler": true
     },
     "ios": {
-      "bundleIdentifier": "kr.redhead.nature"
+      "bundleIdentifier": "kr.redhead.natureapp"
     }
   }
 }

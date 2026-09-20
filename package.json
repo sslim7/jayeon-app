@@ -60,8 +60,10 @@
     "test:auth": "node --test tests/auth.test.cjs",
     "test:e2e": "playwright test",
     "test:sms": "node --test tests/sms.test.cjs",
+    "test:sms-ios": "node --test tests/sms-ios.test.cjs",
     "android:dev": "expo run:android --port 3103",
-    "test:calls": "node --test tests/call-*.test.cjs"
+    "test:calls": "node --test tests/call-*.test.cjs",
+    "test:asr": "node --test tests/asr-*.test.cjs"
   },
   "private": true
 }
