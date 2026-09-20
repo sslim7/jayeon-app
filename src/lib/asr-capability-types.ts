@@ -180,6 +180,26 @@ export function asrCapabilityMessage(reason: AsrCapabilityReason, estimateMs: nu
   }
 }
 
+/**
+ * **모델을 받아 봐야 소용없는 기기인가.** 막을 이유가 있으면 그 사유를, 없으면 `null`.
+ *
+ * ┌────────────────────────────────────────────────────────────────────────────┐
+ * │ 🔴 **834MB 를 받게 두면 안 되는 경우가 하나 있다** — 퀄컴이 **아닌 것이 확실한** AP.   │
+ * │ ggml-hexagon 은 Hexagon NPU 전용이라 거기서는 조용히 CPU 로 떨어지고, 28분 통화가    │
+ * │ 30분을 넘긴다. 받아도 쓸 수 없는데 버튼이 살아 있으면 사용자는 용량만 버린다.          │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ *
+ * 🔴 **`unknown` 은 막지 않는다.** 구형 안드로이드는 AP 를 짚을 수 없을 뿐이고, 여기서
+ * 막으면 멀쩡한 구형 스냅드래곤이 통째로 배제된다 — 느리면 어차피 벤치에서 걸린다
+ * (→ 위 `socVerdict`). iOS 도 마찬가지다: Metal 경로라 Hexagon 여부가 뜻이 없다.
+ *
+ * ⚠️ **이 판정은 「받기」에만 건다.** 이미 받아 둔 모델을 **지우는 길은 언제나 열려 있어야
+ * 한다** — 용량을 되찾는 유일한 방법이 그것이다(→ `app/asr-setup.tsx`).
+ */
+export function modelDownloadBlockReason(facts: { platform: string; soc: SocInfo | null }): 'NOT_SNAPDRAGON' | null {
+  return facts.platform === 'android' && socVerdict(facts.soc) === 'other' ? 'NOT_SNAPDRAGON' : null;
+}
+
 /** 벤치를 돌리기 **전에** 이미 결론이 나는 경우. `null` 이면 재 봐야 안다. */
 export function preBenchReason(facts: {
   platform: string;
@@ -189,8 +209,13 @@ export function preBenchReason(facts: {
 }): AsrCapabilityReason | null {
   if (facts.platform === 'web') return 'WEB';
   if (!facts.nativeAvailable) return 'NO_NATIVE';
-  // 🔴 AP 판정은 안드로이드에만 해당한다. iOS 는 Metal 경로라 Hexagon 여부가 의미가 없다.
-  if (facts.platform === 'android' && socVerdict(facts.soc) === 'other') return 'NOT_SNAPDRAGON';
+  /*
+   * 🔴 AP 판정은 안드로이드에만 해당한다(iOS 는 Metal 경로). 조건을 여기 다시 적지 않고
+   * 위 함수를 부르는 이유는, 「판정은 불가인데 내려받기 버튼은 살아 있다」처럼 두 자리가
+   * 어긋나는 상태를 아예 만들 수 없게 하려는 것이다.
+   */
+  const blocked = modelDownloadBlockReason(facts);
+  if (blocked) return blocked;
   // 모델이 없으면 벤치 자체를 돌릴 수 없다. 「불가」가 아니라 「아직 모른다」다.
   if (!facts.modelInstalled) return 'MODEL_MISSING';
   return null;

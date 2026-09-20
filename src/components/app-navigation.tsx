@@ -8,6 +8,8 @@ import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProfileSheet, PasswordChangeSheet } from '@/components/profile-sheet';
+import { SmsButton } from '@/components/sms-ui';
+import { useShellExit } from '@/hooks/use-shell-exit';
 import { useUserStore } from '@/store/user-store';
 import { colors, fonts, radii, spacing, text } from '@/constants/theme';
 // 🔧 측정용(→ `components/asr-bench.tsx`). 끝나면 이 import 와 아래 갈래를 함께 지운다.
@@ -74,11 +76,20 @@ export function useScreenHeader(header: ScreenHeader | null) {
   }, [header, setHeader]));
 }
 
-/** 화면마다 동일한 진입점을 제공하며 실제 발송 상태와는 독립적으로 동작한다. */
-export function AppNavigation({ children, enabled = true }: { children: ReactNode; enabled?: boolean }) {
+/**
+ * 화면마다 동일한 진입점을 제공하며 실제 발송 상태와는 독립적으로 동작한다.
+ *
+ * 🔴 **`drawer` 가 거짓이면 머리는 「제목 + 닫기」가 된다.** 껍데기 모드에서 쓰는 모양이다 —
+ * 서랍의 목적지(문자 보내기·통화분석…)는 전부 웹뷰 안에 있어서, 껍데기가 연 네이티브 화면에
+ * ☰ 를 세워 봐야 갈 곳이 없다. 사용자에게 이 화면은 **웹 위에 잠깐 뜬 것**이라 「뒤로」보다
+ * 「닫기」가 실제 동작에 맞고, 같은 저장소의 시트들도 오른쪽 위 「닫기」를 쓴다
+ * (→ `components/bottom-sheet.tsx`).
+ */
+export function AppNavigation({ children, enabled = true, drawer = true }: { children: ReactNode; enabled?: boolean; drawer?: boolean }) {
   const pathname = usePathname();
   const [openPath, setOpenPath] = useState<string | null>(null);
-  const open = enabled && openPath === pathname;
+  // 🔴 서랍이 없는 모드에서는 열릴 수도 없어야 한다. 몸짓만으로도 열리면 갈 곳 없는 메뉴가 뜬다.
+  const open = enabled && drawer && openPath === pathname;
   const [stageWidth, setStageWidth] = useState(0);
   const drawerWidth = Math.min(stageWidth * 0.8, 340);
   const [sheet, setSheet] = useState<'profile' | 'password' | null>(null);
@@ -139,14 +150,24 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const content = document.getElementById('navigation-content');
-    const drawer = document.getElementById('navigation-drawer');
+    // ⚠️ 이름을 `drawer` 로 두지 않는다 — 같은 이름의 prop 을 가려 「서랍이 없는 모드」 판정이
+    // 이 블록 안에서만 뒤집힌 것처럼 읽힌다.
+    const drawerEl = document.getElementById('navigation-drawer');
     // 숨겨진 화면의 입력란이나 메뉴가 Tab 이동으로 활성화되지 않게 한다.
     if (content) content.inert = open;
-    if (drawer) drawer.inert = !open;
-    return () => { if (content) content.inert = false; if (drawer) drawer.inert = false; };
+    if (drawerEl) drawerEl.inert = !open;
+    return () => { if (content) content.inert = false; if (drawerEl) drawerEl.inert = false; };
   }, [open]);
   // 메뉴 밖의 화면(발송 상세 등)은 들어온 통로인 첫 항목을 제목으로 쓴다.
   const current = destinations.find((item) => item.href === pathname) ?? destinations[0];
+  /**
+   * 화면이 자기 헤더를 올리지 않았을 때의 **안전망 닫기**.
+   *
+   * 🔴 껍데기 모드에서 이 자리가 비면 **나갈 길이 없는 화면**이 된다 — 실기기에서 사용자가
+   * 앱을 강제 종료해야 했던 그 상태다. 화면이 제 몫을 잊어도 최소한 웹뷰로는 돌아갈 수 있게,
+   * 머리는 언제나 닫기를 들고 있는다(→ `hooks/use-shell-exit.ts`).
+   */
+  const fallbackExit = useShellExit('/shell');
   const homeStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: progress.value * drawerWidth }, { scale: 1 - 0.08 * progress.value }],
     borderRadius: 24 * progress.value,
@@ -156,7 +177,12 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
   return (
     <>
       <View style={styles.stage} onLayout={(event) => setStageWidth(event.nativeEvent.layout.width)}>
-          <SafeAreaView nativeID="navigation-drawer" style={[styles.drawer, { width: drawerWidth }]} accessibilityElementsHidden={!open} importantForAccessibility={open ? 'auto' : 'no-hide-descendants'} aria-hidden={!open} pointerEvents={open ? 'auto' : 'none'}>
+          {/*
+            🔴 **서랍이 없는 모드에서는 아예 그리지 않는다.** 껍데기 모드에서 이 목록의 목적지는
+            전부 웹뷰 안에 있어 네이티브로 열면 빈 화면이 선다. 숨겨만 두면 몸짓이나 낭독기로
+            닿는 길이 남아, 갈 곳 없는 메뉴가 화면 밖에서 살아 있게 된다.
+          */}
+          {drawer ? <SafeAreaView nativeID="navigation-drawer" style={[styles.drawer, { width: drawerWidth }]} accessibilityElementsHidden={!open} importantForAccessibility={open ? 'auto' : 'no-hide-descendants'} aria-hidden={!open} pointerEvents={open ? 'auto' : 'none'}>
             <View style={styles.drawerHeader}>
               <View style={styles.drawerHeading}>
                 <Image source={require('../../assets/images/logo.png')} accessibilityLabel="Nature" contentFit="contain" style={styles.brand} />
@@ -232,12 +258,18 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
                 </Pressable>
               </Link>
             </View>
-          </SafeAreaView>
+          </SafeAreaView> : null}
         <GestureDetector gesture={pan}>
           <Animated.View testID="navigation-main" style={[styles.main, homeStyle]}>
             <View nativeID="navigation-content" style={styles.content} pointerEvents={open ? 'none' : 'auto'} accessibilityElementsHidden={open} importantForAccessibility={open ? 'no-hide-descendants' : 'auto'} aria-hidden={open}>
               {enabled ? <SafeAreaView edges={['top', 'left', 'right']} style={styles.headerSafe}>
-                <View style={styles.header}>
+                {/*
+                  🔴 **상단 안전영역(노치·상태바)은 여기서 한 번만 먹는다.** 본문(`SmsPage`)은
+                  아래·좌우만 먹으므로(→ `components/sms-ui.tsx`) 두 번 먹어 헤더 밑에 빈 자리가
+                  생기는 일도, 아무도 안 먹어 글자가 상태바에 붙는 일도 없다. 껍데기 모드에서
+                  헤더가 통째로 걷혔을 때 후자가 실제로 일어났다 — 내용이 화면 맨 위에 붙었다.
+                */}
+                {drawer ? <View style={styles.header}>
                   {/*
                     🔴 **☰ 와 「← 뒤로」는 같은 자리를 두고 다툰다 — 둘을 같이 세우지 않는다.**
                     메뉴가 세운 화면(문자 보내기·예약·통화분석 목록)에서는 왼쪽이 ☰ 이고,
@@ -276,7 +308,26 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
                     화면 가운데에 서므로, 뒤로 버튼일 때는 그 폭(`backButton`)으로 맞춘다.
                   */}
                   {headerActions ? <View style={styles.headerActions}>{headerActions}</View> : <View style={screenHeader ? styles.backButton : styles.iconButton} />}
-                </View>
+                </View> : <View style={styles.header}>
+                  {/*
+                    ── 껍데기 모드의 머리: 「제목 ………… 닫기」 ──────────────────────────
+                    🔴 **제목은 왼쪽, 닫기는 오른쪽 끝이다** — 시트와 같은 배치다
+                    (→ `components/bottom-sheet.tsx`). 여기서는 가운데 정렬을 쓰지 않는다:
+                    왼쪽에 버튼이 없어 추를 맞출 짝이 없고, 제목이 가운데 뜬 채 오른쪽에만
+                    버튼이 있으면 화면이 한쪽으로 기울어 보인다.
+
+                    ⚠️ 제목이 비는 경우는 **화면이 자기 헤더를 올리지 않았을 때**뿐이다. 그때도
+                    닫기는 선다 — 나갈 길이 없는 화면을 만드느니 이름 없는 머리가 낫다.
+                  */}
+                  <Text accessibilityRole="header" numberOfLines={1} style={styles.shellTitle}>{screenHeader?.title ?? ''}</Text>
+                  {headerActions ? <View style={styles.headerActions}>{headerActions}</View> : null}
+                  <SmsButton
+                    secondary
+                    label="닫기"
+                    accessibilityLabel={screenHeader ? `${screenHeader.title} 닫기` : '닫기'}
+                    onPress={screenHeader ? screenHeader.onBack : fallbackExit}
+                  />
+                </View>}
               </SafeAreaView> : null}
               <ScreenHeaderContext.Provider value={setScreenHeader}>
               <HeaderActionsContext.Provider value={setHeaderActions}>{children}</HeaderActionsContext.Provider>
@@ -329,6 +380,12 @@ const styles = StyleSheet.create({
   line: { width: 22, height: 2, borderRadius: radii.hair, backgroundColor: colors.ink },
   brand: { width: '50%', aspectRatio: 3 },
   current: { ...fonts.bodyBold, fontSize: text.h1, color: colors.ink, flex: 1, textAlign: 'center' },
+  /**
+   * 껍데기 모드의 제목. 🔴 **가운데가 아니라 왼쪽**이고 시트 제목과 같은 크기다
+   * (→ `components/bottom-sheet.tsx` 의 머리). 「닫기」가 오른쪽 끝을 잡고 있어 이 글자가
+   * 남은 폭을 전부 쓴다 — `flex: 1` 이 없으면 긴 제목이 버튼을 화면 밖으로 민다.
+   */
+  shellTitle: { ...fonts.bodyBold, fontSize: text.title, color: colors.ink, flex: 1 },
   drawer: { position: 'absolute', top: 0, bottom: 0, left: 0, backgroundColor: colors.card, borderRightWidth: 1, borderRightColor: colors.borderPill },
   drawerHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
   drawerHeading: { flex: 1, gap: spacing.xs },

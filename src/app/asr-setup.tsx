@@ -4,12 +4,13 @@ import * as FS from 'expo-file-system/legacy';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useScreenHeader } from '@/components/app-navigation';
+import { useShellExit } from '@/hooks/use-shell-exit';
 import { ButtonRow, Loading, Notice, ProgressBar, SmsButton, SmsPage, s } from '@/components/sms-ui';
 import { APP_VERSION } from '@/constants/app-meta';
 import { colors, fonts, radii, spacing, text } from '@/constants/theme';
 import {
   ASR_ENCODE_LIMIT_MS, asrCapabilityMessage, asrDurationLabel, buildAsrCapability,
-  isFreshCapability, loadAsrCapability, measureAsrCapability, preBenchReason,
+  isFreshCapability, loadAsrCapability, measureAsrCapability, modelDownloadBlockReason, preBenchReason,
   type AsrCapability, type SocInfo,
 } from '@/lib/asr-capability';
 import { asrLocalProgress, clearAsrLocalState, listAsrLocalStates, type AsrLocalState } from '@/lib/asr-local';
@@ -35,16 +36,20 @@ import { sessionDayLabel } from '@/lib/session-api';
  * `asrCapabilityMessage(...)` 가 이미 한국어 한 줄로 만들어 두었으므로 **여기서 새로 짓지
  * 않는다.** 화면이 문장을 따로 지으면 규칙이 바뀌는 날 둘이 서로 다른 말을 한다.
  *
- * 나가는 길은 설정과 같은 통로다(「‹ 뒤로 + 제목」, → `app/devices.tsx`).
+ * 나가는 길은 헤더가 맡는다 — 껍데기 모드에서는 「제목 + 닫기」, 아니면 「‹ 뒤로 + 제목」이다
+ * (→ `components/app-navigation.tsx`, `hooks/use-shell-exit.ts`).
  * 🔴 **`confirm()`·`alert()` 를 쓰지 않는다** — 이 앱은 WebView 안에서도 돌고, 그 안에서
  * 브라우저 모달이 뜨면 화면이 그대로 멈춘다. 확인은 화면 안의 두 단계로 받는다.
  */
 export default function AsrSetupScreen() {
+  /**
+   * 나가는 길. 🔴 **껍데기에서 열렸을 때는 웹뷰로 돌아간다** — 사용자는 웹 설정에서 왔고,
+   * 껍데기 모드의 `/settings` 는 네이티브에 그릴 화면이 아니다(→ `hooks/use-shell-exit.ts`).
+   * 이 화면에 머리가 서지 않아 **앱을 강제 종료해야 벗어날 수 있던** 자리다.
+   */
+  const exit = useShellExit('/settings');
   /** ⚠️ `useMemo` 는 멋이 아니다 — 매 렌더 새 객체를 넘기면 헤더가 매번 다시 올라간다. */
-  useScreenHeader(useMemo(() => ({
-    title: '로컬 받아쓰기',
-    onBack: () => (router.canGoBack() ? router.back() : router.replace('/settings')),
-  }), []));
+  useScreenHeader(useMemo(() => ({ title: 'NPU 지원 기기확인', onBack: exit }), [exit]));
 
   /**
    * 이 앱에서 받아쓰기를 할 수 있나 — **기기 성능이 아니라 「기능이 실려 있나」다.**
@@ -69,6 +74,17 @@ export default function AsrSetupScreen() {
   const [confirmJob, setConfirmJob] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
+  /**
+   * 이 기기의 AP. 🔴 **한 번만 읽는다** — 렌더마다 네이티브를 부를 값이 아니고, 기기가
+   * 도중에 바뀌지도 않는다.
+   */
+  const soc = useMemo(() => socInfo(), []);
+  /**
+   * 모델을 받아도 쓸 수 없는 기기인가. 🔴 **판단은 규칙이 한다**(→ `lib/asr-capability-types.ts`).
+   * 여기서 `socVerdict` 를 다시 풀어 쓰면 판정 카드와 버튼이 서로 다른 말을 하는 날이 온다.
+   */
+  const blocked = modelDownloadBlockReason({ platform: Platform.OS, soc });
 
   const alive = useRef(true);
   /** 내려받기를 멈추는 손잡이. 화면을 떠날 때도 이것을 당긴다(아래 효과). */
@@ -271,6 +287,18 @@ export default function AsrSetupScreen() {
       <View style={s.card}>
         <Text style={s.subtitle}>모델</Text>
         {/*
+          🔴 **받아도 쓸 수 없는 기기에서는 받기를 막고, 그 이유를 이 자리에서 말한다.**
+          834MB 를 받아 놓고 「그래서 안 됩니다」를 나중에 듣는 것이 가장 나쁘다. 문장은 판정
+          규칙이 만든 것을 그대로 쓴다 — 위 판정 카드와 한 글자도 어긋나지 않아야 한다.
+
+          ⚠️ **지우기는 막지 않는다.** 이미 받아 둔 사람에게는 이 화면이 용량을 되찾는
+          유일한 길이다(→ `lib/asr-capability-types.ts` 의 `modelDownloadBlockReason`).
+        */}
+        {blocked ? <Notice
+          error
+          message={`${asrCapabilityMessage(blocked, null, soc)} 받아 두어도 쓸 수 없어서 내려받기와 고르기를 막아 두었어요 — 이미 받아 둔 모델은 아래에서 지울 수 있습니다.`}
+        /> : null}
+        {/*
           🔴 **어느 쪽을 권하는지 먼저 적는다.** 두 줄을 나란히 세워 놓고 고르라고만 하면
           사용자는 대개 작은 쪽(=덜 정확한 쪽)을 고른다. 맥북 실측에서는 q8_0 이 **더 빠르고
           더 정확했다**(→ `docs/on-device-asr.md` 7절).
@@ -286,6 +314,7 @@ export default function AsrSetupScreen() {
           selected={item.id === modelId}
           recommended={item.id === RECOMMENDED}
           freeBytes={freeBytes}
+          blocked={blocked !== null}
           downloading={downloading === item.id}
           downloadedBytes={downloadedBytes}
           busy={busy}
@@ -416,7 +445,7 @@ function Evidence({ capability }: { capability: AsrCapability }) {
  * 올라가 「지우기」를 누른 것이 고르기까지 함께 일으킨다(→ `app/devices.tsx` 의 같은 함정).
  */
 function ModelRow({
-  model, status, selected, recommended, freeBytes, downloading, downloadedBytes, busy,
+  model, status, selected, recommended, freeBytes, blocked, downloading, downloadedBytes, busy,
   confirming, onSelect, onDownload, onCancel, onAskRemove, onCancelRemove, onRemove,
 }: {
   model: AsrModel;
@@ -424,6 +453,8 @@ function ModelRow({
   selected: boolean;
   recommended: boolean;
   freeBytes: number | null;
+  /** 🔴 받아도 쓸 수 없는 기기인가. 참이면 **받기와 고르기만** 잠근다 — 지우기는 열어 둔다. */
+  blocked: boolean;
   downloading: boolean;
   downloadedBytes: number;
   busy: boolean;
@@ -448,7 +479,8 @@ function ModelRow({
       // aria-* 로도 적는다. react-native-web 은 RN 의 `checked` 상태를 옮기지 않는다(→ `components/sms-ui.tsx`).
       aria-checked={selected}
       accessibilityLabel={`${model.label} ${installed ? '내려받음' : '없음'} 고르기`}
-      disabled={busy}
+      // 고르기는 「이 모델로 재 본다」는 뜻이다. 잴 수 없는 기기에서는 고를 일도 없다.
+      disabled={busy || blocked}
       onPress={onSelect}
       style={styles.modelHead}
     >
@@ -487,10 +519,16 @@ function ModelRow({
       {/* ⚠️ 「이어받는다」고 단정하지 않는다. OS 가 이어받기 정보를 주지 못하면 처음부터 받는다. */}
       {partial > 0 ? <Text style={s.meta}>{sizeLabel(partial)} 받아 뒀어요. 가능하면 이어받고, 안 되면 처음부터 받습니다.</Text> : null}
       {tight ? <Text style={[s.meta, { color: colors.red }]}>남은 공간이 모자라요. {sizeLabel(model.bytes + 300 * 1024 ** 2)} 이상을 비운 뒤 받아 주세요.</Text> : null}
+      {/*
+        🔴 **버튼만 흐려 두지 않는다.** 눌리지 않는 버튼 옆에 이유가 없으면 사용자는 앱이
+        고장 난 줄 알고 계속 누른다. 자세한 사유는 이 카드 머리의 한 줄이 말하고, 여기서는
+        **지금 이 버튼이 왜 잠겼는지**만 짧게 되짚는다.
+      */}
+      {blocked ? <Text style={[s.meta, { color: colors.red }]}>이 기기에는 받아쓰기가 쓰는 NPU 가 없어 내려받아도 쓸 수 없어요. 위 설명을 보세요.</Text> : null}
       <SmsButton
         label={`${model.label} 내려받기`}
         accessibilityLabel={`${model.label} 내려받기`}
-        disabled={busy}
+        disabled={busy || blocked}
         onPress={onDownload}
       />
     </>}

@@ -117,6 +117,22 @@ const styles = StyleSheet.create({
   input: {
     marginTop: spacing.xs,
     height: 48,
+    /*
+     * 🔴 **안드로이드에서 글자가 칸 위쪽에 붙는 것을 막는 두 줄이다. 둘 다 필요하다.**
+     *
+     * `textAlignVertical` 은 `TextInput` 의 기본값이 `'top'` 이라 필요하고,
+     * `includeFontPadding` 은 안드로이드가 글꼴 위아래에 **자체 여백**을 덧대기 때문에
+     * 필요하다 — 한글 글꼴은 그 여백이 커서, 가운데 정렬을 켜도 그 여백째로 가운데가 되어
+     * 글자는 여전히 위로 밀린다. 실기기에서 `textAlignVertical` 만 넣고 다시 빌드했더니
+     * 화면이 그대로였고, 번들에 값이 들어간 것을 확인한 뒤에야 이 두 번째 원인을 찾았다.
+     *
+     * ⚠️ iOS 는 기본이 가운데이고 `includeFontPadding` 은 안드로이드 전용이라 무시된다.
+     * 웹도 해당 없다 — **안드로이드 실기기에서만** 드러나는 차이다.
+     */
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    // 고정 높이(48) 안에서 세로 여백까지 있으면 글자가 설 자리가 그만큼 좁아진다.
+    paddingVertical: 0,
     borderWidth: 1,
     borderColor: colors.borderStrong,
     borderRadius: radii.button,

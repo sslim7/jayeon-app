@@ -9,7 +9,7 @@ const module_ = { exports: {} };
 vm.runInNewContext(`(function(exports){${compile('src/lib/asr-capability-types.ts')}\n})`, { Error, JSON, Date, Number, Math, RegExp, String, Object, Array })(module_.exports);
 const {
   socVerdict, preBenchReason, benchReason, buildAsrCapability, estimateAsrMs, isFreshCapability, isAsrCapability,
-  asrDurationLabel, ASR_ENCODE_LIMIT_MS, ASR_SLOWDOWN, ASR_REFERENCE_CALL_MS,
+  asrDurationLabel, modelDownloadBlockReason, ASR_ENCODE_LIMIT_MS, ASR_SLOWDOWN, ASR_REFERENCE_CALL_MS,
 } = module_.exports;
 
 const soc = (extra = {}) => ({ manufacturer: '', model: '', hardware: '', board: '', ...extra });
@@ -142,4 +142,46 @@ test('깨진 저장 파일로 판정을 흉내 내지 않는다', () => {
   assert.equal(isAsrCapability({}), false);
   assert.equal(isAsrCapability({ version: 1, ok: true }), false);
   assert.equal(isAsrCapability(buildAsrCapability({ reason: 'OK', modelId: 'q8_0', soc: null, encodeMs: 2_354, now: 1, appVersion: '0.1.0' })), true);
+});
+
+/*
+ * ── 받아도 쓸 수 없는 기기에서는 834MB 를 받게 두지 않는다 ─────────────────────────
+ *
+ * 🔴 퀄컴이 **아닌 것이 확실한** AP 에서는 ggml-hexagon 이 조용히 CPU 로 떨어져 28분 통화가
+ * 30분을 넘긴다. 그런데도 내려받기 버튼이 살아 있으면 사용자는 용량만 버린다.
+ */
+test('NPU 가 없는 것이 확실한 기기에서는 모델 내려받기를 막는다', () => {
+  assert.equal(modelDownloadBlockReason({ platform: 'android', soc: soc({ manufacturer: 'Mediatek', model: 'MT6789' }) }), 'NOT_SNAPDRAGON');
+  assert.equal(modelDownloadBlockReason({ platform: 'android', soc: soc({ board: 'exynos2200' }) }), 'NOT_SNAPDRAGON');
+  // 판정 카드와 같은 사유여야 한다 — 두 자리가 다른 말을 하면 「왜 막혔지」에 답할 수 없다.
+  assert.equal(
+    preBenchReason({ platform: 'android', nativeAvailable: true, modelInstalled: false, soc: soc({ manufacturer: 'Mediatek' }) }),
+    'NOT_SNAPDRAGON',
+  );
+});
+
+test('모르는 AP 와 퀄컴·아이폰은 막지 않는다', () => {
+  // 🔴 `unknown` 은 「아니다」가 아니다. 여기서 막으면 멀쩡한 구형 스냅드래곤이 배제된다 —
+  // 벤치로 재 봐야 알 수 있고, 느리면 어차피 그 벤치에서 걸린다.
+  assert.equal(modelDownloadBlockReason({ platform: 'android', soc: null }), null);
+  assert.equal(modelDownloadBlockReason({ platform: 'android', soc: soc() }), null);
+  assert.equal(modelDownloadBlockReason({ platform: 'android', soc: soc({ manufacturer: 'unknown' }) }), null);
+  assert.equal(modelDownloadBlockReason({ platform: 'android', soc: soc({ manufacturer: 'QTI', model: 'SM8550' }) }), null);
+  // iOS 는 Metal 경로라 Hexagon 여부가 뜻이 없다. AP 문자열이 무엇이든 막지 않는다.
+  assert.equal(modelDownloadBlockReason({ platform: 'ios', soc: soc({ manufacturer: 'Apple' }) }), null);
+});
+
+/*
+ * 화면이 그 판정을 **실제로 버튼에 걸고 있는지**까지 본다. 규칙만 맞고 버튼이 그대로면
+ * 사용자가 보는 것은 하나도 달라지지 않는다 — `node --test` 는 RN 화면을 그릴 수 없으므로
+ * 소스를 읽는다.
+ */
+test('막힌 기기에서 내려받기·고르기는 잠기고 지우기는 열려 있다', () => {
+  const setup = fs.readFileSync('src/app/asr-setup.tsx', 'utf8');
+  assert.ok(/disabled=\{busy \|\| blocked\}\s*\n\s*onPress=\{onSelect\}/.test(setup), '고르기가 잠기지 않는다');
+  assert.ok(/label=\{`\$\{model\.label\} 내려받기`\}[\s\S]{0,300}?disabled=\{busy \|\| blocked\}/.test(setup), '내려받기가 잠기지 않는다');
+  // 🔴 **지우기는 절대 막지 않는다.** 이미 받아 둔 사람에게는 이것이 용량을 되찾는 유일한 길이다.
+  const removes = [...setup.matchAll(/label="지우기[^"]*"[^\n]*disabled=\{([^}]*)\}/g)];
+  assert.ok(removes.length >= 2, '지우기 버튼을 찾지 못했다 — 검사가 헛돌고 있다');
+  for (const [, guard] of removes) assert.equal(guard, 'busy', '지우기에 막기 조건이 붙었다');
 });

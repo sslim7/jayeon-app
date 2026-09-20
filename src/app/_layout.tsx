@@ -13,6 +13,7 @@ import { colors } from '@/constants/theme';
 import { useAppFonts } from '@/hooks/use-app-fonts';
 import { hideBootSplash } from '@/lib/boot-splash';
 import { postReadyToNative, setNativeNavigationHandler } from '@/lib/native-bridge';
+import { isShellNativeRoute } from '@/lib/shell-routes';
 import { registerServiceWorker } from '@/lib/service-worker';
 import { useUserStore } from '@/store/user-store';
 
@@ -117,6 +118,17 @@ export default function RootLayout() {
      * 것이 화면에 전혀 드러나지 않는다.
      */
     if (pathname === '/call-create') return;
+    /*
+     * 🔴 **설정 화면도 마찬가지다. 이 줄이 빠져 실기기에서 실제로 튕겼다.**
+     * 웹 설정의 「로컬 받아쓰기」가 껍데기에게 이 화면을 열어 달라고 말하는데
+     * (→ `app/settings.tsx` 의 `openNativeScreen`), 면제가 없어 열리자마자 되돌려졌다.
+     * 사용자가 본 것은 「스플래시가 잠깐 뜨고 문자 보내기가 나온다」였다 — 바로 위 주석이
+     * 경고한 그 증상인데, 목록에 한 줄을 빠뜨려 그대로 겪었다.
+     *
+     * ⚠️ **네이티브 화면을 새로 붙이는 사람은 이 목록을 함께 늘려야 한다.** 빠뜨려도
+     * 타입도 테스트도 잡지 못하고, 화면은 「아무 일도 없었던 것처럼」 돌아간다.
+     */
+    if (pathname === '/asr-setup') return;
     router.replace('/shell');
   }, [ready, authed, pathname]);
 
@@ -155,7 +167,19 @@ export default function RootLayout() {
       {/* 종이 바탕이라 상태바 글자는 어두워야 한다. */}
       <StatusBar style="dark" />
       {ready ? <>
-      <AppNavigation enabled={authed && pathname !== '/shell' && !ENV.webShell}>
+      {/*
+        🔴 **껍데기 모드에서도 네이티브 화면에는 머리를 세운다 — 거기에 나갈 길이 있다.**
+        예전에는 `!ENV.webShell` 하나로 머리를 통째로 걷었는데, 껍데기가 웹의 말을 듣고 여는
+        화면들(→ `lib/shell-routes.ts`)은 그 바람에 **제목도 닫기도 없이** 열렸다. 스택에
+        앞 화면이 없을 수 있어 뒤로 밀어도 아무 일이 없고, 실기기에서 사용자는 **앱을 강제
+        종료해야** 벗어날 수 있었다. 허용 목록을 그대로 읽으므로 화면이 늘어도 함께 따라온다.
+
+        ⚠️ **☰ 서랍은 껍데기에서 의미가 없다** — 목적지가 전부 웹뷰 안이라 네이티브로 열면
+        빈 화면이 선다. 그래서 머리만 세우고 서랍은 끈다(왼쪽 ☰ 대신 오른쪽 「닫기」).
+      */}
+      <AppNavigation
+        enabled={authed && pathname !== '/shell' && (!ENV.webShell || isShellNativeRoute(pathname))}
+        drawer={!ENV.webShell}>
       <Stack
         screenOptions={{
           headerShown: false,
