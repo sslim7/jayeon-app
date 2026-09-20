@@ -24,6 +24,16 @@ export interface CallContact { name: string; phone: string; recipient_id?: strin
 export interface TranscriptSegment { start: number; end: number; text: string; speaker?: string }
 
 /**
+ * 통화 원문 한 덩어리. **`PUT /calls/{id}` 와 `POST /calls/{id}/transcript` 가 같은 모양을
+ * 받는다**(서버의 `CallTranscript`).
+ *
+ * ⚠️ `segments` 는 비어 있을 수 있다. 폰에서 받아쓴 원문에는 구간 정보가 없다 — whisper 가
+ * 주기는 하지만 우리는 청크를 이어 붙인 글만 들고 있고, **없는 구간을 지어내지 않는다**
+ * (→ `lib/asr-local-types.ts` 의 `asrLocalText`).
+ */
+export interface CallTranscript { text: string; segments: TranscriptSegment[] }
+
+/**
  * 분석 한 덩어리. **서버 계약과 같은 모양**이다(`internal/calls/model.go`).
  *
  * 항목이 비어 있을 수 있다 — 기기 분석이 만든 옛 기록은 `summary` 만 채웠다. 보고서는 내용이
@@ -83,7 +93,7 @@ export interface CallRecord {
    */
   progress: number | null;
   summary?: string;
-  transcript?: { text: string; segments: TranscriptSegment[] };
+  transcript?: CallTranscript;
   analysis?: CallAnalysis;
   ai?: CallAI;
   /** 서버 파이프라인의 내부 작업 상태 원문(`QUEUED`·`ASR_POLLING`…). 기기 경로 기록에는 없다. */

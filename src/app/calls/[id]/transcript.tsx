@@ -64,7 +64,7 @@ export default function CallTranscriptScreen() {
         버튼은 서지 않지만 이 화면은 그 길을 막지 못하므로, 빈 화면 대신 없다고 말한다 —
         그 말을 하는 자리는 `CallTranscript` 안이다.
       */}
-      {record ? <CallTranscript segments={record.transcript?.segments ?? []} /> : null}
+      {record ? <CallTranscript transcript={record.transcript} /> : null}
     </SmsPage>
   );
 }

@@ -70,6 +70,8 @@ npm run lint
 npm run typecheck
 npm run test:auth
 npm run test:sms
+npm run test:attach   # 첨부 이미지 한도·문구를 웹과 네이티브가 같이 쓰는가
+npm run test:sms-origin # 문자 화면을 닫으면 어디로 돌아가 무슨 말을 하는가
 npm run test:e2e
 npm run export:web      # 웹 정적 빌드 → dist/
 ```

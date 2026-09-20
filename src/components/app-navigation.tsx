@@ -125,8 +125,16 @@ export function AppNavigation({ children, enabled = true }: { children: ReactNod
     if (!open) return;
     const back = BackHandler.addEventListener('hardwareBackPress', () => { setOpen(false); return true; });
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
-    if (typeof window !== 'undefined') window.addEventListener('keydown', close);
-    return () => { back.remove(); if (typeof window !== 'undefined') window.removeEventListener('keydown', close); };
+    // 🔴 **`typeof window` 로 웹인지 가르면 안 된다.** React Native 는 `global.window = global`
+    // 로 `window` 를 만들어 두므로 이 검사는 네이티브에서도 통과하고, 정작 없는
+    // `addEventListener` 를 불러 「undefined is not a function」으로 화면이 통째로 죽는다.
+    // **있는지 봐야 하는 것은 창이 아니라 그 함수다.**
+    //
+    // 이 서랍은 `!ENV.webShell` 일 때만 서서 지금까지 웹에서만 돌았다. 그래서 이 줄은
+    // 실기기에서 껍데기를 끄고 열어 본 순간에야 처음 터졌다(→ `config/env.ts` 의 탈출구).
+    const listens = typeof window !== 'undefined' && typeof window.addEventListener === 'function';
+    if (listens) window.addEventListener('keydown', close);
+    return () => { back.remove(); if (listens) window.removeEventListener('keydown', close); };
   }, [open, setOpen]);
   useEffect(() => {
     if (typeof document === 'undefined') return;

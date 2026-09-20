@@ -26,7 +26,17 @@ import type { StoredTokens } from '@/lib/auth-tokens';
 export type NavigateRequest = { path: string };
 
 type NativeWebView = { postMessage(data: string): void };
-type NativeShellInfo = { platform: string; appVersion: string };
+type NativeShellInfo = {
+  platform: string;
+  appVersion: string;
+  /**
+   * 이 껍데기가 열 수 있는 네이티브 화면(→ `lib/shell-routes.ts` 의 `SHELL_NATIVE_ROUTES`).
+   *
+   * ⚠️ **옛 껍데기에는 이 값이 없다.** 그래서 선택 항목이고, 없으면 「하나도 못 연다」로
+   * 읽어야 한다 — 있다고 가정하면 그 껍데기에서 죽은 입구가 선다.
+   */
+  navigateRoutes?: string[];
+};
 
 declare global {
   interface Window {
@@ -52,13 +62,12 @@ declare global {
 type OutboundMessage =
   | { type: 'tokens'; tokens: StoredTokens | null; reason?: 'password-changed' }
   | { type: 'ready' }
-  // 🔧 **측정이 끝나면 이 줄과 openNativeScreen 을 함께 지운다**(→ `components/asr-bench.tsx`).
-  // 받아쓰기는 네이티브 모듈이라 웹뷰 안에서 돌지 않는데, 사용자가 보는 메뉴는 웹이 그린다.
-  // 그래서 웹 메뉴가 껍데기에게 「네이티브 화면을 열어라」고 말하는 통로가 필요하다.
+  // 받아쓰기도 문서 선택기도 네이티브 모듈이라 웹뷰 안에서 돌지 않는데, 사용자가 보는 화면은
+  // 전부 웹이 그린다. 그래서 웹이 껍데기에게 「이 네이티브 화면을 열어라」고 말하는 통로가
+  // 필요하다. 열리는 화면은 껍데기의 **허용 목록**이 정한다(→ `lib/shell-routes.ts`).
   //
   // ⚠️ 위 머리말의 경고가 그대로 적용된다 — **옛 껍데기는 이 말을 모르고 조용히 버린다.**
-  // 지금은 껍데기를 함께 새로 설치해 쓰는 측정용이라 그 상태를 감수한다. 실사용 기능을
-  // 이 통로에 걸지 마라.
+  // 그래서 이 통로에 거는 입구는 반드시 `nativeShellCanOpen(...)` 으로 먼저 물어보고 세운다.
   | { type: 'navigate'; path: string };
 
 // ──────────────────────────────────────────────────────────────
@@ -121,10 +130,26 @@ export function postTokensToNative(tokens: StoredTokens | null, reason?: 'passwo
 /**
  * 껍데기에게 네이티브 화면을 열어 달라고 한다. 브라우저에서는 아무 일도 하지 않는다.
  *
- * 🔧 측정용이다(위 `navigate` 주석). 끝나면 지운다.
+ * 🔴 **부르기 전에 `nativeShellCanOpen(path)` 으로 물어라.** 이 껍데기가 그 화면을 모르면
+ * 요청은 조용히 버려지고, 사용자에게는 눌러도 아무 일이 없는 입구만 남는다.
  */
 export function openNativeScreen(path: string): void {
   post({ type: 'navigate', path });
+}
+
+/**
+ * 이 껍데기가 그 네이티브 화면을 열 줄 아는가.
+ *
+ * 🔴 **모르면 거짓이다.** 옛 껍데기(`navigateRoutes` 를 주입하지 않는 판)와 브라우저가 모두
+ * 여기 걸린다 — 두 경우 모두 그 입구를 세우면 안 되는 상황이라 답이 같아도 된다.
+ *
+ * 값을 껍데기가 **페이지 로드 전에** 주입하므로 첫 렌더부터 참이다(→ `isNativeShell`).
+ * 뒤늦게 참이 되는 판정이면 입구가 한 번 번쩍이고 사라지는 것으로 나타난다.
+ */
+export function nativeShellCanOpen(path: string): boolean {
+  if (typeof window === 'undefined') return false;
+  const routes = (window.__NATURE_NATIVE__ ?? window.__JAYEON_NATIVE__)?.navigateRoutes;
+  return Array.isArray(routes) && routes.includes(path);
 }
 
 export function postReadyToNative(): void {

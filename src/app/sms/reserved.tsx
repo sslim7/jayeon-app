@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
@@ -12,15 +12,25 @@ import { matchesRecipientQuery } from '@/lib/recipient-search';
 import { newSmsRequestId } from '@/lib/sms-dispatch';
 import { smsApi } from '@/lib/sms-api';
 import { reservedGroups, reservedTags } from '@/lib/sms-reservations';
+import { readSmsLeave, smsExit, SMS_LEAVE_PARAM, SMS_ORIGIN_PARAM } from '@/lib/sms-origin';
 
 export default function ReservedScreen() {
   const { reservations, rows, loading, error, reload } = useReservations();
+  /*
+   * 발송 상세를 닫고 **여기로 돌아온 경우**. 그때 무슨 말을 할지는 출처가 정한다
+   * (→ `lib/sms-origin.ts`). 🔴 이 화면의 안내는 「예약을 취소했어요」처럼 **예약에 손을 댔다**는
+   * 말이라, 남의 흐름에서 튕겨 온 사람이 그대로 읽으면 없던 일을 있었다고 믿는다.
+   */
+  const params = useLocalSearchParams<{ closed?: string }>();
   const [tag, setTag] = useState('');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(() => {
+    const leave = readSmsLeave(params[SMS_LEAVE_PARAM]);
+    return leave ? smsExit('reserved', leave).notice : '';
+  });
   const [failure, setFailure] = useState('');
   useFocusEffect(useCallback(() => { void reload(); }, [reload]));
   const tags = reservedTags(rows);
@@ -124,7 +134,7 @@ export default function ReservedScreen() {
         {groups.length > 1 ? <Notice message={`「${active}」 예약은 인원이 많아 ${groups.length}건으로 나뉘어 있어요. 보내기는 한 건씩 하면 되니 한 건 안에서 골라 주세요.`} /> : null}
         {single && single.selectedRowIds.length < single.total ? <Notice message={`보내기는 예약한 건 전체로 나갑니다. 같이 예약된 ${single.total - single.selectedRowIds.length}명도 함께 보내게 됩니다.`} /> : null}
         <ButtonRow>
-          <SmsButton fill label="발송" disabled={busy || !single} onPress={() => { if (single) router.push({ pathname: '/sms/[id]', params: { id: single.campaignId } }); }} />
+          <SmsButton fill label="발송" disabled={busy || !single} onPress={() => { if (single) router.push({ pathname: '/sms/[id]', params: { id: single.campaignId, [SMS_ORIGIN_PARAM]: 'reserved' } }); }} />
           <SmsButton fill secondary danger label="삭제" disabled={busy || !picked.length} onPress={() => { setNotice(''); setConfirming(true); }} />
         </ButtonRow>
       </>}

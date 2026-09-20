@@ -15,7 +15,7 @@
  */
 import { randomUUID } from 'expo-crypto';
 import { ApiError, ApiTimeoutError } from '@/lib/api';
-import { callApi, type CallUploadRequest } from '@/lib/call-api';
+import { callApi, type CallAsrMode, type CallUploadRequest } from '@/lib/call-api';
 import { failureCode, httpCode, permanentFailure } from '@/lib/call-errors';
 import { checkAudioSize } from '@/lib/call-file';
 import { putCallAudio } from '@/lib/call-put';
@@ -50,6 +50,19 @@ export interface CallUploadOptions {
   signal?: AbortSignal;
   /** 재시도할 때 **앞서 쓰던 ID 를 그대로** 넘긴다. 비우면 새로 만든다. */
   callId?: string;
+  /**
+   * 누가 받아쓸 것인가. 생략하면 **지금까지와 똑같이** 서버가 전부 한다.
+   *
+   * ┌────────────────────────────────────────────────────────────────────────────┐
+   * │ 🔴 **오디오는 어느 쪽이든 올라간다.** 이 값이 바꾸는 것은 받아쓰기를 누가 하느냐뿐이다 │
+   * │ — 원본은 재생 기능 때문에 항상 GCS 에 있어야 한다. 「폰에서 받아쓰면 업로드를 건너뛴다」 │
+   * │ 는 착각이 이 흐름에서 가장 비싼 실수다(녹음을 들을 수 없게 된다).                  │
+   * └────────────────────────────────────────────────────────────────────────────┘
+   *
+   * ⚠️ `'client'` 로 보낸 통화는 **앱이 전사문을 보내 주기 전까지 끝나지 않는다.** 6시간이
+   * 지나면 서버가 `CLIENT_TRANSCRIPT_TIMEOUT` 으로 정리한다(→ `lib/call-api.ts`).
+   */
+  asr?: CallAsrMode;
   /** 시험용 시계. 실제 호출부는 넘기지 않는다. */
   now?: () => number;
 }
@@ -125,7 +138,7 @@ export async function uploadCall(input: CallStartInput, options: CallUploadOptio
        */
       if (error instanceof ApiError && error.code === 'CALL_ALREADY_QUEUED') {
         options.onProgress?.(1);
-        return { callId, record: await callApi.complete(callId) };
+        return { callId, record: await callApi.complete(callId, options.asr) };
       }
       throw error;
     }
@@ -133,7 +146,7 @@ export async function uploadCall(input: CallStartInput, options: CallUploadOptio
     // 🔴 서버가 준 헤더를 글자 그대로 싣는다. Content-Type 이 서명에 들어간다.
     await putCallAudio(file, ticket.url, ticket.headers, { onProgress: options.onProgress, signal: options.signal });
     // 여기서부터는 취소해도 되돌릴 것이 없다. 큐잉까지 마치고 결과를 보여 주는 편이 정직하다.
-    return { callId, record: await callApi.complete(callId) };
+    return { callId, record: await callApi.complete(callId, options.asr) };
   } catch (error) {
     const failure = asUploadError(error);
     failure.callId = callId;

@@ -10,8 +10,18 @@ export function smsError(error: unknown): string {
   return readApiErrorMessage(error, {}, '처리하지 못했어요. 연결을 확인하고 다시 시도해 주세요.');
 }
 export function SmsPage({ title, children, wide = false, actions, hideTitle = false, compact = false, footer, fab, onEndReached }: PropsWithChildren<{ title: string; wide?: boolean; actions?: ReactNode; hideTitle?: boolean; compact?: boolean; footer?: ReactNode; fab?: ReactNode; onEndReached?: () => void }>) {
+  /*
+    🔴 **위쪽 안전영역을 여기서 또 먹으면 안 된다.** 상단 노치는 앱 헤더가 이미 처리한다
+    (→ `components/app-navigation.tsx` 의 `headerSafe`). `edges` 를 주지 않으면 사방 전부라
+    본문이 헤더 밑에서 노치 높이만큼(≈59) 한 번 더 밀려, 모든 화면의 머리 아래에 손가락
+    하나만 한 빈 자리가 생긴다.
+
+    ⚠️ **웹에서는 인셋이 0 이라 드러나지 않았다.** 껍데기 모드에서 모든 화면이 웹뷰였던
+    동안에는 보일 수가 없었고, 네이티브 화면을 처음 띄운 날 18개 화면에서 한꺼번에 나왔다.
+    아래·좌우는 그대로 둔다 — 홈 인디케이터와 가로 노치는 이 화면이 맡는 몫이다.
+  */
   return (
-    <SafeAreaView style={s.root}>
+    <SafeAreaView edges={['bottom', 'left', 'right']} style={s.root}>
       <Stack.Screen options={{ title }} />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"

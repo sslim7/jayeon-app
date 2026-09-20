@@ -74,6 +74,16 @@ export const ENV = {
    * 드러난다. 형제 프로젝트가 같은 이유로 같은 판정을 쓴다(→ `birdieup-app/src/config/env.ts`).
    *
    * 웹은 껍데기가 여는 대상 그 자체이므로 당연히 false 다.
+   *
+   * 🔧 **검증용 탈출구: `EXPO_PUBLIC_WEB_SHELL=false` 로 빌드하면 껍데기를 끈다.**
+   * 껍데기 모드에서 사용자가 보는 화면은 **서버에 배포된 웹**이라(→ `webUrl`), 아직 배포하지
+   * 않은 웹 화면은 앱을 새로 설치해도 나타나지 않는다. 그렇다고 웹뷰를 개발 서버로 돌리면
+   * 이번에는 **API 가 CORS 로 막힌다** — 운영 서버는 CORS 를 끄고 있고(`jayeon-was/main.go`),
+   * 그 와일드카드는 「운영에서는 쓰지 않는다」고 못박혀 있다. 즉 네이티브 화면을 실기기에서
+   * 확인할 길이 그 둘 사이에 끼여 없어진다. 이 한 줄이 그 길이다.
+   *
+   * ⚠️ **기본값은 건드리지 않는다.** 정확히 문자열 `'false'` 일 때만 꺼지므로, 값을 주지
+   * 않는 모든 빌드(운영 포함)는 예전과 한 글자도 다르지 않게 동작한다.
    */
-  webShell: Platform.OS !== 'web',
+  webShell: Platform.OS !== 'web' && process.env.EXPO_PUBLIC_WEB_SHELL !== 'false',
 } as const;

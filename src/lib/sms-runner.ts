@@ -25,6 +25,87 @@ export function needsOutcomeReview(row: Pick<CampaignRecipient, 'status' | 'erro
     row.errorCode === 'OUTCOME_UNKNOWN' || row.errorCode === 'PARTIAL_SENT';
 }
 
+/** 보내는 사람이 이 대상을 일부러 건너뛰었다. 시트를 열었다 닫은 것과 다른 이야기다. */
+export const USER_SKIPPED = 'USER_SKIPPED';
+/** 시트를 열었지만 보내지 않고 닫았다. `modules/nature-sms/ios-result.ts` 와 같은 값이어야 한다. */
+export const USER_CANCELLED = 'USER_CANCELLED';
+/**
+ * 시트가 결과 없이 사라졌다 — 네이티브가 매달린 약속을 거둬들인 자리.
+ *
+ * 🔴 `USER_CANCELLED`(사람이 닫았다)·`IOS_SEND_FAILED`(메시지 앱이 실패했다) 와 **다른 글자여야**
+ * 나중에 「왜 안 갔지」를 볼 때 셋이 갈린다. `modules/nature-sms/ios-result.ts` 와 같은 값이어야 한다.
+ */
+export const IOS_COMPOSER_ABANDONED = 'IOS_COMPOSER_ABANDONED';
+/** claim 까지 갔지만 보내기 전에 멈췄다. 실패가 아니라 **아직 안 보낸 사람**이다. */
+export const CANCELLED_BEFORE_SEND = 'CANCELLED_BEFORE_SEND';
+
+/**
+ * 한 건을 보내기 직전에 사용자에게 묻는 창구.
+ *
+ * 🔴 **iPhone 에만 쓴다.** iOS 는 시스템 작성 시트에서 사람이 「보내기」를 눌러야 나가므로
+ * 다음 사람으로 넘어가기 전에 발송/통과/중단을 고르게 한다. 안드로이드는 이 값을 주지
+ * 않으며, 주지 않으면 발송 루프는 예전과 한 글자도 다르지 않게 돈다.
+ */
+export type SendChoice = 'send' | 'skip' | 'stop';
+export interface SendPrompt {
+  campaignRecipientId: string;
+  name: string;
+  phone: string;
+  /** 치환까지 끝난 실제 본문. 사용자가 보게 될 그대로다. */
+  message: string;
+  /** 1부터 센다. */
+  index: number;
+  total: number;
+}
+export type SendConfirm = (prompt: SendPrompt) => Promise<SendChoice>;
+
+/** 「통과」를 서버에 남길 결과. 단말은 호출조차 하지 않았다. */
+export function skippedResult(
+  target: Pick<SmsNativeResult, 'campaignRecipientId' | 'phone'>, attemptId: string,
+): SmsNativeResult {
+  return {
+    campaignRecipientId: target.campaignRecipientId, attemptId, phone: target.phone,
+    success: false, status: 'FAILED', errorCode: USER_SKIPPED,
+    errorMessage: '보내는 사람이 이 대상을 건너뛰었어요.',
+  };
+}
+
+/**
+ * 「나갔는지 모른다」가 아니라 「안 나갔다」를 아는 결과인가.
+ *
+ * 🔴 iOS 의 취소는 status 가 `UNKNOWN` 으로 온다 — 통신사 확정 결과가 없다는 뜻이다. 하지만
+ * 사용자가 눈앞에서 닫은 것이라 **나가지 않았다는 것은 확실하다.** 이 둘을 섞으면 두 가지가
+ * 망가진다: 사유가 `OUTCOME_UNKNOWN` 으로 덮여 「왜 안 갔지」를 못 보고, 실수로 한 건 닫은
+ * 것이 25명짜리 일괄 발송 전체를 세운다.
+ *
+ * ⚠️ 결과 없이 사라진 시트(`IOS_COMPOSER_ABANDONED`)도 여기에 넣는다. iPhone 은 사람이 시트의
+ * 「보내기」를 눌러야만 나가므로, 확인되지 않은 것은 **안 나갔다**고 보는 쪽이 실제에 가깝다.
+ */
+export function knownNotSent(result: Pick<SmsNativeResult, 'errorCode'>): boolean {
+  return result.errorCode === USER_CANCELLED || result.errorCode === USER_SKIPPED ||
+    result.errorCode === IOS_COMPOSER_ABANDONED;
+}
+
+/**
+ * 다른 캠페인이 발송을 잡고 있는가. 잡고 있다면 **여기서 빠져나갈 길을 함께 돌려준다.**
+ *
+ * 🔴 러너는 앱당 하나뿐이라(`smsDispatch`) 한 캠페인이 잡으면 나머지 전부가 막힌다. 예전에는
+ * 막혔다는 말만 하고 그 발송을 멈추거나 찾아갈 길을 주지 않아서, 앱을 껐다 켜는 것이 유일한
+ * 탈출구였다 — 사용자가 알 길이 없는 탈출구는 없는 것과 같다.
+ */
+export interface DispatchBlock {
+  /** 잡고 있는 캠페인. 🔴 null 이면 어느 캠페인인지조차 모르는 상태다. */
+  campaignId: string | null;
+  /** 그 캠페인 화면으로 갈 수 있는가. 어느 캠페인인지 알 때만 참이다. */
+  canOpen: boolean;
+  /** 🔴 **항상 참.** `stop()` 은 싱글턴을 멈추므로 어느 화면에서 눌러도 같은 흐름이 멈춘다. */
+  canStop: boolean;
+}
+export function blockedByOther(snapshot: DispatchSnapshot, campaignId: string): DispatchBlock | null {
+  if (!snapshot.running || snapshot.campaignId === campaignId) return null;
+  return { campaignId: snapshot.campaignId, canOpen: !!snapshot.campaignId, canStop: true };
+}
+
 /** 캠페인 본문의 수신자 치환 토큰을 발송 직전에 해석한다. */
 export function personalizeMessage(message: string, name: string): string {
   return message.replaceAll('@name', name);
@@ -37,6 +118,8 @@ export class SmsRunner {
   };
   private listeners = new Set<() => void>();
   private syncing: Promise<void> | null = null;
+  /** 지금 떠 있는 한 건 확인창을 밖에서 끊는 손잡이. 창이 없으면 null 이다. */
+  private cancelAsk: (() => void) | null = null;
   constructor(private api: DispatchApi, private device: SmsDevice,
     private sessionVersion: () => number, private createId: () => string) {}
 
@@ -52,7 +135,42 @@ export class SmsRunner {
   private assertSession(version: number) {
     if (version !== this.sessionVersion()) throw new Error('계정이 바뀌어 발송을 중단했어요. 이전 계정에서 결과를 확인해 주세요.');
   }
-  stop = () => { if (this.state.running) this.update({ stopping: true }); };
+  /**
+   * 발송을 멈춘다. 🔴 **어느 화면에서 불러도 된다** — 러너는 싱글턴이라 잡고 있는 캠페인이
+   * 무엇이든 같은 흐름을 멈춘다.
+   *
+   * ⚠️ 한 건 확인창을 띄운 화면을 떠난 뒤였다면 그 창의 답이 영영 오지 않는다. 그래서 깃발만
+   * 세우지 않고 **기다리던 답도 여기서 「중단」으로 끊는다.** 안 끊으면 루프가 답을 기다린 채
+   * 남아 `running` 이 풀리지 않는다 — 앱을 껐다 켜야 했던 이유가 이것이다.
+   *
+   * 단말 시트가 떠 있는 동안(`device.send` 대기)은 여기서 끊지 않는다. 시트는 사람 눈앞에
+   * 열려 있고, 그것을 거둬들이는 일은 네이티브가 한다(→ `modules/nature-sms/ios/NatureSmsModule.swift`).
+   */
+  stop = () => {
+    if (!this.state.running) return;
+    this.update({ stopping: true });
+    this.cancelAsk?.();
+  };
+
+  /** 한 건 확인창을 띄우고 답을 기다린다. 답이 오지 않아도 `stop()` 으로 끊을 수 있다. */
+  private ask(confirm: SendConfirm, prompt: SendPrompt): Promise<SendChoice> {
+    return new Promise<SendChoice>((resolve, reject) => {
+      let settled = false;
+      const done = (choice: SendChoice) => {
+        if (settled) return;
+        settled = true;
+        this.cancelAsk = null;
+        resolve(choice);
+      };
+      this.cancelAsk = () => done('stop');
+      confirm(prompt).then(done, (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        this.cancelAsk = null;
+        reject(error);
+      });
+    });
+  }
 
   private async saveResult(campaignId: string, row: CampaignRecipient, result: SmsNativeResult, version: number) {
     this.assertSession(version);
@@ -63,7 +181,8 @@ export class SmsRunner {
       throw new Error('단말 발송 결과가 올바르지 않아요. 결과 확인이 필요해요.');
     }
     const status = result.status === 'SENT' ? 'SENT' : 'FAILED';
-    const errorCode = result.status === 'UNKNOWN' ? 'OUTCOME_UNKNOWN' : result.errorCode;
+    // 안 나간 것이 확실한 결과(통과·시트 취소)는 사유를 그대로 남긴다 — 덮으면 나중에 못 가린다.
+    const errorCode = result.status === 'UNKNOWN' && !knownNotSent(result) ? 'OUTCOME_UNKNOWN' : result.errorCode;
     const saved = await this.api.recordResult(campaignId, row.id, {
       status, attemptId: result.attemptId, transport: result.transport,
       errorCode: status === 'FAILED' ? (errorCode || 'SMS_FAILED').slice(0, 100) : null,
@@ -106,7 +225,17 @@ export class SmsRunner {
     finally { this.syncing = null; }
   };
 
-  run = async (campaignId: string, options: { subscriptionId: number; retryRecipientIds?: string[]; subject?: string }): Promise<void> => {
+  /** claim 을 마친 대상을 보내지 않고 끝낸다. 서버에 SENDING 으로 남겨 두지 않기 위한 마무리다. */
+  private async closeWithoutSending(campaignId: string, recipientId: string, attemptId: string,
+    errorCode: string, errorMessage: string) {
+    await this.api.recordResult(campaignId, recipientId, { status: 'FAILED', attemptId, errorCode, errorMessage });
+  }
+
+  run = async (campaignId: string, options: {
+    subscriptionId: number; retryRecipientIds?: string[]; subject?: string;
+    /** iPhone 전용. 주지 않으면 한 건씩 묻지 않고 예전 그대로 이어서 보낸다. */
+    confirm?: SendConfirm;
+  }): Promise<void> => {
     if (this.state.running) throw new Error('이미 발송 중이에요. 현재 발송을 먼저 마쳐 주세요.');
     this.update({ campaignId, running: true, stopping: false, currentRecipientId: null, error: null });
     const version = this.sessionVersion();
@@ -114,14 +243,21 @@ export class SmsRunner {
       if (this.syncing) await this.syncing;
       this.assertSession(version);
       const capabilities = await this.device.getCapabilities();
-      if (!capabilities.supported || !capabilities.permissionGranted) throw new Error('Android SMS 권한과 SIM 준비를 확인해 주세요.');
-      if (!capabilities.subscriptions.some((sim) => sim.id === options.subscriptionId)) throw new Error('발송할 SIM 회선을 선택해 주세요.');
+      if (!capabilities.supported || !capabilities.permissionGranted) throw new Error('문자 발송 권한과 SIM 준비를 확인해 주세요.');
+      // 🔴 회선 선택이 없는 플랫폼(iPhone)에서는 고를 회선 자체가 없다. 안드로이드는 예전처럼
+      // 반드시 활성 SIM 중 하나여야 한다 — 예전 빌드는 이 값을 주지 않아 undefined 로 온다.
+      if (capabilities.lineSelectable !== false && !capabilities.subscriptions.some((sim) => sim.id === options.subscriptionId)) {
+        throw new Error('발송할 SIM 회선을 선택해 주세요.');
+      }
       await this.reconcile(campaignId, version);
       let rows = await this.api.recipients(campaignId);
       this.assertSession(version);
       if (rows.some((row) => row.status === 'SENDING')) throw new Error('결과가 확인되지 않은 발송이 있어요. 재발송하지 말고 결과 다시 확인을 눌러 주세요.');
       for (const id of new Set(options.retryRecipientIds ?? [])) {
         const row = rows.find((item) => item.id === id);
+        // 아직 보내지 않은 대기 상태는 되돌릴 것이 없다. 「미발송 보내기」가 **대기와 내가 안
+        // 보내기로 한 사람을 한 번에** 넘기기 때문에 둘이 같은 목록으로 들어온다.
+        if (row?.status === 'READY') continue;
         if (!row || row.status !== 'FAILED' || needsOutcomeReview(row)) throw new Error('확실하게 실패한 대상만 다시 보낼 수 있어요.');
         this.assertSession(version);
         if (this.state.stopping) break;
@@ -139,7 +275,10 @@ export class SmsRunner {
       for (const row of pending) {
         const attachments = row.attachments ?? [];
         if (!attachments.length) continue;
-        if (capabilities.mmsSupported !== true) throw new Error('이미지 발송을 지원하는 최신 Android 앱으로 업데이트해 주세요.');
+        // iPhone 은 앱 버전 문제가 아니라 기기/회선이 첨부를 막은 것이라 안내가 달라야 한다.
+        if (capabilities.mmsSupported !== true) throw new Error(capabilities.composerConfirm
+          ? '이 iPhone 에서는 이미지 첨부를 보낼 수 없어요. 메시지 설정의 MMS 를 확인해 주세요.'
+          : '이미지 발송을 지원하는 최신 Android 앱으로 업데이트해 주세요.');
         if (!this.api.attachmentContent || attachments.length > 3 || attachments.reduce((sum, file) => sum + file.size, 0) > 600 * 1024) {
           throw new Error('첨부파일 개수 또는 크기를 확인해 주세요.');
         }
@@ -168,7 +307,7 @@ export class SmsRunner {
       this.assertSession(version);
       if (this.state.stopping) { await this.api.setStatus(campaignId, 'CANCELLED'); return; }
       await this.api.setStatus(campaignId, 'SENDING');
-      for (const row of pending) {
+      for (const [position, row] of pending.entries()) {
         this.assertSession(version);
         if (this.state.stopping) break;
         this.update({ currentRecipientId: row.id });
@@ -179,18 +318,41 @@ export class SmsRunner {
           throw new Error('발송 허가를 확인하지 못했어요. 중복 발송을 피하기 위해 중단했어요.');
         }
         if (this.state.stopping) {
-          await this.api.recordResult(campaignId, row.id, { status: 'FAILED', attemptId,
-            errorCode: 'CANCELLED_BEFORE_SEND', errorMessage: 'SMS 요청 전에 사용자가 중단했어요.' });
+          await this.closeWithoutSending(campaignId, row.id, attemptId,
+            CANCELLED_BEFORE_SEND, 'SMS 요청 전에 사용자가 중단했어요.');
           break;
         }
         const recipient = claim.recipient;
+        const message = personalizeMessage(recipient.message, recipient.name);
+        // iPhone 은 한 건마다 사용자가 발송/통과/중단을 고른다. 안드로이드는 confirm 이 없어 곧장 보낸다.
+        const choice: SendChoice = options.confirm
+          ? await this.ask(options.confirm, {
+            campaignRecipientId: recipient.id, name: recipient.name, phone: recipient.phone,
+            message, index: position + 1, total: pending.length,
+          })
+          : 'send';
+        this.assertSession(version);
+        if (choice === 'skip') {
+          // 🔴 claim 을 마친 대상이라 결과를 남겨야 한다. 「통과」는 서버에서 시트 취소와 구별된다.
+          await this.saveResult(campaignId, recipient, skippedResult(
+            { campaignRecipientId: recipient.id, phone: recipient.phone }, attemptId,
+          ), version);
+          continue;
+        }
+        if (choice === 'stop') {
+          this.update({ stopping: true });
+          await this.closeWithoutSending(campaignId, row.id, attemptId,
+            CANCELLED_BEFORE_SEND, 'SMS 요청 전에 사용자가 중단했어요.');
+          break;
+        }
         const result = await this.device.send({
           campaignRecipientId: recipient.id, attemptId, phone: recipient.phone,
-          message: personalizeMessage(recipient.message, recipient.name), subject: options.subject, subscriptionId: options.subscriptionId,
+          message, subject: options.subject, subscriptionId: options.subscriptionId,
           attachments: prepared.get(row.id),
         });
         await this.saveResult(campaignId, recipient, result, version);
-        if (result.status === 'UNKNOWN') throw new Error('발송 결과가 불확실해 중단했어요. 해당 대상은 자동으로 다시 보내지 않아요.');
+        // 시트를 열었다 닫은 것은 불확실이 아니다 — 안 나간 것을 알고 있으니 다음 사람으로 간다.
+        if (result.status === 'UNKNOWN' && !knownNotSent(result)) throw new Error('발송 결과가 불확실해 중단했어요. 해당 대상은 자동으로 다시 보내지 않아요.');
       }
       this.assertSession(version);
       if (this.state.stopping) await this.api.setStatus(campaignId, 'CANCELLED');
@@ -198,6 +360,7 @@ export class SmsRunner {
       this.update({ error: error instanceof Error ? error.message : '발송을 중단했어요. 결과를 확인해 주세요.' });
       throw error;
     } finally {
+      this.cancelAsk = null;
       this.update({ running: false, stopping: false, currentRecipientId: null });
     }
   };

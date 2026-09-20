@@ -77,6 +77,58 @@ export async function clearWorkFiles(): Promise<void> {
   await FS.deleteAsync(WORK_DIRECTORY, { idempotent: true });
 }
 
+/**
+ * 통화 받아쓰기용 WAV 를 두는 곳. **통화마다 파일이 따로다.**
+ *
+ * ┌────────────────────────────────────────────────────────────────────────────┐
+ * │ 🔴 **시험 화면처럼 이름을 고정하면 안 된다.** 이어하기 상태는 WAV 경로로 「같은          │
+ * │ 파일인가」를 판단한다(→ `asr-local-types.ts` 의 `resumableState`). 경로 하나를        │
+ * │ 돌려 쓰면, 통화 B 를 등록하는 순간 통화 A 의 WAV 가 덮어써지고 A 를 이어할 때          │
+ * │ **B 의 소리를 A 의 오프셋부터** 받아쓴다. 실패하지 않으므로 아무도 못 알아챈다.         │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ⚠️ 여전히 **캐시**다. 28분이면 55MB 이고, 전사문을 보내고 나면 쓸모가 없다. 캐시가
+ * 비워져 이어하기가 깨지는 경우는 화면이 「처음부터 다시」로 받는다.
+ */
+const CALL_DIRECTORY = `${FS.cacheDirectory}asr-call/`;
+
+/** 파일 이름이 되는 값이라 글자를 제한한다. `../` 가 섞이면 앱 저장소 밖을 건드린다. */
+const CALL_ID = /^[A-Za-z0-9_-]{1,128}$/;
+
+export function callWavUri(callId: string): string {
+  if (!CALL_ID.test(callId)) throw new Error('통화 ID 에 쓸 수 없는 글자가 있습니다.');
+  return `${CALL_DIRECTORY}${callId}.wav`;
+}
+
+/**
+ * 통화 하나의 녹음을 16kHz 모노 WAV 로 바꾼다.
+ *
+ * ⚠️ 이미 변환본이 있으면 **다시 만들지 않는다.** 이어하기로 돌아온 경우가 그것인데, 여기서
+ * 새로 만들면 28분치 변환을 한 번 더 기다리게 된다. 다만 길이는 다시 알아야 하므로,
+ * 있는 파일을 쓸 때는 부른 쪽이 저장된 상태의 `totalMs` 를 쓴다.
+ */
+export async function convertCallToWav(callId: string, source: PickedAudio): Promise<ConvertedAudio> {
+  const target = callWavUri(callId);
+  await FS.makeDirectoryAsync(CALL_DIRECTORY, { intermediates: true });
+  // 같은 통화를 「처음부터 다시」 할 때 옛 변환본이 남아 있으면 안 된다 — 변환이 실패해도
+  // 옛 파일로 받아쓰기가 「성공」해 버린다.
+  await FS.deleteAsync(target, { idempotent: true });
+  const started = Date.now();
+  const seconds = await decodeToWav(source.uri, target);
+  return { uri: target, seconds, elapsedMs: Date.now() - started };
+}
+
+/** 이 통화의 변환본이 아직 있나. 이어하기를 시작할 수 있는지의 근거다. */
+export async function callWavExists(callId: string): Promise<boolean> {
+  const info = await FS.getInfoAsync(callWavUri(callId));
+  return info.exists && !info.isDirectory && (info.size ?? 0) > 0;
+}
+
+/** 전사문을 보내고 나면 55MB 를 들고 있을 이유가 없다. 포기했을 때도 같다. */
+export async function clearCallWav(callId: string): Promise<void> {
+  await FS.deleteAsync(callWavUri(callId), { idempotent: true });
+}
+
 /** `1,706초` 를 `28분 26초` 로. 결과표에서 분모와 분자를 같은 단위로 읽게 한다. */
 export function durationLabel(seconds: number): string {
   const whole = Math.round(seconds);

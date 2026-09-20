@@ -1,7 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Notice, s } from '@/components/sms-ui';
 import { colors, fonts, radii, spacing, text } from '@/constants/theme';
-import type { TranscriptSegment } from '@/types/calls';
+import { transcriptView } from '@/lib/call-transcript';
+import type { CallTranscript as CallTranscriptData } from '@/types/calls';
 
 /**
  * 말풍선을 **오른쪽**에 세우는 화자 번호.
@@ -42,9 +43,24 @@ export const spokenAt = (seconds: number) => `${Math.floor(seconds / 60).toStrin
  * 264개를 세우는 데 130ms 안팎이고 스크롤도 걸리지 않아, 가상 스크롤을 들일 이유가 없다.
  * 조각 수가 몇 배로 늘어나는 일이 생기면 그때 다시 재라.
  */
-export function CallTranscript({ segments }: { segments: TranscriptSegment[] }) {
+export function CallTranscript({ transcript }: { transcript?: CallTranscriptData | null }) {
+  const view = transcriptView(transcript);
+  if (view.kind === 'none') return <Notice message="저장된 통화 원문이 없습니다." />;
+  /*
+    ⚠️ **구간이 없는 원문의 안전망.** 만 자가 문단 하나로 쏟아지는, 읽기 나쁜 모양인 것을
+    알고 넣었다 — 시각도 없고 말이 넘어가는 자리도 없다. 그래도 빈 화면보다는 낫다: 구간
+    없이 저장된 통화가 실제로 있고, 안 그리면 그 통화는 영영 못 읽는다.
+    🔴 **왜 이렇게 생겼는지를 화면이 말한다.** 말하지 않으면 읽는 사람은 이 벽을 고장으로
+    보거나, 더 나쁘게는 「원래 이런 제품」으로 본다.
+  */
+  if (view.kind === 'plain') return <>
+    <Notice message="이 원문에는 말한 시각이 없어 한 덩어리로 보입니다. 폰에서 받아쓸 때 구간 정보가 남지 않은 통화예요." />
+    <View style={[styles.bubble, styles.bubblePlain, styles.turnTop]}>
+      <Text selectable style={s.body}>{view.text}</Text>
+    </View>
+  </>;
+  const segments = view.segments;
   const split = segments.some((segment) => segment.speaker);
-  if (!segments.length) return <Notice message="저장된 통화 원문이 없습니다." />;
   return <>
     {/*
       🔴 **가정을 가정이라고 적는 줄이다. 지우지 마라.** 이 줄이 없으면 좌우로 갈린 화면

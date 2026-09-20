@@ -15,7 +15,10 @@ export function RecipientFilters({ groups, group, onGroupChange, query, onQueryC
   const { width, height } = useWindowDimensions();
   const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
   useEffect(() => {
-    if (!anchor || typeof window === 'undefined') return;
+    // 🔴 `window` 의 존재가 아니라 **`addEventListener` 의 존재**를 본다. React Native 에도
+    // `window` 는 있고(`global.window = global`) 그 함수만 없어서, 존재로 가르면 네이티브에서
+    // 「undefined is not a function」이 난다(→ `components/app-navigation.tsx` 의 같은 함정).
+    if (!anchor || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setAnchor(null); };
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);

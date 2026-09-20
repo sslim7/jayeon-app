@@ -1,8 +1,10 @@
-# Nature SMS Android 모듈
+# Nature SMS 모듈
 
-Expo Modules API의 Android 전용 local module입니다. `index.ts`의 `smsNative`만 호출하며 React 화면에서 Android API를 직접 호출하지 않습니다. Expo Go에서는 사용할 수 없고 `npx expo prebuild --platform android` 후 개발 빌드가 필요합니다. `modules/` 기본 autolinking과 library manifest merge로 등록됩니다.
+Expo Modules API의 local module입니다. Android와 iOS(apple) 두 플랫폼을 가집니다. React 화면은 `index.ts`의 `smsNative`만 호출하며 네이티브 API를 직접 호출하지 않습니다. 플랫폼 분기는 `index.ts` 안에서 끝나고 밖에서 보는 함수 목록과 반환 타입은 두 플랫폼이 같습니다. Expo Go에서는 사용할 수 없고 `npx expo prebuild` 후 개발 빌드가 필요합니다. `modules/` 기본 autolinking으로 등록됩니다.
 
 ## 인터페이스
+
+아래 설명은 Android 기준입니다. iPhone에서 무엇이 다른지는 [iPhone 절](#iphone-ios)에 있습니다.
 
 - `getCapabilitiesAsync()` / `requestPermissionsAsync()`: 지원 여부, SEND_SMS와 READ_PHONE_STATE 권한, 활성 SIM ID/라벨, 기본 SMS SIM ID를 반환합니다. SIM의 전화번호를 읽지 않습니다.
 - `sendAsync({campaignRecipientId, attemptId, phone, message, subscriptionId, attachments?})`: 명시적으로 선택된 활성 SIM에서 한 건을 발송합니다. attemptId는 영숫자/하이픈/밑줄 1~128자입니다.
@@ -11,7 +13,66 @@ Expo Modules API의 Android 전용 local module입니다. `index.ts`의 `smsNati
 
 결과는 `{campaignRecipientId, attemptId, phone, success, errorCode, errorMessage, status, transport}`이며 status는 SENT/FAILED/UNKNOWN입니다. SENT는 모든 분할 조각의 Android SENT callback 성공이며 상대방 배달/읽음 확인이 아닙니다. multipart 일부만 성공, 120초 callback timeout, 불확실한 Android 예외는 UNKNOWN이고 자동 재발송하지 않습니다.
 
-## 중복 방지와 복구
+
+## iPhone (`ios/`)
+
+🔴 **iOS 앱은 문자를 직접 보낼 수 없다.** 할 수 있는 일은 `MFMessageComposeViewController` 로
+시스템 메시지 작성 화면을 띄우는 것뿐이고, 실제로 나가는 것은 **사용자가 그 화면의 「보내기」를
+누를 때**다. 이 제약은 우회할 수 없다. 그래서 안드로이드의 `SmsManager` 경로에 있는 것들이
+iOS 에는 하나도 없다.
+
+| | Android | iPhone |
+| --- | --- | --- |
+| 발송 | 앱이 직접 `SmsManager` 호출 | 시스템 시트 → 사용자가 「보내기」 |
+| `subscriptions` | 활성 SIM 목록 | 🔴 **항상 빈 배열** — 회선을 고르는 공개 API 가 없다 |
+| `requestPermissionsAsync` | SEND_SMS / READ_PHONE_STATE runtime permission | 물어볼 권한이 없어 `getCapabilitiesAsync` 와 같은 값 |
+| 결과 | 조각별 SENT callback · 통신사 에러코드 | `sent` / `cancelled` / `failed` 셋뿐 |
+| `transport` | SMS / LMS / MMS | 🔴 **채우지 않는다** — iMessage 였는지도 알 수 없다 |
+| `getResultsAsync` · `acknowledgeAsync` | 백그라운드 저널 | 빈 배열 · 무동작 |
+
+⚠️ `getResultsAsync` / `acknowledgeAsync` 를 iOS 에서 지우지 않는 이유는, 한쪽에만 있는 함수가
+JS 에 플랫폼 분기를 만들고 그 분기는 언젠가 한쪽만 고쳐지기 때문이다
+(`modules/nature-call-audio/ios/NatureCallAudioModule.swift` 맨 위와 같은 이유).
+
+### 결과 매핑
+
+⚠️ **`.sent` 는 「메시지 앱에 넘겼다」는 뜻이지 도달 보장이 아니다.** 안드로이드처럼 통신사
+확정 결과가 뒤따라오지 않는다.
+
+| 시트 결말 | `status` | `errorCode` |
+| --- | --- | --- |
+| `.sent` | `SENT` (success) | — |
+| `.cancelled` | `UNKNOWN` | `USER_CANCELLED` |
+| `.failed` | `FAILED` | `IOS_SEND_FAILED` |
+| 새 iOS 의 알 수 없는 결말 | `UNKNOWN` | `IOS_OUTCOME_UNKNOWN` |
+
+🔴 **이 표는 Swift 가 아니라 `ios-result.ts` 에 있다.** 실기기 없이 확인할 수 있어야 하는
+규칙이기 때문이다(`tests/sms-ios.test.cjs`). Swift 는 시스템이 준 결말 문자열 하나만 넘긴다.
+
+취소는 `status` 가 `UNKNOWN` 이지만 **「나갔는지 모른다」가 아니라 「안 나갔다」를 아는**
+결과다. 그래서 `SmsRunner` 는 이 한 건을 `OUTCOME_UNKNOWN` 으로 덮지 않고 `USER_CANCELLED`
+사유 그대로 저장하며, 일괄 발송을 세우지 않고 다음 사람으로 넘어간다. 사용자가 일부러
+건너뛴 것은 `USER_SKIPPED` 로 따로 남는다 — 나중에 「왜 안 갔지」를 볼 때 둘은 다른 이야기다.
+
+### 시트와 첨부
+
+🔴 **시트는 한 번에 하나만** 뜬다. 이미 떠 있으면 `IOS_COMPOSER_BUSY` 로 거절한다 — 두 번째를
+띄우면 첫 번째 결과를 영영 못 받는다. 쓸어내려 닫아도 델리게이트가 오지 않을 수 있어
+`isModalInPresentation` 으로 시트 자기 버튼으로만 끝나게 막는다.
+
+첨부는 `addAttachmentData(_:typeIdentifier:filename:)` 로 붙인다(JPG `public.jpeg` / PNG
+`public.png` 만). 제목은 `canSendSubject()` 인 기기에서만 넣는다.
+
+### 권한 선언 · 빌드
+
+⚠️ **config plugin 도 `Info.plist` 키도 필요 없다.** 문자 발송에는 usage description 이 없다 —
+시스템 시트가 사용자 확인을 대신하기 때문이다. `MessageUI` 프레임워크만 `NatureSms.podspec` 이
+선언한다. `npx expo prebuild -p ios` 후 개발 빌드가 필요하며 Expo Go 에서는 쓸 수 없다.
+
+실기기에서 확인할 것: 시트 표시/취소/발송, 25건 연속(탭 50번), 「통과」·「중단」 후 서버 상태,
+이미지 첨부 MMS, iMessage 로 나가는 경우, 기내모드·통신 불가, 발송 중 앱 전환·종료.
+
+## 중복 방지와 복구 (Android)
 
 실제 SmsManager 호출 전에 private SharedPreferences에 attempt fence를 동기 commit합니다. commit 실패 시 발송하지 않습니다. 같은 attempt 재호출은 저장 결과만 반환하며, 동일 CampaignRecipient의 SENT/SENDING/UNKNOWN 기록이 있으면 새로운 attempt도 차단합니다. FAILED의 명시적 재시도는 서버 결과 저장/ack 후 새 attempt ID로만 가능합니다. 한 번에 한 건만 진행합니다.
 

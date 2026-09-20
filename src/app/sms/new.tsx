@@ -23,6 +23,7 @@ import { newSmsRequestId } from '@/lib/sms-dispatch';
 import { utf8Length } from '@/lib/phone';
 import { matchesRecipientQuery } from '@/lib/recipient-search';
 import { attachmentApi, recipientApi, smsApi, templateApi } from '@/lib/sms-api';
+import { readSmsLeave, smsExit, SMS_LEAVE_PARAM, SMS_ORIGIN_PARAM } from '@/lib/sms-origin';
 import { excludeReserved, mergeReservation, reservedRecipientIds, reservedRows, MAX_RESERVATION_SIZE } from '@/lib/sms-reservations';
 import { useReservations } from '@/hooks/use-reservations';
 import type { Attachment, CreateCampaignInput, MessageTemplate, Recipient } from '@/types/sms';
@@ -31,7 +32,8 @@ export default function NewCampaignScreen() {
   const [panel, setPanel] = useState<'register' | 'templates' | 'history' | null>(null);
   const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
-  const { ids } = useLocalSearchParams<{ ids?: string }>();
+  const params = useLocalSearchParams<{ ids?: string; closed?: string }>();
+  const ids = params.ids;
   const [stage, setStage] = useState<'recipients' | 'compose'>('recipients');
   const [includeSent, setIncludeSent] = useState(!!ids);
   const [group, setGroup] = useState('');
@@ -50,7 +52,14 @@ export default function NewCampaignScreen() {
   const [message, setMessage] = useState('');
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  /*
+   * 다른 화면을 닫고 **여기로 돌아온 경우**의 한 줄. 무슨 말을 할지는 출처가 정한다
+   * (→ `lib/sms-origin.ts`) — 문자 보내기로 돌아온 사람에게 예약 이야기를 하지 않기 위해서다.
+   */
+  const [notice, setNotice] = useState(() => {
+    const leave = readSmsLeave(params[SMS_LEAVE_PARAM]);
+    return leave ? smsExit('send', leave).notice : '';
+  });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   // 예약·삭제는 발송 준비와 잠금이 달라 별도의 진행 상태를 쓴다.
@@ -133,7 +142,9 @@ export default function NewCampaignScreen() {
       await writeSmsDraft(userId, payload);
       const campaign = await smsApi.create(payload);
       await clearSmsDraft(userId);
-      router.replace({ pathname: '/sms/[id]', params: { id: campaign.id } });
+      // ⚠️ 출처를 실어 보낸다. 안 실으면 상세에서 닫았을 때 돌아올 곳을 스택 기록으로 추측하게 되는데,
+      // 이 `replace` 가 문자 보내기를 스택에서 빼 버려서 그 추측은 반드시 틀린다(→ `lib/sms-origin.ts`).
+      router.replace({ pathname: '/sms/[id]', params: { id: campaign.id, [SMS_ORIGIN_PARAM]: 'send' } });
     } catch (e) {
       const rejected =
         e instanceof ApiError &&
@@ -244,6 +255,32 @@ export default function NewCampaignScreen() {
     await load();
     await reservations.reload();
   }
+  /**
+   * 문자 작성을 그만둔다.
+   *
+   * 🔴 **나갈 길이 하나도 없던 자리다.** 「수신자 선택으로 돌아가기」는 흐름 **안에서** 한 걸음
+   * 물러서는 것이고, 준비 중인 요청이 있으면 그 버튼마저 사라져 앱을 껐다 켜는 것 말고는
+   * 작성 화면을 벗어날 방법이 없었다.
+   *
+   * ⚠️ 준비 중인 요청(`pending`)이 있으면 **내용을 비우지 않는다.** 그 요청이 서버에 캠페인을
+   * 만들었는지 아직 모르는 상태라, 비우면 같은 요청으로 확인할 길이 함께 사라진다.
+   */
+  function closeCompose() {
+    setStage('recipients');
+    setTemplateOpen(false);
+    setError('');
+    if (pending) {
+      setNotice('문자 작성을 닫았어요. 준비 중인 요청은 그대로 두었으니 「발송하기」로 다시 확인할 수 있어요.');
+      return;
+    }
+    const count = selected.length;
+    setSelected([]);
+    setTitle('더메이');
+    setMessage('');
+    setAttachments([]);
+    // 돌아갈 곳도 할 말도 출처가 정한다. 작성 화면은 문자 보내기 흐름 안에만 있다.
+    setNotice(smsExit('send', 'compose', count).notice);
+  }
   const frozen = busy || !draftLoaded || pending !== null;
   // 폰 폭에서는 세 조작을 앱 헤더 아이콘으로 올려 목록에 세로 공간을 준다.
   const phone = useWindowDimensions().width < COMPACT_MAX_WIDTH;
@@ -254,7 +291,7 @@ export default function NewCampaignScreen() {
   const sendButton = stage === 'recipients' ? <View style={{ gap: spacing.sm }}>
     {overLimit ? <Notice error message={`${selected.length}명을 선택했어요. 한 번에 50명까지 발송·예약할 수 있어요.`} /> : null}
     <ButtonRow>
-      <SmsButton fill label="발송하기" disabled={noSelection || overLimit} onPress={() => { setStage('compose'); void openTemplates(); }} />
+      <SmsButton fill label="발송하기" disabled={noSelection || overLimit} onPress={() => { setNotice(''); setStage('compose'); void openTemplates(); }} />
       <SmsButton fill secondary label="예약하기" disabled={noSelection || overLimit} onPress={() => { setNotice(''); setSheet('reserve'); }} />
       <SmsButton fill secondary danger label="삭제" disabled={noSelection} onPress={() => { setNotice(''); setSheet('remove'); }} />
     </ButtonRow>
@@ -263,12 +300,22 @@ export default function NewCampaignScreen() {
   const groups = [...new Set(rows.map((item) => item.groupId).filter(Boolean))];
   const reservedSelected = selected.filter((id) => reservations.recipientIds.has(id)).length;
   const visible = rows.filter((item) => (!group || item.groupId === group) && matchesRecipientQuery(query, item));
+  /*
+   * 작성 화면의 「닫기」. 같은 저장소의 시트들(「템플릿 가져오기」·「예약하기」)과 같은 자리 —
+   * 오른쪽 위 — 에 둔다. 🔴 **폰 폭에서도 선다.** 폰에서는 나머지 조작이 앱 헤더 아이콘으로
+   * 올라가 있어(`useHeaderActions`), 여기까지 감추면 작성 화면에 나갈 길이 다시 없어진다.
+   */
+  const closeAction = stage === 'compose'
+    ? <SmsButton label="닫기" accessibilityLabel="문자 작성 닫기" secondary onPress={closeCompose} />
+    : null;
+  const pageActions = phone ? closeAction : <>
+    <SmsButton label="수신자 등록" secondary disabled={frozen} onPress={() => setPanel('register')} />
+    <SmsButton label="템플릿" secondary disabled={frozen} onPress={() => setPanel('templates')} />
+    <SmsButton label="발송 이력" secondary onPress={() => setPanel('history')} />
+    {closeAction}
+  </>;
   return (
-    <SmsPage hideTitle wide={stage === 'recipients'} compact={listFooter} footer={listFooter ? sendButton : undefined} title={stage === 'recipients' ? '문자 보내기' : '문자 작성'} actions={phone ? undefined : <>
-      <SmsButton label="수신자 등록" secondary disabled={frozen} onPress={() => setPanel('register')} />
-      <SmsButton label="템플릿" secondary disabled={frozen} onPress={() => setPanel('templates')} />
-      <SmsButton label="발송 이력" secondary onPress={() => setPanel('history')} />
-    </>}>
+    <SmsPage hideTitle wide={stage === 'recipients'} compact={listFooter} footer={listFooter ? sendButton : undefined} title={stage === 'recipients' ? '문자 보내기' : '문자 작성'} actions={pageActions}>
       {panel === 'register' || editingRecipient ? <RecipientRegistrationSheet recipient={editingRecipient ?? undefined} onClose={() => { setPanel(null); setEditingRecipient(null); }} onSaved={() => void load()} /> : null}
       {panel === 'templates' ? <TemplateManager onClose={() => setPanel(null)} /> : null}
       {panel === 'history' ? <CampaignHistorySheet onClose={() => { setPanel(null); void load(); }} /> : null}

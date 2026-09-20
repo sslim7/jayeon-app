@@ -1,13 +1,19 @@
 import type { ChangeEvent } from 'react';
 import { colors } from '@/constants/theme';
+import { ATTACHMENT_READ_MESSAGE, oversizeMessage } from '@/lib/attachment-file';
 import type { FilePickerProps } from './file-picker-types';
+/*
+  첨부 파일 선택 — **웹(브라우저와 네이티브 껍데기의 웹뷰).** 운영에서 쓰는 길이라 동작은
+  그대로 두고, 한도와 문구만 `lib/attachment-file.ts` 에서 가져온다 — 네이티브 짝
+  (`file-picker.tsx`)이 같은 것을 보게 하려는 뜻이다. 여기 숫자를 다시 적으면 그 순간 둘이 갈라진다.
+*/
 export function FilePicker({ label, accept, maxBytes, disabled, onPick, onError }: FilePickerProps) {
   async function pick(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
     if (file.size > maxBytes) {
-      onError(`파일은 ${Math.floor(maxBytes / 1024)} KB까지 추가할 수 있어요.`);
+      onError(oversizeMessage(maxBytes));
       return;
     }
     try {
@@ -19,7 +25,7 @@ export function FilePicker({ label, accept, maxBytes, disabled, onPick, onError 
       });
       onPick({ fileName: file.name, mimeType: file.type, size: file.size, dataBase64: encoded });
     } catch {
-      onError('파일을 읽지 못했어요. 다시 선택해 주세요.');
+      onError(ATTACHMENT_READ_MESSAGE);
     }
   }
   return (

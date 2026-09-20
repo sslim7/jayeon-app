@@ -35,6 +35,7 @@ import { PASSWORD_CHANGED_NOTICE, useUserStore } from '@/store/user-store';
 import { getStoredTokens, isStoredTokens, saveTokens, type StoredTokens } from '@/lib/auth-tokens';
 import { handleSmsRequest, type SmsShellRequest } from '@/lib/sms-shell-handler';
 import { startCallService } from '@/lib/call-runtime';
+import { SHELL_NATIVE_ROUTES, shellNavigateTarget } from '@/lib/shell-routes';
 
 /**
  * 웹이 토큰을 읽는 localStorage 키. `@/lib/auth-tokens` 의 `KEY` 와 **같은 값이어야 한다.**
@@ -142,7 +143,11 @@ type ShellMessage =
   | SmsShellRequest
   | { type: 'ready' }
   | { type: 'tokens'; tokens: StoredTokens | null; reason?: 'password-changed' }
-  // 🔧 측정용(→ `components/asr-bench.tsx`). 끝나면 이 줄과 아래 case 를 지운다.
+  /*
+   * 「이 네이티브 화면을 열어 달라」. 웹뷰 안의 웹은 whisper 도 파일 선택기도 쓸 수 없어서,
+   * 그 화면들로 가는 길은 이 한마디뿐이다(→ `lib/native-bridge.web.ts` 의 `openNativeScreen`).
+   * 🔴 여는 화면은 아래 `case 'navigate'` 의 **허용 목록**이 정한다.
+   */
   | { type: 'navigate'; path: string };
 
 /**
@@ -155,7 +160,20 @@ type ShellMessage =
  * 여기서는 전역과 localStorage 만 건드린다.
  */
 function buildInjectedScript(tokens: StoredTokens | null): string {
-  const nativeInfo = JSON.stringify({ platform: Platform.OS, appVersion: APP_VERSION, smsApiVersion: 1 });
+  /*
+   * 🔴 **껍데기가 자기 능력을 스스로 밝힌다.** 웹은 배포하면 즉시 새것이 되지만 껍데기는
+   * 스토어를 거치므로 「옛 껍데기가 새 웹을 연다」가 정상적으로 존재하는 조합이고, 그 껍데기는
+   * 모르는 화면 요청을 로그 한 줄 남기고 버린다. 웹이 그것을 모른 채 입구를 세우면 사용자는
+   * **눌러도 아무 일이 없는 메뉴**를 보게 된다 — 고장으로 읽히는 그 상태다.
+   * 열 수 있는 화면을 여기 실어 보내면, 옛 껍데기에서는 그 입구가 아예 서지 않는다
+   * (→ `lib/native-bridge.web.ts` 의 `nativeShellCanOpen`).
+   */
+  const nativeInfo = JSON.stringify({
+    platform: Platform.OS,
+    appVersion: APP_VERSION,
+    smsApiVersion: 1,
+    navigateRoutes: SHELL_NATIVE_ROUTES,
+  });
 
   /*
    * **`JSON.stringify` 를 두 번 쓴다.** 한 번은 토큰셋 → JSON 문자열(웹이 그대로 저장해 읽을
@@ -207,7 +225,7 @@ true;`;
 
 export function WebShell() {
   const insets = useSafeAreaInsets();
-  // 🔧 측정용 — 웹 메뉴가 보낸 navigate 를 받아 네이티브 화면을 연다. 끝나면 지운다.
+  // 웹이 보낸 navigate 를 받아 네이티브 화면을 연다(→ 아래 `case 'navigate'`).
   const router = useRouter();
   useEffect(() => { startCallService(); }, []);
   const ref = useRef<WebView>(null);
@@ -335,12 +353,21 @@ export function WebShell() {
       case 'ready':
         revealContent();
         return;
-      case 'navigate':
+      case 'navigate': {
         // 🔴 웹이 준 경로를 그대로 router 에 넘기지 않는다. 웹뷰가 여는 페이지는 바깥
         // 서버가 주는 것이라, 임의 경로를 받으면 껍데기의 아무 화면이나 열 수 있는
-        // 통로가 된다. 지금 열 수 있는 것은 측정 화면 하나뿐이다.
-        if (message.path === '/asr-bench') router.push('/asr-bench');
+        // 통로가 된다. 열 수 있는 화면과 파라미터는 **허용 목록**이 정한다
+        // (→ `lib/shell-routes.ts`).
+        const target = shellNavigateTarget(message.path);
+        if (!target) {
+          // 조용히 삼키지 않는다 — 「눌렀는데 아무 일도 없다」를 쫓을 단서가 이 한 줄뿐이다.
+          console.warn('[web-shell] 허용 목록에 없는 화면 요청');
+          return;
+        }
+        if (target.params) router.push({ pathname: target.path, params: target.params });
+        else router.push(target.path);
         return;
+      }
       case 'tokens':
         // null은 명시적 로그아웃/자격 만료일 때만 전송된다. 일시 복구 장애는 토큰을 보존한다.
         if (message.tokens === null) {

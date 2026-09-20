@@ -7,7 +7,9 @@ import { useScreenHeader } from '@/components/app-navigation';
 import { SmsPage, s } from '@/components/sms-ui';
 import { APP_VERSION } from '@/constants/app-meta';
 import { colors, fonts, radii, spacing, text } from '@/constants/theme';
-import { nativeShellVersion } from '@/lib/native-bridge';
+import { useAsrSummary } from '@/hooks/use-asr-summary';
+import { nativeShellCanOpen, nativeShellVersion, openNativeScreen } from '@/lib/native-bridge';
+import { ASR_SETUP_PATH } from '@/lib/asr-choice';
 
 /**
  * 설정 — 서랍 발치의 톱니가 여는 화면.
@@ -57,6 +59,25 @@ export default function SettingsScreen() {
    */
   const shellVersion = nativeShellVersion();
   const split = !!shellVersion && shellVersion !== APP_VERSION;
+  /**
+   * 폰 받아쓰기의 지금 상태. 🔴 **여기서 기기 성능을 재지 않는다** — 그 검사는 모델을 여는
+   * 데만 18초라, 설정이 「가끔 20초 멈추는 화면」이 된다. 저장해 둔 값만 읽는다
+   * (→ `hooks/use-asr-summary.ts`).
+   */
+  const asr = useAsrSummary();
+  /**
+   * 껍데기 안의 웹에서도 이 줄이 서야 하는가.
+   *
+   * 🔴 **로그인 이후 화면은 전부 웹이다.** 사용자가 실제로 보는 설정은 껍데기의 웹뷰가 그린
+   * 이 화면의 **웹 빌드**라, `asr.supported`(네이티브 전용)만으로 감추면 `/asr-setup` 에
+   * 갈 길이 세상에 하나도 없다 — 모델을 받을 방법도, 기기를 재 볼 방법도 없어진다.
+   * 그래서 껍데기 안에서는 줄을 세우고, 누르면 껍데기에게 네이티브 화면을 열어 달라고 한다.
+   *
+   * ⚠️ **브라우저에서는 여전히 감춘다.** 열 껍데기가 없어 눌러도 아무 일이 없고, 그 죽은
+   * 줄은 고장으로 읽힌다. `nativeShellCanOpen` 이 그 판정까지 함께 한다 — 이 화면을 열 줄
+   * 모르는 옛 껍데기도 같이 걸린다(→ `lib/native-bridge.web.ts`).
+   */
+  const shellAsr = nativeShellCanOpen(ASR_SETUP_PATH);
   return (
     // `hideTitle` — 제목은 위 헤더가 이미 말한다. 본문에 또 세우면 같은 말이 두 줄로 선다.
     <SmsPage title="설정" hideTitle>
@@ -70,6 +91,28 @@ export default function SettingsScreen() {
         */}
         <Row icon="device" label="로그인 기기 관리" onPress={() => router.push('/devices')} />
       </Section>
+
+      {/*
+        🔴 **브라우저에서는 이 섹션 자체가 서지 않는다.** whisper 는 네이티브에서만 돌아서,
+        껍데기가 없는 브라우저에서 이 줄을 눌러 봐야 갈 곳이 없다 — 눌러도 아무것도 되지
+        않는 줄은 고장으로 읽힌다. 줄만 감추고 카드를 남기면 빈 상자가 서므로 **섹션째** 감춘다.
+
+        ⚠️ **껍데기 안의 웹에서는 배지가 비어 있다.** 웹은 모델이 깔렸는지도 기기가 되는지도
+        알 수 없다(whisper 가 없으니 잰 적도 없다). 🔴 모르는 것을 아는 척하지 않는다 —
+        상태는 넘어간 네이티브 화면이 말한다.
+
+        ⚠️ 오른쪽 값은 `value` 가 아니라 `badge` 다. `value` 는 모노라서 한글을 넣으면 폰트
+        폴백으로 자간이 벌어진다(→ 아래 `Row` 주석). 이 값은 버전 같은 **값**이 아니라
+        「사용 가능」·「모델 없음」 같은 **상태**라, 알약 쪽이 뜻에도 맞는다.
+      */}
+      {asr.supported || shellAsr ? <Section title="통화분석">
+        <Row
+          icon="asr"
+          label="로컬 받아쓰기"
+          badge={asr.value || undefined}
+          onPress={() => (shellAsr ? openNativeScreen(ASR_SETUP_PATH) : router.push('/asr-setup'))}
+        />
+      </Section> : null}
 
       <Section title="정보">
         {/*
@@ -170,7 +213,7 @@ function Note({ children }: { children: React.ReactNode }) {
   return <Text style={styles.note}>{children}</Text>;
 }
 
-type RowIcon = 'device' | 'phone' | 'version';
+type RowIcon = 'device' | 'phone' | 'version' | 'asr';
 
 /**
  * 줄 아이콘. **이모지를 쓰지 않는다** — 기기·OS 마다 그림이 제각각이라 같은 줄이 사람마다
@@ -189,6 +232,11 @@ function RowIconGlyph({ kind }: { kind: RowIcon }) {
     {kind === 'phone' ? <><Rect x={6.5} y={2.5} width={11} height={19} rx={2.5} /><Path d="M10.5 18.5h3" /></> : null}
     {/* 반짝임: 「지금 쓰고 있는 것」. 형제 앱 설정의 버전 줄과 같은 그림이다 */}
     {kind === 'version' ? <><Path d="M10.5 3.5l1.6 4.1 4.1 1.6-4.1 1.6-1.6 4.1-1.6-4.1L4.8 9.2l4.1-1.6z" /><Path d="M17.5 14.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z" /></> : null}
+    {/*
+      파형: 「소리를 글로」. ⚠️ 마이크를 그려 봤더니 22px 에서 머리와 대가 붙어 열쇠처럼
+      읽혔다 — 위 `device` 주석과 같은 이유로, 작은 아이콘은 선 몇 개로 끝나야 뜻이 남는다.
+    */}
+    {kind === 'asr' ? <><Path d="M3.5 10v4" /><Path d="M7.8 6.5v11" /><Path d="M12 3.5v17" /><Path d="M16.2 6.5v11" /><Path d="M20.5 10v4" /></> : null}
   </Svg>;
 }
 
