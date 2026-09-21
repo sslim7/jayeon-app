@@ -49,8 +49,34 @@ export type ShellNavTarget =
   | { path: '/asr-run'; params: { callId: string } }
   | { path: Exclude<ShellNativeRoute, '/asr-run'>; params?: undefined };
 
-function isShellNativeRoute(path: string): path is ShellNativeRoute {
+/**
+ * 이 경로가 **껍데기가 열어 준 네이티브 화면**인가.
+ *
+ * 🔴 허용 목록을 읽는 자리가 하나 더 있다 — 껍데기 모드의 **앱 헤더**다(→ `app/_layout.tsx`).
+ * 껍데기 모드에서는 로그인 뒤 모든 화면이 웹뷰라 앱 헤더를 통째로 걷는데, 그러면 여기 적힌
+ * 화면들은 **제목도 나가는 버튼도 없이** 열려 사용자가 앱을 강제 종료해야 벗어난다.
+ * 실기기에서 `/asr-setup` 이 정확히 그랬다. 그래서 목록을 화면 쪽에서도 볼 수 있게 내보낸다.
+ */
+export function isShellNativeRoute(path: string): path is ShellNativeRoute {
   return (SHELL_NATIVE_ROUTES as readonly string[]).includes(path);
+}
+
+/**
+ * 스택에 앞 화면이 없을 때 **어디로 나가는가.**
+ *
+ * ┌────────────────────────────────────────────────────────────────────────────┐
+ * │ 🔴 **껍데기에서 열린 화면은 웹뷰(`/shell`)로 돌아간다 — 사용자가 거기서 왔기 때문이다.** │
+ * │ 껍데기 모드에서는 `/settings`·`/calls` 같은 화면이 웹뷰 안에 있어, 그 경로로 나가면    │
+ * │ 네이티브 라우터가 **빈 화면**을 세우거나 `/shell` 되돌림에 한 번 더 튕긴다             │
+ * │ (→ `app/_layout.tsx`). 껍데기가 아니면 그 화면들이 진짜 네이티브라 그대로 맞다.        │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ⚠️ **돌아갈 기록이 있으면 이 값을 쓰지 않는다.** 부르는 쪽이 `router.canGoBack()` 을 먼저
+ * 본다(→ `hooks/use-shell-exit.ts`) — 웹뷰를 `replace` 로 다시 세우면 페이지가 처음부터
+ * 로드되어 사용자가 보던 목록·검색어·스크롤이 전부 사라진다.
+ */
+export function shellExitPath<T>(webShell: boolean, fallback: T): T | '/shell' {
+  return webShell ? '/shell' : fallback;
 }
 
 /**

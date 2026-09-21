@@ -36,7 +36,16 @@ export type AsrSummary = {
 async function summaryText(): Promise<string> {
   // 🔴 안드로이드에서 퀄컴이 **아닌 것이 확실하면** 모델을 보기 전에 결론이 난다.
   // iOS 는 Metal 경로라 이 판단이 아예 해당하지 않는다(→ `lib/asr-capability-types.ts`).
-  if (Platform.OS === 'android' && socVerdict(socInfo()) === 'other') return '지원 안 함';
+  /*
+   * 🔴 **「지원 안 함」이라고만 적지 않는다.** 앱이 이 기기를 거부하는 것처럼 읽히는데,
+   * 실제로는 **이 칩에 받아쓰기가 쓰는 NPU 가 없는 것**이다. 원인을 적어야 사용자가
+   * 「내 폰이 고장인가」와 「원래 안 되는 폰인가」를 가를 수 있다.
+   *
+   * ⚠️ 아래 마지막 줄의 「지원 안 함」과 **원인이 다르다** — 저쪽은 NPU 유무를 떠나
+   * 실제로 재 봤더니 너무 느린 경우다. 두 말을 같게 적으면 사용자는 재 볼 수 있는 폰인지
+   * 아닌지 알 수 없다.
+   */
+  if (Platform.OS === 'android' && socVerdict(socInfo()) === 'other') return 'NPU 없는 폰';
 
   const installed: AsrModelId[] = [];
   for (const model of ASR_MODELS) {
@@ -54,8 +63,9 @@ async function summaryText(): Promise<string> {
     const saved = await loadAsrCapability(id);
     if (!isFreshCapability(saved, id, APP_VERSION)) return `검사 필요 · ${id}`;
   }
-  // 깔린 모델 전부를 재 봤고 전부 불가였다.
-  return '지원 안 함';
+  // 깔린 모델 전부를 재 봤고 전부 불가였다. **재 본 결과**라는 것이 위의 「NPU 없는 폰」과
+  // 다른 점이다 — 이 기기는 NPU 가 있을 수도 있는데 그래도 느렸다는 뜻이다.
+  return '너무 느림';
 }
 
 export function useAsrSummary(): AsrSummary {

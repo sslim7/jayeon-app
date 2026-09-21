@@ -328,3 +328,24 @@ test('합친 명단은 중복을 걸러 50명씩 나눈다', () => {
   ], '가을 안내', []);
   assert.deepEqual(plain(twice.chunks), [['p1']]);
 });
+
+const batchModule = { exports: {} };
+const batchCompiled = ts.transpileModule(fs.readFileSync('src/lib/external-send-batch.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+// 일괄 경로도 1명씩 등록하는 경로와 **같은 날짜 헬퍼**를 통과해야 한다 — 여기서 갈라지면 두 경로의 저장 형식이 어긋난다.
+vm.runInNewContext(`(function(exports, require){${batchCompiled}\n})`, { Error, Date })(batchModule.exports, () => dateModule.exports);
+const { externalSendBatchTime, externalSendBatchNotice } = batchModule.exports;
+test('일괄 발송처리 시각은 분 단위로 잘려 항상 현재보다 과거다', () => {
+  const now = new Date(2026, 8, 16, 15, 0, 47, 321);
+  assert.equal(externalSendBatchTime(now), new Date(2026, 8, 16, 15, 0).toISOString());
+  assert.ok(new Date(externalSendBatchTime(now)).getTime() <= now.getTime());
+  // 초가 0인 정각에도 미래가 되지 않는다 — 서버는 미래 일시를 거절한다.
+  const exact = new Date(2026, 8, 16, 15, 0, 0, 0);
+  assert.equal(externalSendBatchTime(exact), exact.toISOString());
+  assert.ok(new Date(externalSendBatchTime()).getTime() <= Date.now());
+});
+test('일괄 발송처리 결과는 성공·충돌·실패를 갈라 알린다', () => {
+  assert.equal(externalSendBatchNotice({ done: 3, failed: 0, conflicted: 0 }), '3명을 발송처리했어요.');
+  assert.equal(externalSendBatchNotice({ done: 1, failed: 2, conflicted: 0 }), '1명을 발송처리했어요. 2명은 발송처리하지 못했어요. 목록을 확인해 주세요.');
+  assert.equal(externalSendBatchNotice({ done: 0, failed: 0, conflicted: 2 }), '0명을 발송처리했어요. 2명은 앞서 다른 일시로 이미 발송처리되어 있어 그대로 두었어요.');
+  assert.equal(externalSendBatchNotice({ done: 1, failed: 1, conflicted: 1 }), '1명을 발송처리했어요. 1명은 앞서 다른 일시로 이미 발송처리되어 있어 그대로 두었어요. 1명은 발송처리하지 못했어요. 목록을 확인해 주세요.');
+});

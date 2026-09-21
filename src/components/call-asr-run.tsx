@@ -26,7 +26,9 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useScreenHeader } from '@/components/app-navigation';
 import { ButtonRow, Loading, Notice, ProgressBar, SmsButton, SmsPage, s } from '@/components/sms-ui';
+import { useShellExit } from '@/hooks/use-shell-exit';
 import { colors, fonts, spacing, text as textSize } from '@/constants/theme';
 import { callWavExists, clearCallWav, convertCallToWav, durationLabel } from '@/lib/asr-audio';
 import { loadAsrCapability } from '@/lib/asr-capability';
@@ -100,6 +102,8 @@ export function CallAsrRun({ callId, model, sourceUri, sourceName, sourceBytes }
   const [encodeMs, setEncodeMs] = useState<number | null>(null);
   /** 「포기」는 되돌릴 수 없다. 한 번 더 묻는다. */
   const [quitting, setQuitting] = useState(false);
+  /** 머리의 「닫기」를 도는 중에 눌렀을 때. 🔴 7분치가 조용히 멈추지 않게 한 번 더 묻는다. */
+  const [closing, setClosing] = useState(false);
 
   const cancelRef = useRef<(() => void) | null>(null);
   /** 두 번 도는 것을 막는다. 같은 WAV 에 세션 두 개를 열면 메모리가 먼저 무너진다. */
@@ -332,25 +336,48 @@ export function CallAsrRun({ callId, model, sourceUri, sourceName, sourceBytes }
     void Promise.resolve().then(() => begin(false));
   }, [begin]);
 
+  /**
+   * 이 화면에서 나가는 유일한 길. 껍데기에서 열렸으면 웹뷰로 돌아간다
+   * (→ `hooks/use-shell-exit.ts`). 🔴 `router.back()` 만으로는 부족하다 — 껍데기가 바로
+   * 이 화면을 열었을 때는 **스택에 앞 화면이 없어 아무 일도 일어나지 않는다.**
+   */
+  const exit = useShellExit('/calls');
+
+  /**
+   * 머리의 「닫기」. **도는 중이면 곧바로 나가지 않는다.**
+   *
+   * 🔴 화면을 떠나면 받아쓰기는 그 자리에서 멈춘다(위 언마운트 처리). 28분 통화면 7분이
+   * 걸리는 일이라, 아무 말 없이 닫히면 사용자는 **자기가 무엇을 멈췄는지 모른 채** 나간다.
+   * 그래서 도는 중에는 「멈춘다」와 「이어서 할 수 있다」를 말한 뒤 한 번 더 받는다 —
+   * 이 저장소의 다른 되돌릴 수 없는 조작들과 같은 두 단계다(`confirm()` 은 쓰지 않는다).
+   */
+  const requestClose = useCallback(() => {
+    if (busy) { setClosing(true); return; }
+    exit();
+  }, [busy, exit]);
+  /** ⚠️ `useMemo` 없이 넘기면 매 렌더 새 객체라 머리가 계속 다시 올라간다. */
+  useScreenHeader(useMemo(() => ({ title: '폰에서 받아쓰기', onBack: requestClose }), [requestClose]));
+
   /** 포기. 🔴 되돌릴 수 없고, **서버는 6시간 뒤 이 통화를 실패로 정리한다.** */
   const giveUp = useCallback(async () => {
     cancelRef.current?.();
     await clearAsrLocalState(callId).catch(() => {});
     await clearPendingTranscript(callId).catch(() => {});
     await clearCallWav(callId).catch(() => {});
-    router.back();
-  }, [callId]);
+    exit();
+  }, [callId, exit]);
 
   if (!supported) {
     return <SmsPage title="폰에서 받아쓰기">
       <Notice message="받아쓰기는 앱에서만 됩니다. 이 통화는 웹에서 이어갈 수 없어요." />
-      <SmsButton label="돌아가기" secondary onPress={() => router.back()} />
+      {/* 🔴 `router.back()` 이 아니다 — 껍데기가 바로 연 화면에는 돌아갈 기록이 없다. */}
+      <SmsButton label="돌아가기" secondary onPress={exit} />
     </SmsPage>;
   }
   if (!callId) {
     return <SmsPage title="폰에서 받아쓰기">
       <Notice error message="어느 통화를 받아쓸지 알 수 없습니다. 통화 목록에서 다시 열어 주세요." />
-      <SmsButton label="돌아가기" secondary onPress={() => router.back()} />
+      <SmsButton label="돌아가기" secondary onPress={exit} />
     </SmsPage>;
   }
 
@@ -374,6 +401,20 @@ export function CallAsrRun({ callId, model, sourceUri, sourceName, sourceBytes }
   const plan = failure ? asrFailurePlan({ hasTranscript: !!body, code: failure }) : null;
 
   return <SmsPage title="폰에서 받아쓰기">
+    {/*
+      ── 닫기 확인 ─────────────────────────────────────────────
+      🔴 **머리의 「닫기」는 도는 중에 곧바로 나가지 않는다.** 여기서 무엇이 멈추고 무엇이
+      남는지 말한 뒤에 받는다. 맨 위에 두는 것은, 누른 버튼(머리의 「닫기」) 바로 아래에서
+      답이 나와야 사용자가 그것을 자기 조작의 결과로 읽기 때문이다.
+    */}
+    {closing ? <View style={s.card}>
+      <Notice error message="지금 닫으면 받아쓰기가 멈춥니다. 끝낸 부분은 폰에 남아 있어서, 설정 → 로컬 받아쓰기의 「진행 중인 받아쓰기」에서 이어 할 수 있어요. 다시 하는 부분은 마지막 조각(최대 2분)뿐입니다." />
+      <ButtonRow>
+        <SmsButton fill label="멈추고 닫기" onPress={exit} />
+        <SmsButton fill secondary label="계속 받아쓰기" onPress={() => setClosing(false)} />
+      </ButtonRow>
+    </View> : null}
+
     {/* 무엇을 받아쓰는지. 이어하기로 들어온 사람은 이 줄로 자기 통화를 알아본다. */}
     <View style={s.card}>
       <Text style={s.subtitle}>{saved?.sourceName ?? sourceName ?? '이 통화의 녹음'}</Text>

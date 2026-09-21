@@ -16,18 +16,26 @@
  * - 로컬 받아쓰기를 골랐으면 시트가 `/asr-run` 으로 이어 보낸다(→ `components/call-create.tsx`).
  *   그 전에 이 화면이 먼저 물러나므로, 받아쓰기가 끝나고 뒤로 가면 껍데기로 돌아온다.
  * - 아니면 껍데기(`/shell`)로 돌아간다. 올라간 통화는 웹 목록이 이어서 보여 준다.
+ *
+ * 🔴 **나가는 손잡이는 둘이 같은 함수를 쓴다** — 시트 머리의 「닫기」와 앱 헤더의 「닫기」다.
+ * 시트는 화면을 거의 다 덮지만(`maxHeight: 95%`), 그 뒤에도 머리를 세워 두는 것은 시트가
+ * 뜨지 않거나 닫힌 순간에 **나갈 길이 없는 화면**이 남지 않게 하려는 것이다 — 껍데기 모드에서
+ * 실제로 그런 화면이 있었고, 사용자는 앱을 강제 종료해야 했다.
  */
-import { router } from 'expo-router';
+import { useMemo } from 'react';
 
+import { useScreenHeader } from '@/components/app-navigation';
 import { CallCreate } from '@/components/call-create';
+import { useShellExit } from '@/hooks/use-shell-exit';
 
 export default function CallCreateScreen() {
   /**
    * 🔴 **돌아갈 기록이 있으면 `back()` 이다.** 껍데기의 웹뷰는 `replace` 로 다시 세우면
    * 페이지를 처음부터 로드한다 — 사용자가 보던 목록과 검색어, 스크롤이 전부 사라진다.
-   * 기록이 없는 경우(주소로 바로 열기)에만 껍데기를 새로 연다.
+   * 기록이 없는 경우(주소로 바로 열기)에만 껍데기(껍데기가 아니면 통화 목록)를 새로 연다.
    */
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/shell'));
+  const close = useShellExit('/calls');
+  useScreenHeader(useMemo(() => ({ title: '통화분석 등록', onBack: close }), [close]));
   /*
    * ⚠️ `onStarted` 는 목록 새로고침 자리인데, 여기서는 할 일이 없다 — 목록은 웹이 그리고
    * 껍데기로 돌아가면 웹이 제 주기로 다시 받는다. 🔴 **그렇다고 여기서 웹을 새로고침하지
