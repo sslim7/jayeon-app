@@ -20,6 +20,7 @@ import { ApiError } from '@/lib/api';
 import { useUserStore } from '@/store/user-store';
 import { clearSmsDraft, readSmsDraft, writeSmsDraft } from '@/lib/sms-draft';
 import { newSmsRequestId } from '@/lib/sms-dispatch';
+import { externalSendBatchNotice, externalSendBatchTime } from '@/lib/external-send-batch';
 import { utf8Length } from '@/lib/phone';
 import { matchesRecipientQuery } from '@/lib/recipient-search';
 import { attachmentApi, recipientApi, smsApi, templateApi } from '@/lib/sms-api';
@@ -63,8 +64,29 @@ export default function NewCampaignScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   // 예약·삭제는 발송 준비와 잠금이 달라 별도의 진행 상태를 쓴다.
-  const [sheet, setSheet] = useState<'reserve' | 'remove' | null>(null);
+  const [sheet, setSheet] = useState<'reserve' | 'remove' | 'external' | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  /*
+   * 일괄 발송처리에서 **아직 끝나지 않은 수신자별 요청**. 🔴 부분 실패 뒤 사용자가 다시 누를 때
+   * 새 요청으로 가면 서버의 멱등 판정이 걸리지 않는다 — 응답만 유실되고 등록은 이미 된 건이
+   * 한 번 더 집계되어, 되돌릴 수 없는 발송건수가 조용히 두 배가 된다.
+   *
+   * 🔴 **요청 id 만 들고 있으면 소용없다.** 서버의 멱등 지문은 id 단독이 아니라
+   * `sha256(recipientId + sentAt)` 이다. `sentAt` 을 다시 누를 때마다 새로 구하면 분이 넘어간
+   * 순간 지문이 **반드시** 어긋나, 멱등 성공(200)이 아니라 409 로 떨어진다. 그래서 시각까지
+   * 함께 얼려 둔다 — 1명씩 등록하는 길의 `PendingSend`(→ `components/external-send-registration.tsx`)가
+   * `{ requestId, sentAt }` 를 같이 저장하고 발송일시 칸을 얼려 두는 것과 **같은 이유, 같은 모양**이다.
+   *
+   * ⚠️ 이 맵은 시트를 닫았다 다시 열어도 살아남는다. 그래서 앞서 실패한 사람은 새로 고른 시각이
+   * 아니라 **처음 눌렀던 그 시각**으로 기록된다 — 의도한 동작이다. 재시도는 새 발송이 아니라
+   * 결과를 모르는 그 한 번을 완성하는 일이다.
+   */
+  const externalPending = useRef(new Map<string, { requestId: string; sentAt: string }>());
+  /*
+   * 확인 시트에 **보여 준 시각**. 🔴 표시와 실제 기록이 갈리면 안 된다 — 「되돌릴 수 없어요」라고
+   * 경고해 놓고 사용자가 읽은 것과 다른 값을 남기는 꼴이 된다. 시트를 열 때 한 번 정해 그대로 쓴다.
+   */
+  const [externalAt, setExternalAt] = useState<string | null>(null);
   const reservations = useReservations();
   // 응답 유실 시 같은 캠페인을 확인할 수 있도록 요청 당시 내용을 보존한다.
   const [pending, setPending] = useState<CreateCampaignInput | null>(null);
@@ -256,6 +278,48 @@ export default function NewCampaignScreen() {
     await reservations.reload();
   }
   /**
+   * 선택한 사람들을 **지금 보낸 것으로 한꺼번에 기록한다.** 실제 문자는 보내지 않는다 —
+   * 다른 곳(개인 휴대폰 등)에서 이미 보낸 발송을 이력에 남기는 일이다.
+   *
+   * 예약과는 무관하므로 `removeSelected` 와 달리 `reservations.reload()` 는 부르지 않는다.
+   */
+  async function externalSendSelected() {
+    setActionBusy(true);
+    setError('');
+    // 🔴 시각은 **시트에 보여 준 그 값**을 쓴다. 루프 안에서 다시 구하면 인원이 많을 때 한 번의
+    // 동작이 분 단위로 갈라져 기록되고, 나중에 이력에서 같은 발송으로 읽히지 않는다.
+    // ⚠️ `externalAt` 이 비어 있는 건 시트를 거치지 않고 들어왔다는 뜻 — 정상 경로가 아니지만
+    // 기록을 통째로 놓치는 것보다는 지금 시각으로라도 남기는 편이 낫다.
+    const batchAt = externalAt ?? externalSendBatchTime();
+    let done = 0;
+    let failed = 0;
+    let conflicted = 0;
+    for (const id of selected) {
+      // 다시 누른 건은 처음의 요청 id 와 시각을 **그대로** 재사용해야 지문이 맞아 멱등이 성립한다.
+      const request = externalPending.current.get(id) ?? { requestId: newSmsRequestId(), sentAt: batchAt };
+      externalPending.current.set(id, request);
+      try {
+        await recipientApi.registerExternal(id, request);
+        // 끝난 건은 지운다. 다음 「발송처리」는 **다른 발송**이므로 같은 요청으로 가면 서버가
+        // 멱등 응답을 돌려줘 새 기록이 아예 남지 않는다.
+        externalPending.current.delete(id);
+        done += 1;
+      } catch (e) {
+        // 시각까지 얼려 두므로 이제 거의 닿지 않는 길이지만 방어로 남긴다. 409 는 같은 요청 id 가
+        // 다른 일시로 이미 등록됐다는 뜻 — 앞선 시도가 서버에 닿았다는 증거이므로 실패와 섞지
+        // 않는다. 그 기록이 남아 있으니 요청을 놓아 주지 않으면 이 사람은 영원히 409 에 갇힌다.
+        if (e instanceof ApiError && e.status === 409) { externalPending.current.delete(id); conflicted += 1; }
+        else failed += 1;
+      }
+    }
+    setSheet(null);
+    setExternalAt(null);
+    setSelected([]);
+    setNotice(externalSendBatchNotice({ done, failed, conflicted }));
+    setActionBusy(false);
+    await load();
+  }
+  /**
    * 문자 작성을 그만둔다.
    *
    * 🔴 **나갈 길이 하나도 없던 자리다.** 「수신자 선택으로 돌아가기」는 흐름 **안에서** 한 걸음
@@ -294,6 +358,8 @@ export default function NewCampaignScreen() {
       <SmsButton fill label="발송하기" disabled={noSelection || overLimit} onPress={() => { setNotice(''); setStage('compose'); void openTemplates(); }} />
       <SmsButton fill secondary label="예약하기" disabled={noSelection || overLimit} onPress={() => { setNotice(''); setSheet('reserve'); }} />
       <SmsButton fill secondary danger label="삭제" disabled={noSelection} onPress={() => { setNotice(''); setSheet('remove'); }} />
+      {/* ⚠️ 50명 제한(`overLimit`)을 걸지 않는다 — 그 제한은 한 번에 실제로 **보내는** 양의 한계이고, 발송처리는 이미 보낸 것을 기록만 한다. */}
+      <SmsButton fill secondary label="발송처리" disabled={noSelection} onPress={() => { setNotice(''); setExternalAt(externalSendBatchTime()); setSheet('external'); }} />
     </ButtonRow>
   </View> : null;
   const listFooter = phone && stage === 'recipients';
@@ -330,6 +396,18 @@ export default function NewCampaignScreen() {
         {reservedSelected ? <Notice error message={`이 중 ${reservedSelected}명은 예약되어 있어요. 수신자를 지워도 이미 만들어진 예약은 남아 그대로 발송됩니다. 「예약 문자 보내기」에서 예약을 먼저 취소해 주세요.`} /> : null}
         <SmsButton label="삭제" accessibilityLabel="수신자 삭제 확인" danger secondary disabled={actionBusy} onPress={() => void removeSelected()} />
         <SmsButton label="취소" accessibilityLabel="수신자 삭제 취소" secondary disabled={actionBusy} onPress={() => setSheet(null)} />
+      </BottomSheet> : null}
+      {/*
+        🔴 **삭제와 같은 급의 조작이라 확인을 한 번 받는다.** 되돌리는 API 가 없어 한 번 등록하면
+        선택한 사람들의 누적 발송건수가 영구히 올라간다. 목록에서 체크 → 버튼 한 번으로 수십 명이
+        한꺼번에 처리되는 자리라, 잘못 누른 것을 알아차렸을 때는 이미 돌이킬 수 없다.
+      */}
+      {sheet === 'external' ? <BottomSheet title="발송처리" visible onClose={() => { setSheet(null); setExternalAt(null); }}>
+        <Notice message={`선택한 ${selected.length}명을 ${new Date(externalAt ?? externalSendBatchTime()).toLocaleString('ko-KR')}에 보낸 것으로 기록할까요?`} />
+        <Notice message="실제 문자는 보내지 않고, 다른 곳에서 이미 보낸 것으로 발송 기록만 남깁니다." />
+        <Notice error message="되돌릴 수 없어요." />
+        <SmsButton label="발송처리" accessibilityLabel="일괄 발송처리 확인" secondary disabled={actionBusy} onPress={() => void externalSendSelected()} />
+        <SmsButton label="취소" accessibilityLabel="일괄 발송처리 취소" secondary disabled={actionBusy} onPress={() => { setSheet(null); setExternalAt(null); }} />
       </BottomSheet> : null}
       {stage === 'recipients' ? <>
         <RecipientFilters groups={groups} group={group} onGroupChange={setGroup} query={query} onQueryChange={setQuery} />
