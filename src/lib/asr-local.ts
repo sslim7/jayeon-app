@@ -249,6 +249,11 @@ export function runLocalAsr(input: AsrLocalInput, options: AsrLocalOptions): Asr
             // 진행되지 않은 채 흘러가고, 돌아왔을 때 처음부터 다시 돈다.
             if (!deps.isForeground()) { background = true; break; }
 
+            // 🔴 **이 청크에 든 시간은 여기서부터 잰다.** 화면의 「N분 M초 경과」는 이어하기로
+            // 들어오면 기준점이 없어 0 부터 다시 세는데, 실제로는 20분을 이미 쓴 뒤일 수 있다.
+            // 벽시계(`updatedAt - startedAt`)로는 안 된다 — 멈춰 둔 시간과 백그라운드에서
+            // 얼어 있던 시간이 통째로 섞인다(→ `asr-local-types.ts` 의 `workedMs`).
+            const chunkStarted = deps.now();
             const handle = deps.transcribeChunk(
               session, state.wavUri, options.threads,
               { offsetMs: chunk.offsetMs, durationMs: chunk.durationMs },
@@ -275,12 +280,19 @@ export function runLocalAsr(input: AsrLocalInput, options: AsrLocalOptions): Asr
               14분째에 시작하는 대화로 보이는데, 그것이 「구간 없음」보다 나쁘다.
             */
             const collected = state.segments;
+            // ⚠️ 시각은 **한 번만** 읽는다. 여기서 두 번 부르면 누적 시간과 `updatedAt` 이
+            // 서로 다른 순간을 가리키고, 시계를 주입하는 테스트에서 그 차이가 그대로 드러난다.
+            const chunkEnded = deps.now();
             state = {
               ...state,
               pieces: [...state.pieces, result.text.trim()],
               ...(collected ? { segments: [...collected, ...asrChunkSegments(result.segments, chunk)] } : {}),
               nextOffsetMs: chunk.offsetMs + chunk.durationMs,
-              updatedAt: deps.now(),
+              // 🔴 **끝난 청크만 더한다.** 위에서 `result.aborted` 로 이미 빠져나갔으므로 돌다
+              // 만 청크는 여기 닿지 않는다. 옛 상태에는 이 값이 없고(`?? 0`), 그때는 앞부분에
+              // 쓴 시간을 되찾을 길이 없으므로 이번 실행분부터 센다.
+              workedMs: (state.workedMs ?? 0) + Math.max(0, chunkEnded - chunkStarted),
+              updatedAt: chunkEnded,
             };
             await deps.writeState(state);
             chunksRun += 1;

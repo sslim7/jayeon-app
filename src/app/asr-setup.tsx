@@ -49,7 +49,7 @@ export default function AsrSetupScreen() {
    */
   const exit = useShellExit('/settings');
   /** ⚠️ `useMemo` 는 멋이 아니다 — 매 렌더 새 객체를 넘기면 헤더가 매번 다시 올라간다. */
-  useScreenHeader(useMemo(() => ({ title: 'NPU 지원 기기확인', onBack: exit }), [exit]));
+  useScreenHeader(useMemo(() => ({ title: 'NPU 기기확인', onBack: exit }), [exit]));
 
   /**
    * 이 앱에서 받아쓰기를 할 수 있나 — **기기 성능이 아니라 「기능이 실려 있나」다.**

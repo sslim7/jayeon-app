@@ -9,6 +9,15 @@ import { recipientSentSummary, useRecipientTableColumns } from './recipient-tabl
 import { customSortKey, sortHeaderLabel, sortIndicator, type RecipientSort } from './recipient-table-sort';
 import type { RecipientTableProps } from './recipient-table-types';
 
+/**
+ * 네이티브 표. 열 순서는 웹과 같게 맞춰 두었다 — 이름 → 전화번호 → 사용자 정의 → 그룹 → 발송건수.
+ *
+ * ⚠️ **끌어서 순서를 바꾸거나 너비를 조절하는 조작은 일부러 넣지 않았다. 결함이 아니다.**
+ * 이 앱은 인증 뒤 화면을 배포된 웹으로 띄우는 껍데기라(→ `lib/shell-routes.ts`) 이 표는 껍데기를
+ * 끈 검증 빌드에서만 그려진다. 게다가 여기 고정 열은 `Animated` 로 가로 스크롤을 따라 움직이게
+ * 만든 구조라, 열을 옮길 수 있게 하려면 그 보정 계산을 전부 다시 짜야 한다 — 아무도 보지 않는
+ * 화면에 그 값을 치를 이유가 없다. 조작은 웹 표에만 있다(→ `recipient-table.web.tsx`).
+ */
 export function RecipientTable({ items, selectedIds, onSelectionChange, onHistory, disabled, onEdit, onRemove, includeSentFilter, reservedIds }: RecipientTableProps) {
   const { allInfo, compact, viewportWidth, setAllInfo, fields, rows, sort, toggleSort } = useRecipientTableColumns(items);
   const actions = !!onRemove;
@@ -34,8 +43,9 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
         <Animated.View style={[styles.fixedColumns, fixedStyle, { backgroundColor: colors.bg }]}>
         <Pressable accessibilityRole="checkbox" accessibilityLabel="전체 선택" aria-checked={mixed ? 'mixed' : all} accessibilityState={{ checked: mixed ? 'mixed' : all }} disabled={disabled || !rows.length} style={[styles.check, columns.check]} onPress={() => onSelectionChange(all ? selectedIds.filter((id) => !ids.includes(id)) : [...new Set([...selectedIds, ...ids])])}><Text>{all ? '☑' : mixed ? '▣' : '☐'}</Text></Pressable>
         <SortHeading label="이름" sortKey="name" sort={sort} onToggle={toggleSort} style={columns.name} cellStyle={[styles.cell, columns.cell]} />
-        </Animated.View><SortHeading label="전화번호" sortKey="phone" sort={sort} onToggle={toggleSort} style={columns.phone} cellStyle={[styles.cell, columns.cell]} /><SortHeading label="그룹" sortKey="group" sort={sort} onToggle={toggleSort} style={columns.group} cellStyle={[styles.cell, columns.cell]} /><SortHeading label="발송건수" sortKey="sent" sort={sort} onToggle={toggleSort} style={columns.date} cellStyle={[styles.cell, columns.cell]} />
+        </Animated.View><SortHeading label="전화번호" sortKey="phone" sort={sort} onToggle={toggleSort} style={columns.phone} cellStyle={[styles.cell, columns.cell]} />
         {fields.map((name) => <SortHeading key={name} label={name} sortKey={customSortKey(name)} sort={sort} onToggle={toggleSort} style={{ width: 140 }} cellStyle={styles.cell} />)}
+        <SortHeading label="그룹" sortKey="group" sort={sort} onToggle={toggleSort} style={columns.group} cellStyle={[styles.cell, columns.cell]} /><SortHeading label="발송건수" sortKey="sent" sort={sort} onToggle={toggleSort} style={columns.date} cellStyle={[styles.cell, columns.cell]} />
         {actions ? <Text style={[styles.cell, { width: compact ? 44 : 160 }]}>관리</Text> : null}
       </View>
       {rows.map((item) => <View key={item.id} style={[styles.row, { backgroundColor: selectedIds.includes(item.id) ? colors.sageRow : colors.card }]}>
@@ -47,9 +57,10 @@ export function RecipientTable({ items, selectedIds, onSelectionChange, onHistor
           {reservedIds?.has(item.id) ? <ReservedMark size={13} /> : null}
           {onEdit && !actions ? <Pressable accessibilityRole="button" accessibilityLabel={`${item.name} 수정`} disabled={disabled} onPress={() => onEdit(item)} style={styles.nameFill}><Text numberOfLines={1} style={[styles.cell, columns.cell, { color: colors.greenText, textDecorationLine: 'underline' }]}>{item.name}</Text></Pressable> : <Text numberOfLines={1} style={[styles.cell, columns.cell, styles.nameFill]}>{item.name}</Text>}
         </View>
-        </Animated.View><Text style={[styles.cell, columns.cell, columns.phone]}>{formatPhone(item.phone)}</Text><Text style={[styles.cell, columns.cell, columns.group]}>{item.groupId || '—'}</Text>
-        {item.sentCount ? <Pressable accessibilityRole="button" accessibilityLabel={`${item.name} 발송 이력 보기`} style={columns.date} onPress={() => onHistory(item)}><Text style={[styles.cell, columns.cell, { color: colors.greenText, textDecorationLine: 'underline' }]}>{recipientSentSummary(item)}</Text></Pressable> : <View style={columns.date} />}
+        </Animated.View><Text style={[styles.cell, columns.cell, columns.phone]}>{formatPhone(item.phone)}</Text>
         {fields.map((name) => <Text key={name} style={[styles.cell, { width: 140 }]}>{item.customFields?.find((field) => field.name === name)?.value || '—'}</Text>)}
+        <Text style={[styles.cell, columns.cell, columns.group]}>{item.groupId || '—'}</Text>
+        {item.sentCount ? <Pressable accessibilityRole="button" accessibilityLabel={`${item.name} 발송 이력 보기`} style={columns.date} onPress={() => onHistory(item)}><Text style={[styles.cell, columns.cell, { color: colors.greenText, textDecorationLine: 'underline' }]}>{recipientSentSummary(item)}</Text></Pressable> : <View style={columns.date} />}
         {actions ? <View style={{ width: compact ? 44 : 160, flexDirection: compact ? 'column' : 'row', gap: 4 }}>
           {onEdit ? <Pressable accessibilityRole="button" accessibilityLabel={`${item.name} 수정`} disabled={disabled} onPress={() => onEdit(item)} style={{ padding: 4 }}><Text style={{ ...fonts.body, fontSize: text.base, color: colors.greenText }}>수정</Text></Pressable> : null}
           {onRemove ? <Pressable accessibilityRole="button" accessibilityLabel={`${item.name} 삭제`} disabled={disabled} onPress={() => onRemove(item)} style={{ padding: 4 }}><Text style={{ ...fonts.body, fontSize: text.base, color: colors.red }}>삭제</Text></Pressable> : null}

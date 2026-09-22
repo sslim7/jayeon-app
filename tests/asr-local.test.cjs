@@ -17,7 +17,7 @@ const load = (file, mocks = {}) => {
 
 // 🔴 순수 계산은 **실제 구현을 그대로** 쓴다. 가짜로 바꾸면 청크 경계를 검사하는 의미가 없다.
 const types = load('src/lib/asr-local-types.ts');
-const { ASR_CHUNK_MS, asrChunks, asrChunkCount, asrChunkAt, asrChunkSegments, asrLocalRatio, asrLocalText, resumableState, isAsrLocalState, freshAsrLocalState } = types;
+const { ASR_CHUNK_MS, ASR_STATE_VERSION, asrChunks, asrChunkCount, asrChunkAt, asrChunkSegments, asrLocalRatio, asrLocalText, resumableState, isAsrLocalState, freshAsrLocalState } = types;
 
 const TOTAL = 600_000; // 10분 = 120초짜리 5청크
 const CALL_ID = 'call-1';
@@ -556,4 +556,76 @@ test('옛 상태를 이어받으면 구간을 모으지 않는다 — 앞이 빠
   */
   assert.equal(result.segments.length, 0);
   assert.equal(harness.state(), null);
+});
+
+/* ── 실제로 일한 시간 ──────────────────────────────────────────────────
+   🔴 화면의 「N분 M초 경과」는 이어하기로 들어오면 0 부터 다시 셌다. 20분을 이미 쓴 사람이
+   그 숫자를 보면 「처음부터 다시 도는구나」로 읽는다. 기준점이 될 값을 엔진이 남긴다.
+   ⚠️ 여기서는 **시계를 테스트가 쥔다**: `now()` 는 값을 그대로 돌려주고, 청크가 시작될 때
+   그 청크에 걸릴 시간만큼 앞으로 민다. 그래야 「몇 번 물었나」가 아니라 「얼마나 걸렸나」를 잰다.
+   ─────────────────────────────────────────────────────────────────── */
+
+test('끝난 청크에 쓴 시간만 `workedMs` 에 쌓인다', async () => {
+  let clock = 100_000;
+  const spent = [5_000, 7_000, 9_000];
+  // 세 번째 청크는 9초를 쓰고도 끝내지 못했다(백그라운드로 밀렸을 때의 모양).
+  const harness = setup({ chunk: index => { clock += spent[index]; return index === 2 ? { aborted: true } : {}; } });
+  harness.deps.now = () => clock;
+  const result = await run(harness).handle.promise;
+  assert.equal(result.done, false);
+
+  const saved = harness.state();
+  assert.deepEqual(saved.pieces, ['조각0', '조각1']);
+  // 5초 + 7초. 🔴 돌다 만 청크의 9초는 들어 있지 않다 — 그 2분은 어차피 다시 돈다.
+  assert.equal(saved.workedMs, 12_000);
+});
+
+test('이어하면 앞 실행이 쓴 시간에 이어서 쌓인다', async () => {
+  let clock = 500_000;
+  const harness = setup({ chunk: index => { clock += 3_000; return index === 1 ? { aborted: true } : {}; } });
+  harness.seedState({
+    version: 1, callId: CALL_ID, wavUri: WAV, sourceName: '통화.m4a', sourceBytes: 1000,
+    modelId: 'q8_0', totalMs: TOTAL, nextOffsetMs: 240_000, pieces: ['먼저0', '먼저1'],
+    workedMs: 1_200_000, startedAt: 1, updatedAt: 2,
+  });
+  harness.deps.now = () => clock;
+  await run(harness).handle.promise;
+  // 🔴 앞 실행의 20분을 그대로 이어받는다. 여기서 덮어쓰면 화면이 다시 0 분부터 센다.
+  assert.equal(harness.state().workedMs, 1_203_000);
+});
+
+test('경과 시간 필드가 없는 옛 상태도 그대로 읽힌다 — 버전은 1 그대로다', () => {
+  const old = {
+    version: 1, callId: CALL_ID, wavUri: WAV, sourceName: '통화.m4a', sourceBytes: 1000,
+    modelId: 'q8_0', totalMs: TOTAL, nextOffsetMs: 240_000, pieces: ['가', '나'], startedAt: 1, updatedAt: 2,
+  };
+  /*
+    🔴 **버전을 올리지 않았다.** 올렸으면 실기기에서 진행 중인 받아쓰기가 전부 버려져 28분을
+    처음부터 다시 돈다 — `segments` 를 더할 때와 같은 판단이다. 대신 새 필드는 없어도 되는
+    값으로 두고, 없으면 「앞부분에 쓴 시간을 모른다」로 읽는다.
+  */
+  assert.equal(ASR_STATE_VERSION, 1);
+  assert.equal(old.workedMs, undefined);
+  assert.equal(isAsrLocalState(old), true);
+  assert.notEqual(resumableState(old, input()), null);
+  // 새로 시작하는 쪽은 0 으로 연다. 그때는 기준값이 0 이라 예전과 똑같이 보인다.
+  assert.equal(freshAsrLocalState(input(), 1).workedMs, 0);
+  // 모양이 깨진 값은 거른다. 음수나 NaN 이 들어오면 화면의 경과 시간이 뒤로 가거나 `NaN분` 이 된다.
+  assert.equal(isAsrLocalState({ ...old, workedMs: -1 }), false);
+  assert.equal(isAsrLocalState({ ...old, workedMs: Number.NaN }), false);
+  assert.equal(isAsrLocalState({ ...old, workedMs: '10' }), false);
+  assert.equal(isAsrLocalState({ ...old, workedMs: 10 }), true);
+});
+
+test('옛 상태를 이어받으면 이번 실행분부터 센다 — 모르는 시간을 지어내지 않는다', async () => {
+  let clock = 700_000;
+  const harness = setup({ chunk: index => { clock += 4_000; return index === 1 ? { aborted: true } : {}; } });
+  harness.seedState({
+    version: 1, callId: CALL_ID, wavUri: WAV, sourceName: '통화.m4a', sourceBytes: 1000,
+    modelId: 'q8_0', totalMs: TOTAL, nextOffsetMs: 240_000, pieces: ['먼저0', '먼저1'], startedAt: 1, updatedAt: 2,
+  });
+  harness.deps.now = () => clock;
+  await run(harness).handle.promise;
+  // 앞의 4분치에 쓴 시간은 되찾을 길이 없다. 지어내는 대신 이번에 끝낸 한 청크만 센다.
+  assert.equal(harness.state().workedMs, 4_000);
 });

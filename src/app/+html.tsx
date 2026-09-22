@@ -47,8 +47,24 @@ const FONT_HREF =
  * React 트리가 아직 없는 구간이 전부 그 흰색으로 보인다 — 종이색 화면 옆에서 유독 튄다.
  * `#root` 까지 함께 칠하는 이유는 expo-router 가 앱을 그 안에 마운트하기 때문이다.
  */
+/**
+ * 파일 선택 버튼은 브라우저가 그리는 `::file-selector-button` 이라 **인라인 style 로는 닿지
+ * 않는다.** 기본값은 높이 24px 남짓이라 이 앱의 다른 버튼들(`minHeight: 48`) 옆에서 혼자
+ * 작고, 손가락으로 누르기에도 작다. 여기서 같은 규격으로 맞춘다.
+ *
+ * ⚠️ 색을 토큰에서 읽지 않고 적어 둔 것은 이 파일의 다른 상수들과 같은 이유다(위 `PAGE_BG`
+ * 머리말). `constants/theme.ts` 의 `colors.card`·`colors.ink`·`colors.borderStrong`·
+ * `radii.button` 과 **같은 값이어야 한다** — 한쪽만 바꾸면 이 버튼만 색이 어긋난다.
+ */
+const FILE_INPUT_CSS = `input[type="file"]{font:inherit;font-size:15px;color:#1E3A2F}
+input[type="file"]::file-selector-button{min-height:48px;padding:0 18px;margin-right:12px;`
+  + `font:inherit;font-size:15px;font-weight:600;color:#1E3A2F;`
+  + `background:#FDFBF7;border:1px solid rgba(30,58,47,0.14);border-radius:14px;cursor:pointer}
+input[type="file"]:disabled::file-selector-button{opacity:0.5;cursor:default}`;
+
 const PAGE_CSS = `html,body,#root{background-color:${PAGE_BG}}
-body{margin:0}`;
+body{margin:0}
+${FILE_INPUT_CSS}`;
 
 export default function Root({ children }: { children: ReactNode }) {
   return (

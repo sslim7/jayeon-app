@@ -33,10 +33,14 @@ export function RecipientRegistrationSheet({ recipient, onClose, onSaved }: { re
     } catch (e) { setError(smsError(e)); }
     finally { lock.current = false; setBusy(false); }
   }
-  return <BottomSheet title={recipient ? '수신자 수정' : '수신자 등록'} visible onClose={() => { if (!busy && !externalBusy) onClose(); }} headerActions={recipient ? <SmsButton label="발송등록" secondary disabled={busy || externalBusy} onPress={() => { setExternalOpen(true); setExternalKey((value) => value + 1); }} /> : undefined}>
+  return <BottomSheet title={recipient ? '수신자 수정' : '수신자 등록'} visible onClose={() => { if (!busy && !externalBusy) onClose(); }} headerActions={recipient
+    ? <SmsButton label="발송등록" secondary disabled={busy || externalBusy} onPress={() => { setExternalOpen(true); setExternalKey((value) => value + 1); }} />
+    // 엑셀 가져오기는 「수신자 한 명 적기」와 나란한 선택지가 아니라 **그 화면 전체를 갈아 끼우는**
+    // 전환이다. 본문에 폭 전체로 두면 이름 칸 바로 위에 앉아 입력 흐름을 끊는다. 「발송등록」이
+    // 수정 화면에서 쓰는 자리와 같은 곳(닫기 왼쪽)으로 올린다.
+    : <SmsButton label="엑셀 가져오기" secondary disabled={busy || externalBusy} onPress={() => setImportOpen(!importOpen)} />}>
     {details ? <View style={s.card}><Text style={s.body}>발송건수: {details.sentCount ?? 0}건</Text><Text style={s.body}>최종발송일시: {details.latestSentAt ? new Date(details.latestSentAt).toLocaleString('ko-KR') : '없음'}</Text></View> : null}
     {recipient && externalOpen ? <><Notice message={`기록 대상: ${recipient.name} · ${formatPhone(recipient.phone)}. 수정 중인 이름·번호는 저장한 뒤 적용됩니다.`} /><ExternalSendRegistration key={externalKey} recipientId={recipient.id} onBusy={setExternalBusy} onSaved={(updated) => { setDetails(updated); onSaved(); }} /></> : null}
-    {!recipient ? <SmsButton label="엑셀 가져오기" secondary disabled={busy || externalBusy} onPress={() => setImportOpen(!importOpen)} /> : null}
     {importOpen ? <RecipientImportPanel onSaved={onSaved} /> : <>
       <TextField label="이름" value={form.name} maxLength={100} editable={!busy && !externalBusy} onChangeText={(name) => setForm({ ...form, name })} />
       <TextField label="전화번호" value={form.phone} keyboardType="phone-pad" editable={!busy && !externalBusy} onChangeText={(phone) => setForm({ ...form, phone })} />

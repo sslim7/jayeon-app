@@ -65,7 +65,8 @@
     "test:calls": "node --test tests/call-*.test.cjs",
     "test:asr": "node --test tests/asr-*.test.cjs",
     "test:attach": "node --test tests/attachment-*.test.cjs",
-    "test:sms-origin": "node --test tests/sms-origin.test.cjs"
+    "test:sms-origin": "node --test tests/sms-origin.test.cjs",
+    "test:columns": "node --test tests/recipient-columns.test.cjs"
   },
   "private": true
 }
