@@ -88,6 +88,21 @@ export type AsrLocalState = {
    * └────────────────────────────────────────────────────────────────────────────┘
    */
   segments?: AsrLocalSegment[];
+  /**
+   * 끝난 청크들에 **실제로 쓴 시간의 합**(ms).
+   *
+   * 🔴 **벽시계로 잰 `updatedAt - startedAt` 과 다르다.** 그 사이에는 사용자가 멈춰 둔 시간,
+   * 앱이 백그라운드에서 얼어 있던 시간이 통째로 들어간다. 여기에는 **완료된 청크에 든 시간만**
+   * 쌓는다 — 돌다 만 청크는 어차피 다시 도므로 세지 않는다(`pieces` 와 같은 규칙이다).
+   *
+   * ┌────────────────────────────────────────────────────────────────────────────┐
+   * │ 🔴 **없을 수 있다.** 이 필드가 생기기 전에 저장된 상태에는 아예 없고, 그때 **버전을     │
+   * │ 올리지 않았다** — 올렸으면 실기기에서 진행 중인 받아쓰기가 전부 버려져 28분을 처음부터 │
+   * │ 다시 돈다(`segments` 때와 같은 판단이다, 위 `ASR_STATE_VERSION` 주석). 없다는 것은   │
+   * │ 「앞부분에 쓴 시간을 모른다」는 뜻이고, 그때는 **이번 실행분부터만** 센다.             │
+   * └────────────────────────────────────────────────────────────────────────────┘
+   */
+  workedMs?: number;
   startedAt: number;
   updatedAt: number;
 };
@@ -231,6 +246,7 @@ export function freshAsrLocalState(input: AsrLocalInput, now: number): AsrLocalS
     // 새로 시작하는 받아쓰기는 **반드시 빈 배열로** 연다. `undefined` 로 두면 「옛 상태를
     // 이어받았다」와 구분이 안 되어 구간을 한 개도 모으지 않는다(→ `asr-local.ts`).
     segments: [],
+    workedMs: 0,
     startedAt: now,
     updatedAt: now,
   };
@@ -249,6 +265,9 @@ export function isAsrLocalState(value: unknown): value is AsrLocalState {
   // 🔴 **없는 것은 통과시킨다.** 구간을 모으기 전에 저장된 상태에는 이 필드가 없는데, 여기서
   // 막으면 실기기에 남아 있는 진행 중인 받아쓰기가 전부 「깨진 파일」이 되어 처음부터 돈다.
   if (state.segments !== undefined && !isAsrSegmentList(state.segments)) return false;
+  // 🔴 같은 이유로 `workedMs` 도 **없으면 통과**다. 있을 때만 모양을 본다 — 음수나 NaN 이
+  // 들어오면 화면의 「N분 M초 경과」가 뒤로 가거나 `NaN분` 이 된다.
+  if (state.workedMs !== undefined && !(number('workedMs') && (state.workedMs as number) >= 0)) return false;
   return (state.nextOffsetMs as number) >= 0 && (state.totalMs as number) > 0;
 }
 

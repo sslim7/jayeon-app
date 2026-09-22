@@ -95,6 +95,13 @@ export function CallAsrRun({ callId, model, sourceUri, sourceName, sourceBytes }
   /** 전송만 실패한 상태의 「처음부터 다시」는 되돌릴 수 없다. 한 번 더 묻는다. */
   const [restarting, setRestarting] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
+  /**
+   * 앞선 실행들이 **끝난 청크에 실제로 쓴 시간**(ms). 이어하기가 아니면 0 이다.
+   *
+   * 🔴 **실행이 시작될 때 딱 한 번 읽는다**(→ `prepare`). 도는 중에 저장된 `workedMs` 를 다시
+   * 읽으면 이번 실행에서 끝낸 청크가 여기와 `elapsedMs` 양쪽에 들어가 **두 번 세어진다.**
+   */
+  const [priorWorkMs, setPriorWorkMs] = useState(0);
   const [backgrounded, setBackgrounded] = useState(false);
   /** 끝난 청크들의 실측 소요 시간. 🔴 남은 시간 추정의 **본 자료**다(→ `lib/asr-eta.ts`). */
   const [samples, setSamples] = useState<AsrEtaSample[]>([]);
@@ -140,6 +147,16 @@ export function CallAsrRun({ callId, model, sourceUri, sourceName, sourceBytes }
     const timer = setInterval(() => setElapsedMs(Date.now() - startedAt.current), 500);
     return () => clearInterval(timer);
   }, [phase]);
+
+  /**
+   * 화면이 말하는 「N분 M초 경과」.
+   *
+   * 🔴 **이번 실행분만 보여 주면 이어하기에서 거짓말이 된다.** 20분을 받아쓰다 멈춘 사람이
+   * 이어하면 화면은 0초부터 다시 세는데, 그 숫자를 보고 「처음부터 다시 도는구나」로 읽는다.
+   * 그래서 앞선 실행들이 쓴 시간을 앞에 붙인다. ⚠️ 이어하기가 아니면 `priorWorkMs` 가 0 이라
+   * 예전과 한 글자도 다르지 않다.
+   */
+  const workedMs = priorWorkMs + elapsedMs;
 
   /**
    * 화면을 떠나면 반드시 멈춘다.
@@ -235,6 +252,10 @@ export function CallAsrRun({ callId, model, sourceUri, sourceName, sourceBytes }
     const previous = fresh ? null : await loadAsrLocalState(callId);
     if (previous && (await callWavExists(callId))) {
       setSaved(previous);
+      // 🔴 **경과 시간의 기준점을 여기서, 이 실행에 한 번만 잡는다.** 없는 값(`undefined`)은
+      // 이 필드가 생기기 전에 저장된 상태라는 뜻이고, 그때는 앞에 쓴 시간을 되찾을 수 없으므로
+      // 0 부터 센다 — 모르는 시간을 지어내지 않는다(→ `lib/asr-local-types.ts` 의 `workedMs`).
+      setPriorWorkMs(previous.workedMs ?? 0);
       return {
         callId, wavUri: previous.wavUri, sourceName: previous.sourceName,
         sourceBytes: previous.sourceBytes, modelId: previous.modelId, totalMs: previous.totalMs,
@@ -274,7 +295,7 @@ export function CallAsrRun({ callId, model, sourceUri, sourceName, sourceBytes }
   const begin = useCallback(async (fresh: boolean) => {
     if (lock.current || !supported || !callId) return;
     lock.current = true;
-    setFailure(null); setNotice(''); setStopped(null); setQuitting(false); setRestarting(false); setBackgrounded(false); setElapsedMs(0);
+    setFailure(null); setNotice(''); setStopped(null); setQuitting(false); setRestarting(false); setBackgrounded(false); setElapsedMs(0); setPriorWorkMs(0);
     // 🔴 이어하기는 **새 실행**이다. 표시를 그대로 두면 앞 실행이 멈춰 있던 시간까지 이번
     // 청크의 소요로 세어 「청크당 4분」 같은 값이 나온다.
     mark.current = null;
@@ -439,7 +460,7 @@ export function CallAsrRun({ callId, model, sourceUri, sourceName, sourceBytes }
       <Text style={s.subtitle}>
         {phase === 'converting' ? '받아쓰기용으로 바꾸는 중' : phase === 'transcribing' ? '받아쓰는 중' : '서버로 보내는 중'}
       </Text>
-      <Text accessibilityLiveRegion="polite" style={s.body}>{Math.floor(elapsedMs / 60000)}분 {Math.floor(elapsedMs / 1000) % 60}초 경과</Text>
+      <Text accessibilityLiveRegion="polite" style={s.body}>{Math.floor(workedMs / 60000)}분 {Math.floor(workedMs / 1000) % 60}초 경과</Text>
       {/*
         🔴 **막대는 끝난 청크로만 그린다.** whisper 가 주는 청크 안 진행률(0~100)을 전체에
         섞어 넣으면 우리가 센 적 없는 숫자가 된다. 그래서 두 값을 **따로** 보여 준다 —
