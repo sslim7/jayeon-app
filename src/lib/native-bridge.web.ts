@@ -36,6 +36,14 @@ type NativeShellInfo = {
    * 읽어야 한다 — 있다고 가정하면 그 껍데기에서 죽은 입구가 선다.
    */
   navigateRoutes?: string[];
+  /**
+   * 이 껍데기가 한 번에 받아 줄 수 있는 메시지 크기(→ `components/web-shell.tsx`).
+   *
+   * ⚠️ **옛 껍데기에는 이 값이 없다.** 그래서 선택 항목이고, 없으면 「그 시절 상한(64KB)」
+   * 으로 읽어야 한다 — 넉넉하다고 가정하면 첨부를 실은 발송 메시지가 그 껍데기에서 조용히
+   * 버려진다(→ `lib/sms-device.web.ts` 의 `shellMessageMaxBytes`).
+   */
+  messageMaxBytes?: number;
 };
 
 declare global {

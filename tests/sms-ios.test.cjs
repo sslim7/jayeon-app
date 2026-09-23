@@ -20,12 +20,18 @@ const fs = require('node:fs');
 const ts = require('typescript');
 const vm = require('node:vm');
 
-function load(file, sandbox = { Error, Set }) {
+/**
+ * 🔴 **가져오는 모듈도 진짜를 읽어 넘긴다.** 러너는 첨부 한도와 base64 계산을
+ * `lib/attachment-file` 에서 가져오는데, 그 자리에 가짜를 물리면 한도가 어긋나도 여기서는
+ * 통과한다. `@/lib/x` 를 실제 파일로 되돌려 같은 규칙을 그대로 태운다.
+ */
+function load(file, sandbox = { Error, Set, Math, Number }) {
   const mod = { exports: {} };
   const compiled = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  vm.runInNewContext(`(function(exports){${compiled}\n})`, sandbox)(mod.exports);
+  const shim = name => load(name.replace(/^@\//, 'src/') + '.ts', sandbox);
+  vm.runInNewContext(`(function(exports, require){${compiled}\n})`, sandbox)(mod.exports, shim);
   return mod.exports;
 }
 

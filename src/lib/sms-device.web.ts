@@ -12,10 +12,41 @@ type SmsBridgeWindow = Window & {
 const pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>();
 let sequence = 0;
 
+function shellInfo(): { platform?: string; smsApiVersion?: number; messageMaxBytes?: number } | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return window.__NATURE_NATIVE__ ?? window.__JAYEON_NATIVE__;
+}
+
 function supportedShell(): boolean {
   if (typeof window === 'undefined') return false;
-  const info = (window.__NATURE_NATIVE__ ?? window.__JAYEON_NATIVE__) as { platform?: string; smsApiVersion?: number } | undefined;
+  const info = shellInfo();
   return info?.platform === 'android' && info.smsApiVersion === 1 && !!window.ReactNativeWebView;
+}
+
+/**
+ * 옛 껍데기의 메시지 상한. **껍데기가 자기 값을 밝히지 않을 때 쓰는 가정이다.**
+ *
+ * 🔴 **낙관적으로 잡으면 안 된다.** 09-17 이후의 껍데기는 웹이 보낸 원문이 64KB 를 넘으면
+ * **통째로 버렸고**, 첨부는 base64 로 그 통로를 건넌다 — 첨부 47.7KB 부터 발송 메시지가
+ * 사라졌고 서버의 수신자는 `SENDING` 으로 잠긴 채 남았다(2026-09-23). 값을 밝히는 껍데기가
+ * 나오기 전에 깔린 빌드가 지금 사용자 폰에 있으므로, **모르면 그 시절 상한으로 본다.**
+ * 그러면 **웹만 배포해도** 그 폰에서 큰 첨부가 갇히는 대신 발송 직전에 분명한 문구로
+ * 실패한다(→ `lib/sms-runner.ts`).
+ *
+ * 📌 껍데기 밖(그냥 브라우저)에서도 이 값이 나오지만 아무 일도 하지 않는다 — 거기서는
+ * 발송이 단말 능력 확인에서 이미 막힌다(아래 `supportedShell`).
+ */
+const LEGACY_SHELL_MESSAGE_MAX_BYTES = 64 * 1024;
+
+/**
+ * 이 껍데기가 한 번에 받아 줄 수 있는 메시지 크기(→ `components/web-shell.tsx` 의
+ * `SHELL_MESSAGE_MAX_BYTES`). 밝히지 않는 껍데기·브라우저에서는 옛 상한으로 가정한다.
+ */
+export function shellMessageMaxBytes(): number {
+  const declared = shellInfo()?.messageMaxBytes;
+  return typeof declared === 'number' && Number.isFinite(declared) && declared > 0
+    ? declared
+    : LEGACY_SHELL_MESSAGE_MAX_BYTES;
 }
 
 // SMS 응답은 별도 수신구로 받는다. 기존 라우팅/인증 메시지 형식을 바꾸지 않는다.

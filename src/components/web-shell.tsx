@@ -32,6 +32,7 @@ import { ENV } from '@/config/env';
 import { APP_VERSION } from '@/constants/app-meta';
 import { colors, fonts, radii, text } from '@/constants/theme';
 import { PASSWORD_CHANGED_NOTICE, useUserStore } from '@/store/user-store';
+import { ATTACHMENT_TOTAL_MAX_BYTES } from '@/lib/attachment-file';
 import { getStoredTokens, isStoredTokens, saveTokens, type StoredTokens } from '@/lib/auth-tokens';
 import { handleSmsRequest, type SmsShellRequest } from '@/lib/sms-shell-handler';
 import { startCallService } from '@/lib/call-runtime';
@@ -59,6 +60,41 @@ const TOKENS_KEY = 'jayeon.tokens';
  * 막는 장치라 서로 다른 시간을 쓸 이유가 없다.
  */
 const READY_FALLBACK_MS = 8000;
+
+/**
+ * 웹이 보낸 원문에 거는 상한. **숫자를 손으로 적지 않는다 — 첨부 한도에서 파생시킨다.**
+ *
+ * 🔴 **이 다리로 첨부가 지나간다.** 상한 자체는 메모리 보호 장치로 들어왔는데(09-17
+ * `8d431ba`), 그때 첨부가 base64 로 같은 통로를 건넌다는 것이 계산에 없었다. 그 바람에
+ * 64KB 고정 상한이 **첨부 47.7KB 부터** 발송 메시지를 통째로 버렸고, 버려진 요청은 웹에서
+ * 150초 뒤에야 거절되는데 그때는 이미 서버의 수신자가 `SENDING` 으로 잠긴 뒤라 결과를
+ * 저장할 기회가 없다 — 「발송 중 · 확인 필요」에 영원히 매달린다(2026-09-23, 3회 연속 실패).
+ *
+ * 그래서 폭을 **붙일 수 있는 첨부 합계**에서 되짚어 만든다: base64 는 3바이트를 4글자로
+ * 적으므로 ×4/3 하고, 본문·수신자·파일 이름·JSON 포장 몫을 얹는다. `ATTACHMENT_TOTAL_MAX_BYTES`
+ * 가 바뀌면 **여기가 따라 움직인다** — 한도를 올려 놓고 이 다리만 좁은 채로 남는 일이
+ * 다시 생기지 않게 하는 것이 이 파생의 전부다.
+ *
+ * ⚠️ **무제한으로 열지 않는다.** 원래 취지(브리지 입력은 그대로 파싱되므로 크기만큼 메모리를
+ * 먹는다)는 그대로다 — 붙일 수 있는 최대치보다 한 뼘 넉넉할 뿐이다.
+ *
+ * 📌 여기서 재는 것은 바이트가 아니라 **JS 문자열 길이**다. 덩치를 정하는 base64 는 ASCII 라
+ * 1글자 = 1바이트로 같고, 한글 본문은 글자당 UTF-8 3바이트라 오히려 적게 세어진다. 아래
+ * 포장 몫이 그 차이를 덮는다.
+ */
+const SHELL_MESSAGE_ENVELOPE_BYTES = 64 * 1024;
+const SHELL_MESSAGE_MAX_BYTES =
+  Math.ceil((ATTACHMENT_TOTAL_MAX_BYTES * 4) / 3) + SHELL_MESSAGE_ENVELOPE_BYTES;
+
+/**
+ * 크기 초과로 버리기 전에 `requestId` 를 찾아볼 앞부분 길이.
+ *
+ * ⚠️ **정규식을 원문 전체에 돌리지 않는다.** 여기 오는 문자열은 2MB 에 가까울 수 있고,
+ * 그런 값에 정규식을 걸면 「사고를 알리는 코드」가 그 자체로 멈춤이 된다. 웹이 만드는
+ * 봉투는 `{"type":"sms","requestId":"…"` 로 시작하므로(→ `lib/sms-device.web.ts` 의
+ * `invoke`) 앞 300자면 충분하다.
+ */
+const MESSAGE_HEAD_CHARS = 300;
 
 /** 주소를 오리진과 그 뒤(경로·쿼리·해시)로 가른 결과. */
 type UrlParts = { origin: string; rest: string };
@@ -173,6 +209,20 @@ function buildInjectedScript(tokens: StoredTokens | null): string {
     appVersion: APP_VERSION,
     smsApiVersion: 1,
     navigateRoutes: SHELL_NATIVE_ROUTES,
+    /*
+     * 🔴 **이 껍데기가 한 번에 받을 수 있는 메시지 크기.** 첨부는 이 다리를 base64 로
+     * 건너므로, 웹은 이 값을 읽어 **발송 직전에** 건널 수 없는 첨부를 가려낸다
+     * (→ `lib/sms-device.web.ts` 의 `shellMessageMaxBytes`,
+     *   `lib/image-shrink-plan.ts` 의 `bridgeAttachmentBudget`,
+     *   `lib/sms-runner.ts` 의 `bridgeOversizeMessage`).
+     *
+     * 🔴 **값이 없는 옛 껍데기가 이 설계의 핵심이다.** 스토어를 거치지 않는 웹만 배포해도,
+     * 옛 껍데기에서는 웹이 이 값을 못 읽고 **64KB 로 가정**한다 — 지금 실제 폰에 깔려 있는
+     * 09-20 빌드가 정확히 그 경우다. 그 폰에서는 큰 첨부가 **갇히는 대신 한도와 실제 크기를
+     * 적은 문구로 실패**한다. APK 를 다시 깔아야 하는 것은 **더 큰 첨부를 실제로 보내고
+     * 싶을 때뿐이다.**
+     */
+    messageMaxBytes: SHELL_MESSAGE_MAX_BYTES,
   });
 
   /*
@@ -331,11 +381,41 @@ export function WebShell() {
     setLoading(false);
   }
 
+  /** SMS 요청에 답을 되돌려 준다. 웹의 `pending` 이 이 한마디로 풀린다. */
+  function replySms(reply: object) {
+    ref.current?.injectJavaScript(
+      `(window.__NATURE_SMS_BRIDGE__ || window.__JAYEON_SMS_BRIDGE__)?.receive(${JSON.stringify(reply)}); true;`,
+    );
+  }
+
+  /**
+   * 크기 초과로 버리는 메시지가 **SMS 요청이었다면 즉시 거절을 되돌려 준다.**
+   *
+   * 🔴 **조용히 버리는 것이 원래 버그보다 나빴다.** 답이 없으면 웹은 150초를 기다리는데,
+   * 그동안 서버의 수신자는 `SENDING` 으로 잠겨 있고 타임아웃이 온 뒤에는 결과를 쓸 자리가
+   * 없다 — 그 한 명은 영원히 「발송 중 · 확인 필요」로 남는다. 지금 거절하면 러너가 그
+   * 자리에서 실패로 닫고 사용자는 무엇을 해야 하는지 듣는다.
+   *
+   * 파싱하지 않고 앞부분만 훑는 것은, 파싱할 수 없을 만큼 크다는 것이 애초에 버리는
+   * 이유이기 때문이다. `requestId` 를 못 찾으면 예전처럼 조용히 버린다 — SMS 가 아닌
+   * 다른 메시지일 수 있고, 그쪽에는 되돌려 줄 수신구가 없다.
+   */
+  function rejectOversizeSms(raw: string) {
+    const head = raw.slice(0, MESSAGE_HEAD_CHARS);
+    if (!/"type"\s*:\s*"sms"/.test(head)) return;
+    const requestId = /"requestId"\s*:\s*"([^"\\]{1,150})"/.exec(head)?.[1];
+    if (!requestId) return;
+    // 사용자가 다음에 무엇을 할지 알 수 있어야 한다 — 「너무 큽니다」로 끝내지 않는다.
+    replySms({ requestId, error: '첨부가 너무 커서 앱으로 보낼 수 없어요. 더 작은 이미지로 바꿔 주세요.' });
+  }
+
   function handleMessage(raw: string) {
     let message: ShellMessage;
     // 웹이 보낸 원문에 상한을 둔다. 브리지 입력은 그대로 파싱되므로 크기를 재지 않으면 메모리를 그만큼 먹는다.
-    if (typeof raw !== 'string' || raw.length > 64 * 1024) {
+    // 상한은 첨부 합계에서 파생된다(→ `SHELL_MESSAGE_MAX_BYTES`) — 여기만 좁게 남으면 첨부가 조용히 사라진다.
+    if (typeof raw !== 'string' || raw.length > SHELL_MESSAGE_MAX_BYTES) {
       console.warn('[web-shell] 웹 메시지 크기 초과');
+      if (typeof raw === 'string') rejectOversizeSms(raw);
       return;
     }
     try {
@@ -346,9 +426,7 @@ export function WebShell() {
     }
     switch (message?.type) {
       case 'sms':
-        void handleSmsRequest(message).then((reply) => {
-          ref.current?.injectJavaScript(`(window.__NATURE_SMS_BRIDGE__ || window.__JAYEON_SMS_BRIDGE__)?.receive(${JSON.stringify(reply)}); true;`);
-        });
+        void handleSmsRequest(message).then(replySms);
         return;
       case 'ready':
         revealContent();

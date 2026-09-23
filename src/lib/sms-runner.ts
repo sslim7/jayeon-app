@@ -1,5 +1,12 @@
 import type { Campaign, CampaignRecipient } from '@/types/sms';
 import type { SmsAttachment, SmsDevice, SmsNativeResult } from '@/lib/sms-device-types';
+/*
+ * 🔴 **한도를 여기 숫자로 적지 않는다.** 이 검사는 발송 **직전**이라, 값이 서버·업로드 화면과
+ * 어긋나면 사용자는 **붙일 때는 통과하고 보낼 때 거절당한다.** 그 실패는 캠페인을 만들고
+ * 수신자를 고른 뒤에야 나오므로 가장 비싸다. 실제로 300KB 가 여기 박혀 있는 동안 서버가
+ * 700KB 로 올라가 그 틈이 생겼다(→ `lib/attachment-file.ts`, `jayeon-was` assets.go).
+ */
+import { ATTACHMENT_MAX_BYTES, ATTACHMENT_MAX_COUNT, ATTACHMENT_TOTAL_MAX_BYTES, base64Size } from '@/lib/attachment-file';
 
 export interface DispatchSnapshot {
   campaignId: string | null;
@@ -38,6 +45,30 @@ export const USER_CANCELLED = 'USER_CANCELLED';
 export const IOS_COMPOSER_ABANDONED = 'IOS_COMPOSER_ABANDONED';
 /** claim 까지 갔지만 보내기 전에 멈췄다. 실패가 아니라 **아직 안 보낸 사람**이다. */
 export const CANCELLED_BEFORE_SEND = 'CANCELLED_BEFORE_SEND';
+/**
+ * 첨부가 **껍데기 다리를 건널 수 없을 만큼 크다** — 단말에 넘기기도 전에 막았다.
+ *
+ * 🔴 다른 실패와 글자를 갈라 둔다. 통신사 거절(`SMS_FAILED`)이나 권한 문제와 섞이면,
+ * 「어떤 폰이 어디까지 보낼 수 있는가」를 결과 목록에서 읽을 수 없게 된다 — 지금 우리가
+ * 기기별 실제 한도를 실험으로 찾는 중이라 그 구분이 곧 실험 결과다.
+ */
+export const ATTACHMENT_TOO_LARGE = 'ATTACHMENT_TOO_LARGE';
+
+/** 바이트를 사람이 읽는 KB 로. 한도는 내림(넘겨 말하지 않는다), 실제 크기는 반올림한다. */
+const limitKb = (bytes: number) => Math.floor(bytes / 1024);
+const sizeKb = (bytes: number) => Math.max(1, Math.round(bytes / 1024));
+
+/**
+ * 첨부가 다리 폭을 넘었을 때 결과에 남기는 말.
+ *
+ * 🔴 **두 숫자를 모두 적는다 — 한도와 이번 첨부 크기.** 하나만 있으면 사용자는 다음에
+ * 무엇을 올려야 할지 여전히 모르고, 기기마다 다른 경계를 실험으로 찾는 지금은 그 두 숫자가
+ * 곧 실험 결과다. 숫자는 예산과 실제 크기에서 **계산**한다 — 손으로 적으면 한도를 고친 날
+ * 문구만 옛말로 남는다.
+ */
+export function bridgeOversizeMessage(budgetBytes: number, attachmentBytes: number): string {
+  return `이 폰은 첨부를 최대 ${limitKb(budgetBytes)} KB까지 보낼 수 있어요. 이 첨부는 ${sizeKb(attachmentBytes)} KB입니다. 더 작은 이미지로 바꿔 주세요.`;
+}
 
 /**
  * 한 건을 보내기 직전에 사용자에게 묻는 창구.
@@ -120,8 +151,23 @@ export class SmsRunner {
   private syncing: Promise<void> | null = null;
   /** 지금 떠 있는 한 건 확인창을 밖에서 끊는 손잡이. 창이 없으면 null 이다. */
   private cancelAsk: (() => void) | null = null;
+  /**
+   * `attachmentBudget` 은 **이 껍데기가 한 번에 받아 줄 수 있는 첨부 바이트**를 묻는 함수다
+   * (→ `lib/sms-dispatch.ts` 에서 `bridgeAttachmentBudget(shellMessageMaxBytes())` 로 잇는다).
+   *
+   * 🔴 **왜 껍데기 쪽 검사만으로는 부족한가.** 껍데기가 「너무 크다」고 답해 주는 것은
+   * 네이티브라 **새 APK 를 깔아야** 동작한다. 지금 사용자 폰에 깔린 옛 빌드는 크기를 넘는
+   * 메시지를 **아무 말 없이 버리고**, 웹은 150초를 기다리다 포기하는데 그때는 이미 서버에
+   * 수신자가 `SENDING` 으로 잠긴 뒤라 결과를 쓸 자리가 없다 — 그 사람은 영원히 「발송 중 ·
+   * 확인 필요」로 남는다(2026-09-23 실제 사고). 러너는 **웹**이라 배포만으로 즉시 반영되고,
+   * 껍데기가 자기 한도를 밝히지 않으면 옛 상한(64KB)으로 가정하므로
+   * (→ `lib/sms-device.web.ts`) **옛 APK 가 깔린 폰에서도 갇히지 않고 깔끔하게 실패한다.**
+   *
+   * 주지 않으면 「모른다」로 보고 아무것도 막지 않는다 — 옛 호출부와 테스트가 그대로 돈다.
+   */
   constructor(private api: DispatchApi, private device: SmsDevice,
-    private sessionVersion: () => number, private createId: () => string) {}
+    private sessionVersion: () => number, private createId: () => string,
+    private attachmentBudget: () => number = () => Number.POSITIVE_INFINITY) {}
 
   getSnapshot = (): DispatchSnapshot => this.state;
   subscribe = (listener: () => void) => {
@@ -272,6 +318,15 @@ export class SmsRunner {
       // 파일 준비는 claim 전에 끝낸다. 다운로드 실패를 발송 여부 불명 상태로 만들지 않는다.
       const attachmentCache = new Map<string, SmsAttachment>();
       const prepared = new Map<string, SmsAttachment[]>();
+      /**
+       * 다리를 못 건너는 수신자와 그 사유. **발송 전에 정해 두고, claim 뒤에 닫는다.**
+       *
+       * ⚠️ 여기서 캠페인 전체를 세우지 않는다. 같은 템플릿이면 모두 같은 결과가 나오겠지만,
+       * 중단해 버리면 캠페인이 또 어중간하게 남아(일부는 READY, 일부는 SENDING) 사용자가
+       * 무엇을 다시 눌러야 하는지 알 수 없다. 한 사람씩 사유를 적어 닫고 계속 간다.
+       */
+      const oversized = new Map<string, string>();
+      const budget = this.attachmentBudget();
       for (const row of pending) {
         const attachments = row.attachments ?? [];
         if (!attachments.length) continue;
@@ -279,7 +334,7 @@ export class SmsRunner {
         if (capabilities.mmsSupported !== true) throw new Error(capabilities.composerConfirm
           ? '이 iPhone 에서는 이미지 첨부를 보낼 수 없어요. 메시지 설정의 MMS 를 확인해 주세요.'
           : '이미지 발송을 지원하는 최신 Android 앱으로 업데이트해 주세요.');
-        if (!this.api.attachmentContent || attachments.length > 3 || attachments.reduce((sum, file) => sum + file.size, 0) > 600 * 1024) {
+        if (!this.api.attachmentContent || attachments.length > ATTACHMENT_MAX_COUNT || attachments.reduce((sum, file) => sum + file.size, 0) > ATTACHMENT_TOTAL_MAX_BYTES) {
           throw new Error('첨부파일 개수 또는 크기를 확인해 주세요.');
         }
         const files: SmsAttachment[] = [];
@@ -293,7 +348,7 @@ export class SmsRunner {
             const data = content.dataBase64;
             const size = typeof data === 'string' ? data.length / 4 * 3 - (data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0) : -1;
             if (content.id !== attachment.id || content.mimeType !== attachment.mimeType || content.size !== attachment.size ||
-              !['image/jpeg', 'image/png'].includes(content.mimeType) || size !== content.size || size <= 0 || size > 300 * 1024 ||
+              !['image/jpeg', 'image/png'].includes(content.mimeType) || size !== content.size || size <= 0 || size > ATTACHMENT_MAX_BYTES ||
               !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data)) {
               throw new Error('첨부파일 내용을 확인하지 못했어요. 발송을 중단했어요.');
             }
@@ -303,6 +358,14 @@ export class SmsRunner {
           files.push(file);
         }
         prepared.set(row.id, files);
+        /*
+         * 🔴 **업로드는 막지 않고 발송에서 막는다.** 붙이는 시점에 다리 폭으로 깎아 버리면
+         * 모든 첨부가 같은 크기로 줄어들어 **어느 폰이 어디까지 보낼 수 있는지 실험할 수
+         * 없다.** 지금은 기기별 실제 한도를 찾는 중이라, 크게 올려 보고 여기서 분명하게
+         * 실패하는 편이 낫다 — 갇히지만 않으면 실패는 정보다.
+         */
+        const bytes = files.reduce((sum, file) => sum + base64Size(file.dataBase64), 0);
+        if (bytes > budget) oversized.set(row.id, bridgeOversizeMessage(budget, bytes));
       }
       this.assertSession(version);
       if (this.state.stopping) { await this.api.setStatus(campaignId, 'CANCELLED'); return; }
@@ -321,6 +384,17 @@ export class SmsRunner {
           await this.closeWithoutSending(campaignId, row.id, attemptId,
             CANCELLED_BEFORE_SEND, 'SMS 요청 전에 사용자가 중단했어요.');
           break;
+        }
+        /*
+         * 🔴 **단말을 부르지 않고 이 사람만 실패로 닫는다.** 다리를 못 건널 것이 이미
+         * 확실하므로 `device.send` 를 부르면 옛 껍데기에서는 답이 영영 오지 않고, 그 사이
+         * 서버는 이 수신자를 `SENDING` 으로 잡고 있다. 확인창(iPhone)도 띄우지 않는다 —
+         * 어차피 보낼 수 없는 건을 사람에게 물을 이유가 없다.
+         */
+        const tooLarge = oversized.get(row.id);
+        if (tooLarge) {
+          await this.closeWithoutSending(campaignId, row.id, attemptId, ATTACHMENT_TOO_LARGE, tooLarge);
+          continue;
         }
         const recipient = claim.recipient;
         const message = personalizeMessage(recipient.message, recipient.name);
