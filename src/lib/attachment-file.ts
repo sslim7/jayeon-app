@@ -12,12 +12,31 @@
 
 import type { PickedFile } from '@/components/file-picker-types';
 
-/** 파일 하나의 상한. 서버 MMS 제약에서 온 값이라 양쪽이 같아야 한다. */
-export const ATTACHMENT_MAX_BYTES = 300 * 1024;
+/**
+ * 파일 하나의 상한. 서버 MMS 제약에서 온 값이라 양쪽이 같아야 한다.
+ *
+ * ⚠️ **이것은 「저장」 한도지 「발송」 한도가 아니다.** 통신망으로 실제로 나가는 크기는 단말이
+ * SIM 에서 읽는 `MMS_CONFIG_MAX_MESSAGE_SIZE` 가 정하고, 그 값을 읽지 못하면 300 KiB 로
+ * 떨어진다(→ `modules/nature-sms/.../MmsPdu.kt`). 여기를 통과했다고 통신사가 받아 준다는
+ * 뜻은 아니다 — 그 숫자를 첨부 시점에 알 수 있게 되면 `deviceBudget` 으로 함께 걸러야 한다.
+ */
+export const ATTACHMENT_MAX_BYTES = 700 * 1024;
 /** 한 메시지에 붙일 수 있는 장수. */
 export const ATTACHMENT_MAX_COUNT = 3;
-/** 붙인 것 전부를 더한 상한. */
-export const ATTACHMENT_TOTAL_MAX_BYTES = 600 * 1024;
+/** 붙인 것 전부를 더한 상한. 위와 마찬가지로 저장 한도다. */
+export const ATTACHMENT_TOTAL_MAX_BYTES = 1400 * 1024;
+
+/**
+ * **줄이기 전에 일단 받아 줄 원본 상한.** 🔴 이것은 「한도」가 아니라 「여기까지는 받아서
+ * 줄여 본다」는 뜻이다 — 선택기는 이 값으로 거르고, 실제 한도(`ATTACHMENT_MAX_BYTES`)는
+ * 줄인 뒤에 본다.
+ *
+ * 폰으로 찍은 사진은 2~5MB 다. 선택기를 `ATTACHMENT_MAX_BYTES` 로 잠가 두면 사용자는
+ * **매번 직접 줄여서** 가져와야 하고, 그 방법을 아는 사람은 많지 않다. 20MB 는 요즘 폰의
+ * 고화소 사진이 넉넉히 들어오는 크기이고, 그보다 큰 것은 사진이 아닐 가능성이 높아
+ * (스캔 원본·연사 합성 등) 줄이려고 메모리에 올리기 전에 거절한다.
+ */
+export const ATTACHMENT_PICK_MAX_BYTES = 20 * 1024 * 1024;
 
 /**
  * 선택기에 거는 필터. 확장자를 함께 적어야 일부 안드로이드 웹뷰에서 목록이 비지 않는다
@@ -27,9 +46,17 @@ export const ATTACHMENT_ACCEPT = 'image/jpeg,image/png,.jpg,.jpeg,.png';
 
 /** 바이트를 화면에 적는 KB 로. 문구가 갈라지지 않게 한 곳에서만 계산한다. */
 const kb = (bytes: number) => Math.floor(bytes / 1024);
+/** 1 MB 를 넘는 값은 KB 로 적으면 읽히지 않는다(「20480 KB」). 그때만 MB 로 바꾼다. */
+const humanSize = (bytes: number) => bytes >= 1024 * 1024 ? `${Math.floor(bytes / (1024 * 1024))} MB` : `${kb(bytes)} KB`;
 
-/** 화면에 적는 안내. 위 상한들과 **같은 숫자**여야 한다. */
-export const ATTACHMENT_HINT = `JPG·PNG, 파일당 ${kb(ATTACHMENT_MAX_BYTES)} KB · 합계 ${kb(ATTACHMENT_TOTAL_MAX_BYTES)} KB까지. 이미지를 첨부하면 MMS로 발송합니다.`;
+/**
+ * 화면에 적는 안내.
+ *
+ * 🔴 **크기를 사용자 숙제로 말하지 않는다.** 「파일당 700 KB」라고 적으면, 폰 사진이 2~5MB
+ * 라는 것을 아는 사용자는 붙이기를 포기하고 모르는 사용자는 거절당한 뒤에야 알게 된다.
+ * 큰 사진은 우리가 줄인다(→ `lib/image-shrink-plan.ts`). 숫자는 줄여도 안 될 때만 말한다.
+ */
+export const ATTACHMENT_HINT = `JPG·PNG 최대 ${ATTACHMENT_MAX_COUNT}장. 큰 사진은 자동으로 줄여서 첨부합니다. 이미지를 첨부하면 MMS로 발송합니다.`;
 
 /*
   ── 사용자가 보는 문구 ───────────────────────────────────────────
@@ -45,15 +72,32 @@ export const ATTACHMENT_READ_MESSAGE = '파일을 읽지 못했어요. 다시 �
 /** 장수·합계에 걸렸을 때. */
 export const ATTACHMENT_QUOTA_MESSAGE = `첨부는 최대 ${ATTACHMENT_MAX_COUNT}개, 합계 ${kb(ATTACHMENT_TOTAL_MAX_BYTES)} KB까지 가능해요.`;
 /**
+ * 줄여 봤는데도 한도를 못 맞췄을 때.
+ *
+ * ⚠️ 「너무 커요」에서 끝내면 사용자는 **무엇을 하면 되는지** 모른다. 우리가 이미 줄여 본
+ * 뒤이므로 남은 선택지는 하나뿐이고, 그것을 말해 준다.
+ */
+export const ATTACHMENT_SHRINK_FAILED_MESSAGE = '이미지를 줄여도 한도를 넘어요. 더 작은 이미지를 선택해 주세요.';
+/**
+ * 줄이는 동안 화면에 세워 두는 말.
+ *
+ * 🔴 5MB 사진 한 장을 줄이는 데 폰에서 1초 이상 걸린다. 그동안 아무 말이 없으면 사용자는
+ * 버튼이 안 먹은 줄 알고 다시 누르거나 화면을 떠난다.
+ */
+export const ATTACHMENT_SHRINKING_MESSAGE = '이미지 줄이는 중…';
+/**
  * 선택 화면 자체가 열리지 않을 때 — **네이티브에서만 나온다.**
  * 안드로이드에 문서 선택을 받아 줄 앱이 없으면 `getDocumentAsync` 가 바로 던진다. 이때
  * 「파일을 읽지 못했어요」라고 하면 파일을 고른 적도 없는 사용자가 다시 고르려 든다.
  */
 export const ATTACHMENT_PICKER_MESSAGE = '이 기기에서 파일 선택 화면을 열지 못했어요. 파일을 다루는 앱이 설치되어 있는지 확인해 주세요.';
 
-/** 한 파일이 클 때. 상한은 호출부가 정하므로 인자로 받는다. */
+/**
+ * 한 파일이 클 때. 상한은 호출부가 정하므로 인자로 받는다.
+ * 선택기는 이제 `ATTACHMENT_PICK_MAX_BYTES`(20MB) 를 넘겨주므로 MB 로도 나온다.
+ */
 export function oversizeMessage(maxBytes: number): string {
-  return `파일은 ${kb(maxBytes)} KB까지 추가할 수 있어요.`;
+  return `파일은 ${humanSize(maxBytes)}까지 추가할 수 있어요.`;
 }
 
 /*
@@ -107,6 +151,8 @@ export function attachmentReason(error: unknown, maxBytes: number): string {
   const code = error instanceof Error ? error.message : '';
   if (code === 'FILE_TOO_LARGE') return oversizeMessage(maxBytes);
   if (code === 'UNSUPPORTED_TYPE') return ATTACHMENT_TYPE_MESSAGE;
+  // 줄이기까지 해 보고 실패한 것. 「읽지 못했어요」로 눌리면 사용자는 같은 사진을 다시 고른다.
+  if (code === 'SHRINK_FAILED') return ATTACHMENT_SHRINK_FAILED_MESSAGE;
   if (code === 'PICKER_UNAVAILABLE') return ATTACHMENT_PICKER_MESSAGE;
   return ATTACHMENT_READ_MESSAGE;
 }
@@ -150,8 +196,10 @@ export function base64Size(encoded: string): number {
  * 🔴 **취소는 오류가 아니다** — `null` 을 돌려주고 화면은 아무 말도 하지 않는다. 사용자가
  * 스스로 뒤로 간 것을 실패라고 알리면, 다음에는 버튼을 누르기 전에 망설이게 된다.
  *
- * 크기는 두 번 본다. 선택기가 알려 준 값이 있으면 **읽기 전에** 걸러 300 KB 넘는 사진을
+ * 크기는 두 번 본다. 선택기가 알려 준 값이 있으면 **읽기 전에** 걸러 상한을 넘는 사진을
  * 통째로 메모리에 올리지 않고, 값을 주지 않는 문서 제공자를 위해 읽은 뒤 실제 길이로 다시 본다.
+ * 여기서 쓰는 `maxBytes` 는 호출부가 주는 값이고, 첨부 흐름은 **줄이기 전 원본 상한**
+ * (`ATTACHMENT_PICK_MAX_BYTES`) 을 넘긴다 — 진짜 한도는 줄인 뒤에 본다.
  */
 export async function pickNativeAttachment(
   deps: NativePickDeps, { accept, maxBytes }: { accept: string; maxBytes: number },

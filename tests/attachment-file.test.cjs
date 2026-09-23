@@ -21,7 +21,8 @@ vm.runInNewContext(`(function(exports,require){${compile('src/lib/attachment-fil
 });
 const {
   ATTACHMENT_ACCEPT, ATTACHMENT_HINT, ATTACHMENT_MAX_BYTES, ATTACHMENT_MAX_COUNT,
-  ATTACHMENT_PICKER_MESSAGE, ATTACHMENT_QUOTA_MESSAGE, ATTACHMENT_READ_MESSAGE, ATTACHMENT_TOTAL_MAX_BYTES,
+  ATTACHMENT_PICKER_MESSAGE, ATTACHMENT_PICK_MAX_BYTES, ATTACHMENT_QUOTA_MESSAGE, ATTACHMENT_READ_MESSAGE,
+  ATTACHMENT_SHRINK_FAILED_MESSAGE, ATTACHMENT_TOTAL_MAX_BYTES,
   ATTACHMENT_TYPE_MESSAGE, acceptTypes, attachmentReason, base64Size, imageContentType, isAllowedImage,
   oversizeMessage, pickNativeAttachment, quotaExceeded,
 } = mod.exports;
@@ -43,43 +44,60 @@ const options = { accept: ATTACHMENT_ACCEPT, maxBytes: ATTACHMENT_MAX_BYTES };
 
 // ── 한도 ────────────────────────────────────────────────────────
 
-test('한도는 파일당 300 KB · 합계 600 KB · 3장이고 안내 문구가 같은 숫자를 말한다', () => {
-  assert.equal(ATTACHMENT_MAX_BYTES, 300 * 1024);
-  assert.equal(ATTACHMENT_TOTAL_MAX_BYTES, 600 * 1024);
+test('한도는 파일당 700 KB · 합계 1400 KB · 3장이고, 저장 한도지 발송 한도가 아니다', () => {
+  assert.equal(ATTACHMENT_MAX_BYTES, 700 * 1024);
+  assert.equal(ATTACHMENT_TOTAL_MAX_BYTES, 1400 * 1024);
   assert.equal(ATTACHMENT_MAX_COUNT, 3);
-  // 화면 안내가 상한과 다른 숫자를 말하면 사용자는 둘 중 무엇을 믿어야 할지 알 수 없다.
-  assert.match(ATTACHMENT_HINT, /파일당 300 KB · 합계 600 KB까지/);
-  assert.match(ATTACHMENT_QUOTA_MESSAGE, /최대 3개, 합계 600 KB/);
-  assert.equal(oversizeMessage(ATTACHMENT_MAX_BYTES), '파일은 300 KB까지 추가할 수 있어요.');
+  // 서버가 받아 주는 크기와 **같은 숫자**여야 한다. 앱이 더 느슨하면 업로드가 서버에서 깨지고,
+  // 더 빡빡하면 서버가 받아 줄 사진을 앱이 혼자 거절한다.
+  assert.match(ATTACHMENT_QUOTA_MESSAGE, /최대 3개, 합계 1400 KB/);
+  assert.equal(oversizeMessage(ATTACHMENT_MAX_BYTES), '파일은 700 KB까지 추가할 수 있어요.');
+});
+
+test('안내 문구는 크기를 사용자 숙제로 말하지 않는다', () => {
+  // 🔴 폰 사진은 2~5MB 다. 「파일당 700 KB」라고 적어 두면 아는 사용자는 포기하고 모르는
+  //    사용자는 거절당한 뒤에야 안다. 큰 사진은 우리가 줄인다 — 그 사실을 먼저 말한다.
+  assert.match(ATTACHMENT_HINT, /자동으로 줄여서 첨부/);
+  assert.doesNotMatch(ATTACHMENT_HINT, /KB/);
+  assert.match(ATTACHMENT_HINT, /최대 3장/);
+  assert.match(ATTACHMENT_HINT, /MMS로 발송/);
+});
+
+test('선택기 상한은 한도가 아니라 「여기까지는 받아서 줄여 본다」는 값이다', () => {
+  assert.equal(ATTACHMENT_PICK_MAX_BYTES, 20 * 1024 * 1024);
+  // 실제 한도보다 훨씬 커야 뜻이 산다 — 같아지면 자동 축소가 있으나 마나다.
+  assert.ok(ATTACHMENT_PICK_MAX_BYTES > ATTACHMENT_MAX_BYTES * 10);
+  // 20480 KB 라고 적으면 아무도 못 읽는다.
+  assert.equal(oversizeMessage(ATTACHMENT_PICK_MAX_BYTES), '파일은 20 MB까지 추가할 수 있어요.');
 });
 
 test('합계와 장수는 붙일 수 있는 것만 통과시킨다', () => {
-  assert.equal(quotaExceeded([], 300 * 1024), false);
-  assert.equal(quotaExceeded([{ size: 300 * 1024 }], 300 * 1024), false);
-  // 300+300+1 은 합계를 넘는다. 장수는 아직 남아 있어도 막아야 한다.
-  assert.equal(quotaExceeded([{ size: 300 * 1024 }, { size: 300 * 1024 }], 1), true);
+  assert.equal(quotaExceeded([], 700 * 1024), false);
+  assert.equal(quotaExceeded([{ size: 700 * 1024 }], 700 * 1024), false);
+  // 700+700+1 은 합계를 넘는다. 장수는 아직 남아 있어도 막아야 한다.
+  assert.equal(quotaExceeded([{ size: 700 * 1024 }, { size: 700 * 1024 }], 1), true);
   assert.equal(quotaExceeded([{ size: 1 }, { size: 1 }, { size: 1 }], 1), true);
 });
 
 // ── 거절 ────────────────────────────────────────────────────────
 
-test('크기 초과는 읽기 전에 거절한다 — 300 KB 넘는 사진을 통째로 메모리에 올리지 않는다', async () => {
-  const d = ok({ uri: 'file:///big.jpg', name: 'big.jpg', size: 300 * 1024 + 1, mimeType: 'image/jpeg' }, bytes(10));
+test('크기 초과는 읽기 전에 거절한다 — 상한 넘는 사진을 통째로 메모리에 올리지 않는다', async () => {
+  const d = ok({ uri: 'file:///big.jpg', name: 'big.jpg', size: 700 * 1024 + 1, mimeType: 'image/jpeg' }, bytes(10));
   await assert.rejects(() => pickNativeAttachment(d, options), /FILE_TOO_LARGE/);
   assert.deepEqual(d.calls.read, []);
 });
 
 test('선택기가 크기를 주지 않아도 읽은 뒤 실제 길이로 거절한다', async () => {
-  const d = ok({ uri: 'file:///big.jpg', name: 'big.jpg', mimeType: 'image/jpeg' }, bytes(300 * 1024 + 1));
+  const d = ok({ uri: 'file:///big.jpg', name: 'big.jpg', mimeType: 'image/jpeg' }, bytes(700 * 1024 + 1));
   await assert.rejects(() => pickNativeAttachment(d, options), /FILE_TOO_LARGE/);
   assert.deepEqual(d.calls.read, ['file:///big.jpg']);
 });
 
 test('딱 한도인 파일은 통과한다', async () => {
-  const d = ok({ uri: 'file:///ok.png', name: '명함.png', size: 300 * 1024, mimeType: 'image/png' }, bytes(300 * 1024));
+  const d = ok({ uri: 'file:///ok.png', name: '명함.png', size: 700 * 1024, mimeType: 'image/png' }, bytes(700 * 1024));
   const file = await pickNativeAttachment(d, options);
   assert.deepEqual({ ...file, dataBase64: file.dataBase64.length }, {
-    fileName: '명함.png', mimeType: 'image/png', size: 300 * 1024, dataBase64: bytes(300 * 1024).length,
+    fileName: '명함.png', mimeType: 'image/png', size: 700 * 1024, dataBase64: bytes(700 * 1024).length,
   });
 });
 
@@ -127,10 +145,19 @@ test('선택기가 열리지 않는 것과 파일을 읽지 못한 것은 다른
 });
 
 test('코드는 사람이 읽을 한 줄이 되고 모르는 것은 읽기 실패로 눌린다', () => {
-  assert.equal(attachmentReason(new Error('FILE_TOO_LARGE'), ATTACHMENT_MAX_BYTES), '파일은 300 KB까지 추가할 수 있어요.');
+  assert.equal(attachmentReason(new Error('FILE_TOO_LARGE'), ATTACHMENT_MAX_BYTES), '파일은 700 KB까지 추가할 수 있어요.');
   assert.equal(attachmentReason(new Error('UNSUPPORTED_TYPE'), ATTACHMENT_MAX_BYTES), ATTACHMENT_TYPE_MESSAGE);
   assert.equal(attachmentReason(new Error('SQLITE_FULL: /data/user/0/kr.co.jayeon/cache/a.jpg'), ATTACHMENT_MAX_BYTES), ATTACHMENT_READ_MESSAGE);
   assert.equal(attachmentReason('그냥 문자열', ATTACHMENT_MAX_BYTES), ATTACHMENT_READ_MESSAGE);
+});
+
+test('줄여도 안 되는 것은 「읽지 못했다」가 아니라 할 일을 알려 준다', () => {
+  // 🔴 이미 우리가 줄여 본 뒤다. 「다시 선택해 주세요」라고 하면 사용자는 같은 사진을 또 고른다.
+  assert.equal(attachmentReason(new Error('SHRINK_FAILED'), ATTACHMENT_MAX_BYTES), ATTACHMENT_SHRINK_FAILED_MESSAGE);
+  assert.match(ATTACHMENT_SHRINK_FAILED_MESSAGE, /더 작은 이미지를 선택/);
+  assert.notEqual(ATTACHMENT_SHRINK_FAILED_MESSAGE, ATTACHMENT_READ_MESSAGE);
+  // 디코딩 자체가 안 된 것은 다른 일이다 — 「읽지 못했어요」로 남아야 한다.
+  assert.equal(attachmentReason(new Error('IMAGE_DECODE_FAILED'), ATTACHMENT_MAX_BYTES), ATTACHMENT_READ_MESSAGE);
 });
 
 // ── 선택기에 거는 필터 ───────────────────────────────────────────
@@ -165,6 +192,17 @@ test('웹 짝·네이티브 짝·호출부가 모두 공용 규칙을 가져다 
   assert.match(source(WEB), /oversizeMessage/);
 });
 
+test('선택기에는 실제 한도가 아니라 「줄이기 전 원본 상한」이 걸린다', () => {
+  // 🔴 여기에 `ATTACHMENT_MAX_BYTES` 를 걸면 폰 사진이 **파일을 넘겨받기도 전에** 거절되고,
+  //    자동 축소는 한 번도 불리지 않는다. 자동 축소 전체가 조용히 죽는 자리다.
+  assert.match(code(CALLER), /maxBytes=\{ATTACHMENT_PICK_MAX_BYTES\}/);
+  assert.doesNotMatch(code(CALLER), /maxBytes=\{ATTACHMENT_MAX_BYTES\}/);
+  // 그리고 진짜 한도는 줄인 뒤의 목표로 쓰인다.
+  assert.match(code(CALLER), /shrinkTargetBytes/);
+  assert.match(code(CALLER), /perFile: ATTACHMENT_MAX_BYTES/);
+  assert.match(code(CALLER), /totalLimit: ATTACHMENT_TOTAL_MAX_BYTES/);
+});
+
 test('어느 쪽도 한도와 문구를 따로 적지 않는다', () => {
   for (const file of [NATIVE, WEB, CALLER]) {
     const text = code(file);
@@ -173,7 +211,7 @@ test('어느 쪽도 한도와 문구를 따로 적지 않는다', () => {
     // (`setError('')` 는 지우는 것이라 예외다 — 사람에게 보이는 말이 아니다.)
     assert.doesNotMatch(text, /onError\(\s*['"`][^'"`]/, `${file} 이 오류 문구를 따로 적었다`);
     assert.doesNotMatch(text, /setError\(\s*['"`][^'"`]/, `${file} 이 오류 문구를 따로 적었다`);
-    assert.doesNotMatch(text, /300 \* 1024|600 \* 1024/, `${file} 이 한도 숫자를 따로 적었다`);
+    assert.doesNotMatch(text, /700 \* 1024|1400 \* 1024/, `${file} 이 한도 숫자를 따로 적었다`);
     assert.doesNotMatch(text, /image\/jpeg', 'image\/png/, `${file} 이 허용 형식 목록을 따로 적었다`);
   }
 });
