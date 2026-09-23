@@ -20,7 +20,7 @@ vm.runInNewContext(`(function(exports,require){${compile('src/lib/image-shrink-p
   // 🔴 이 모듈은 플랫폼 코드를 import 하면 안 된다. 하나라도 들어오면 여기서 터진다.
   throw new Error(`unmocked ${name}`);
 });
-const { needsShrink, scaledSize, shrinkAttempts, shrinkPlan, shrinkTargetBytes, shrunkFileName } = mod.exports;
+const { bridgeAttachmentBudget, needsShrink, scaledSize, shrinkAttempts, shrinkPlan, shrinkTargetBytes, shrunkFileName } = mod.exports;
 
 const KB = 1024;
 /** 운영에서 쓰는 값(→ `lib/attachment-file.ts`). 여기서는 목표 계산의 재료로만 쓴다. */
@@ -56,6 +56,47 @@ test('남은 몫이 없으면 0 이 아니라 「더 붙일 수 없다」다', (
   assert.equal(shrinkTargetBytes({ ...LIMITS, usedBytes: 1400 * KB + 1 }), null);
   // 1바이트라도 남아 있으면 줄여 볼 여지는 있다 — null 과 구분된다.
   assert.equal(shrinkTargetBytes({ ...LIMITS, usedBytes: 1400 * KB - 1 }), 1);
+});
+
+// ── 🔴 껍데기 다리의 폭 ─────────────────────────────────────────
+
+test('옛 껍데기(64KB)의 다리로는 첨부를 47KB 도 못 보낸다', () => {
+  // 🔴 실측한 경계는 47.7KB 였다(2026-09-23). 계산값이 그보다 크면 「통과한다고 판단했는데
+  //    실제로는 버려지는」 구간이 생기고, 그 구간의 증상은 영원한 「발송 중 · 확인 필요」다.
+  const legacy = bridgeAttachmentBudget(64 * 1024);
+  assert.ok(legacy > 0, '예산이 0 이면 아무것도 못 붙인다');
+  assert.ok(legacy < 47 * KB, `64KB 다리에서 ${legacy}B 를 허용했다 — 실측 경계(47.7KB)보다 크다`);
+});
+
+test('한도를 밝히는 새 껍데기에서는 붙일 수 있는 전부가 지나간다', () => {
+  // 껍데기가 첨부 합계에서 파생한 폭을 밝힌다(→ `components/web-shell.tsx`). 그 폭에서
+  // 다리가 가장 좁은 곳이 되면 안 된다 — 그러면 700KB 를 허용해 놓고 못 보내는 꼴이 된다.
+  assert.ok(bridgeAttachmentBudget(2 * 1024 * KB) > LIMITS.totalLimit);
+});
+
+test('포장 몫은 넉넉히 뺀다 — 경계에 딱 맞추면 이름이 긴 수신자만 실패한다', () => {
+  // ⚠️ 본문 2000자(한글이면 6000바이트)·수신자 이름·파일 이름·JSON 따옴표가 같은 문자열에
+  //    실린다. 이 여유가 없으면 같은 캠페인에서 어떤 사람만 실패하고 원인을 못 찾는다.
+  const budget = bridgeAttachmentBudget(64 * KB);
+  assert.ok(budget <= ((64 * KB - 8 * KB) * 3) / 4);
+  // 다리보다 좁은 예산이 나와야 base64 팽창(4/3)을 실제로 감당한다.
+  assert.ok(Math.ceil((budget * 4) / 3) < 64 * KB);
+  // 건널 수 없이 좁은 다리는 「모른다」가 아니라 0 이다 — 지어낸 여유로 통과시키지 않는다.
+  assert.equal(bridgeAttachmentBudget(8 * KB), 0);
+  assert.equal(bridgeAttachmentBudget(0), 0);
+});
+
+test('🔴 오늘 갇힌 두 첨부는 옛 다리의 예산을 넘고, 나갔던 세 장은 들어온다', () => {
+  // 실측(2026-09-23): 66,736B·98,735B 는 버려졌고 20,174B·13,680B·26,658B 는 전부 성공했다.
+  const legacy = bridgeAttachmentBudget(64 * KB);
+  for (const size of [66736, 98735]) assert.ok(size > legacy, `${size}B 가 통과로 판정됐다`);
+  for (const size of [20174, 13680, 26658]) assert.ok(size <= legacy, `${size}B 가 막혔다`);
+});
+
+test('⚠️ 다리 폭은 붙이는 시점의 목표를 건드리지 않는다', () => {
+  // 🔴 업로드에서 깎아 버리면 모든 첨부가 같은 크기가 되어 **기기별 실제 한도를 실험할 수
+  //    없다.** 다리를 못 건너는 첨부는 발송 직전에 그 수신자만 실패시킨다(→ `lib/sms-runner.ts`).
+  assert.equal(shrinkTargetBytes({ ...LIMITS, usedBytes: 0 }), 700 * KB);
 });
 
 // ── 이미 작은 것은 건드리지 않는다 ───────────────────────────────

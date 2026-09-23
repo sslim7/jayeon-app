@@ -58,6 +58,11 @@ export function AttachmentEditor({ value, onChange, disabled, onBusy }: { value:
       perFile: ATTACHMENT_MAX_BYTES,
       totalLimit: ATTACHMENT_TOTAL_MAX_BYTES,
       usedBytes: value.reduce((sum, item) => sum + item.size, 0),
+      // ⚠️ **껍데기 다리의 폭도 여기서 깎지 않는다.** 그 폭(→ `lib/image-shrink-plan.ts` 의
+      //    `bridgeAttachmentBudget`)으로 붙이는 시점에 줄여 버리면 모든 첨부가 같은 크기가
+      //    되어 **기기마다 다른 실제 한도를 실험으로 찾을 수 없다.** 다리를 못 건너는 첨부는
+      //    발송 직전에 그 수신자만 분명한 문구로 실패시킨다(→ `lib/sms-runner.ts`).
+      //
       // ⚠️ `deviceBudget` 은 지금 넘기지 않는다(= 모른다). 통신망으로 실제로 나갈 수 있는
       //    크기는 단말이 SIM 에서 읽는 `MMS_CONFIG_MAX_MESSAGE_SIZE` 이고, 그것을 여기로
       //    넘기면 통신사 거절을 **첨부 시점에** 막을 수 있다. `modules/nature-sms` 의

@@ -203,6 +203,14 @@ test('선택기에는 실제 한도가 아니라 「줄이기 전 원본 상한�
   assert.match(code(CALLER), /totalLimit: ATTACHMENT_TOTAL_MAX_BYTES/);
 });
 
+test('붙이는 시점에는 껍데기 다리의 폭으로 깎지 않는다', () => {
+  // 🔴 여기서 다리 폭(→ `lib/image-shrink-plan.ts` 의 `bridgeAttachmentBudget`)으로 줄이면
+  //    모든 첨부가 같은 크기가 되어 **기기마다 다른 실제 발송 한도를 실험으로 찾을 수 없다.**
+  //    다리를 못 건너는 첨부는 발송 직전에 그 수신자만 분명한 문구로 실패시킨다
+  //    (→ `lib/sms-runner.ts` 의 `bridgeOversizeMessage`).
+  assert.doesNotMatch(code(CALLER), /bridgeAttachmentBudget|deviceBudget/);
+});
+
 test('어느 쪽도 한도와 문구를 따로 적지 않는다', () => {
   for (const file of [NATIVE, WEB, CALLER]) {
     const text = code(file);

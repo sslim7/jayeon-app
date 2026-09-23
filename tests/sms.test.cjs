@@ -5,10 +5,25 @@ const ts = require('typescript');
 const vm = require('node:vm');
 const mod = { exports: {} };
 const compiled = ts.transpileModule(fs.readFileSync('src/lib/sms-runner.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-vm.runInNewContext(`(function(exports){${compiled}\n})`, { Error, Set })(mod.exports);
-const { SmsRunner } = mod.exports;
+// 러너는 첨부 한도를 `lib/attachment-file` 에서 가져온다 — 여기에 숫자를 다시 적으면 그 한도가
+// 어긋나도 테스트가 통과해 버린다. 그래서 진짜 모듈을 읽어 셔틀로 넘긴다.
+const attachmentMod = { exports: {} };
+vm.runInNewContext(
+  `(function(exports){${ts.transpileModule(fs.readFileSync('src/lib/attachment-file.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText}\n})`,
+  { Error, Math, Number },
+)(attachmentMod.exports);
+vm.runInNewContext(`(function(exports, require){${compiled}\n})`, { Error, Set, Math, Number })(mod.exports, () => attachmentMod.exports);
+const { SmsRunner, ATTACHMENT_TOO_LARGE } = mod.exports;
+// 다리 폭 계산도 진짜 규칙을 읽어 온다. 여기에 42 KB 를 적어 두면 규칙이 바뀌어도 통과한다.
+const planMod = { exports: {} };
+vm.runInNewContext(
+  `(function(exports){${ts.transpileModule(fs.readFileSync('src/lib/image-shrink-plan.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText}\n})`,
+  { Math, Number },
+)(planMod.exports);
+/** 자기 한도를 밝히지 않는 옛 껍데기의 가정치(64KB)에서 나온 첨부 예산(→ `lib/sms-device.web.ts`). */
+const LEGACY_BUDGET = planMod.exports.bridgeAttachmentBudget(64 * 1024);
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
-function setup(count = 3) {
+function setup(count = 3, attachmentBudget) {
   const rows = Array.from({ length: count }, (_, i) => ({ id: `r${i}`, campaignId: 'c1', recipientId: `p${i}`, name: `사람${i}`, phone: `+82100000000${i}`, message: '안내', status: 'READY', attemptId: null }));
   const events = []; const journal = []; let version = 1; let sequence = 0;
   const campaign = { id: 'c1', status: 'READY' };
@@ -26,7 +41,9 @@ function setup(count = 3) {
     getResults: async () => [...journal],
     acknowledge: async id => { events.push(`ack:${id}`); const index = journal.findIndex(r => r.attemptId === id); if (index >= 0) journal.splice(index, 1); },
   };
-  const runner = new SmsRunner(api, device, () => version, () => `attempt-${++sequence}`);
+  // 예산을 주지 않으면 러너는 「모른다」로 보고 아무것도 막지 않는다 — 옛 호출부와 같은 동작이다.
+  const runner = new SmsRunner(api, device, () => version, () => `attempt-${++sequence}`,
+    attachmentBudget === undefined ? undefined : () => attachmentBudget);
   return { rows, events, journal, api, device, runner, changeSession: () => { version++; } };
 }
 const run = h => h.runner.run('c1', { subscriptionId: 7 });
@@ -125,6 +142,79 @@ test('구버전 앱과 첨부 다운로드 실패는 claim 전에 막아 텍스�
   await assert.rejects(run(h), /download offline/);
   assert.equal(h.events.filter(e => e.startsWith('claim:')).length, 0);
 });
+/*
+  ── 🔴 껍데기 다리를 못 건너는 첨부 ──────────────────────────────
+
+  2026-09-23 실제 사고. 껍데기는 웹이 보낸 원문이 자기 상한(옛 빌드는 64KB)을 넘으면 **아무
+  말 없이 버렸고**, 웹은 150초를 기다리다 포기했다. 그때는 이미 서버에 수신자가 `SENDING` 으로
+  잠긴 뒤라 결과를 쓸 자리가 없어 그 사람은 영원히 「발송 중 · 확인 필요」로 남았다.
+  껍데기 쪽 수정은 새 APK 가 깔려야 듣지만, 러너는 웹이라 배포만으로 즉시 반영된다.
+*/
+
+/** size 바이트를 정확히 나타내는 base64. 러너의 길이 검산과 같은 규칙이어야 한다. */
+const base64Of = size => {
+  const whole = Math.floor(size / 3); const rest = size % 3;
+  return 'A'.repeat(whole * 4) + (rest === 1 ? 'AA==' : rest === 2 ? 'AAA=' : '');
+};
+/** 수신자마다 크기가 다른 첨부 한 장을 붙이고, 서버가 그 내용을 주는 것처럼 꾸민다. */
+function attachSizes(h, sizes) {
+  const capabilities = h.device.getCapabilities;
+  h.device.getCapabilities = async () => ({ ...await capabilities(), mmsSupported: true });
+  const contents = new Map();
+  sizes.forEach((size, index) => {
+    const file = { id: `a${index}`, name: `사진${index}.jpg`, mimeType: 'image/jpeg', size };
+    contents.set(file.id, { ...file, dataBase64: base64Of(size) });
+    h.rows[index].attachments = [file];
+  });
+  h.api.attachmentContent = async id => contents.get(id);
+}
+
+test('다리를 못 건너는 첨부는 단말을 부르지 않고 그 사람만 닫은 뒤 계속 간다', async () => {
+  // 🔴 `send` 를 부르면 옛 껍데기에서는 답이 오지 않고, 그 사이 수신자는 SENDING 으로 잠긴다.
+  const h = setup(2, LEGACY_BUDGET); attachSizes(h, [98735, 20174]);
+  await run(h);
+  assert.deepEqual(h.events.filter(e => e.startsWith('send:')), ['send:r1']);
+  // ⚠️ 전체를 중단하지 않는다 — 중단하면 캠페인이 또 어중간하게 남는다.
+  assert.equal(h.rows[0].status, 'FAILED');
+  assert.equal(h.rows[1].status, 'SENT');
+  assert.equal(h.rows[0].errorCode, ATTACHMENT_TOO_LARGE);
+  // claim 은 했으므로 결과를 반드시 남긴다 — 여기가 비면 그 사람이 SENDING 으로 갇힌다.
+  assert.ok(h.events.indexOf('claim:r0') < h.events.indexOf('save:r0'));
+});
+
+test('실패 문구에는 이 폰의 한도와 이번 첨부 크기가 모두 들어간다', async () => {
+  // 🔴 숫자 하나만 있으면 사용자는 다음에 무엇을 올려야 할지 여전히 모른다. 기기별 경계를
+  //    실험으로 찾는 지금은 이 두 숫자가 곧 실험 결과다.
+  const h = setup(1, LEGACY_BUDGET); attachSizes(h, [66736]);
+  await run(h);
+  const message = h.rows[0].errorMessage;
+  assert.match(message, new RegExp(`${Math.floor(LEGACY_BUDGET / 1024)} KB`), '한도가 빠졌다');
+  assert.match(message, new RegExp(`${Math.round(66736 / 1024)} KB`), '이번 첨부 크기가 빠졌다');
+});
+
+test('오늘 갇힌 두 첨부는 거절되고, 그동안 나갔던 세 장은 그대로 나간다', async () => {
+  // 실측(2026-09-23): 66,736B·98,735B 는 버려졌고 20,174B·13,680B·26,658B 는 전부 성공했다.
+  for (const size of [66736, 98735]) {
+    const h = setup(1, LEGACY_BUDGET); attachSizes(h, [size]);
+    await run(h);
+    assert.equal(h.events.filter(e => e.startsWith('send:')).length, 0, `${size}B 가 단말까지 갔다`);
+    assert.equal(h.rows[0].errorCode, ATTACHMENT_TOO_LARGE);
+  }
+  for (const size of [20174, 13680, 26658]) {
+    const h = setup(1, LEGACY_BUDGET); attachSizes(h, [size]);
+    await run(h);
+    assert.deepEqual(h.events.filter(e => e.startsWith('send:')), ['send:r0'], `${size}B 가 막혔다`);
+    assert.equal(h.rows[0].status, 'SENT');
+  }
+});
+
+test('예산을 모르면 아무것도 막지 않는다 — 지어낸 숫자로 발송을 막지 않는다', async () => {
+  // 브라우저·껍데기를 끈 네이티브 빌드가 이 경우다(→ `lib/sms-device(.web).ts`).
+  const h = setup(1); attachSizes(h, [98735]);
+  await run(h);
+  assert.deepEqual(h.events.filter(e => e.startsWith('send:')), ['send:r0']);
+});
+
 test('서버 결과 응답이 요청과 다르면 단말 결과를 지우거나 다음 사람에게 보내지 않는다', async () => {
   const h = setup(); const record = h.api.recordResult;
   h.api.recordResult = async (...args) => { const result = await record(...args); return { ...result, recipient: { ...result.recipient, status: 'SENDING' } }; };

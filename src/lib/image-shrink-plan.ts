@@ -49,8 +49,14 @@ export function shrinkTargetBytes({
   /** 이미 붙어 있는 것들의 합. */
   usedBytes: number;
   /**
-   * 단말이 SIM 에서 읽은 실제 발송 한도. **모르면 넘기지 않는다** — 모르는 것을 숫자로
-   * 지어내면 멀쩡한 사진을 필요 이상으로 뭉갠다.
+   * 단말 쪽 사정으로 좁아지는 한도. **모르면 넘기지 않는다** — 모르는 것을 숫자로
+   * 지어내면 멀쩡한 사진을 필요 이상으로 뭉갠다(`Infinity` 도 「모른다」로 다뤄진다:
+   * 아래 `Number.isFinite`).
+   *
+   * ⚠️ **껍데기 다리의 폭(`bridgeAttachmentBudget`)은 여기로 넣지 않는다.** 붙이는 시점에
+   * 그 폭으로 깎으면 모든 첨부가 같은 크기로 줄어들어, 기기마다 다른 실제 발송 한도를
+   * 실험으로 찾을 수 없게 된다. 다리 폭은 **발송 직전에** 본다
+   * (→ `lib/sms-runner.ts` 의 `bridgeOversizeMessage`).
    */
   deviceBudget?: number | null;
 }): number | null {
@@ -62,6 +68,41 @@ export function shrinkTargetBytes({
     target = Math.min(target, deviceBudget);
   }
   return target > 0 ? target : null;
+}
+
+/**
+ * 첨부 말고 그 메시지에 함께 실리는 것들의 몫 — **넉넉히 8KB.**
+ *
+ * ⚠️ **경계에 딱 맞추면 안 된다.** 이 다리를 건너는 것은 첨부만이 아니다: 본문(최대 2000자,
+ * 한글이면 UTF-8 로 글자당 3바이트), 수신자 이름·전화번호, 파일 이름, JSON 의 따옴표와
+ * 키까지 같은 문자열에 들어간다. 여유를 1KB 로 조이면 **이름이 긴 수신자 한 명에게만**
+ * 실패하고, 같은 캠페인의 다른 사람에게는 멀쩡히 나간다 — 그 증상으로 원인을 되짚는 것은
+ * 사실상 불가능하다. 8KB 를 양보해 그 부류의 사고를 통째로 없앤다.
+ */
+const BRIDGE_ENVELOPE_BYTES = 8 * 1024;
+
+/**
+ * 껍데기 다리(웹뷰 → 네이티브 메시지)에서 **첨부가 실제로 쓸 수 있는 바이트.**
+ *
+ * 🔴 **이 값을 세지 않으면 사고가 조용히 난다.** 첨부는 base64 로 그 다리를 건너는데,
+ * 껍데기는 원문이 자기 상한을 넘으면 **메시지를 통째로 버린다**(→ `components/web-shell.tsx`).
+ * 버려진 발송 요청은 웹에서 150초 뒤에야 거절되고, 그동안 서버의 수신자는 `SENDING` 으로
+ * 잠긴 채 남는다 — 화면에는 「발송 중 · 확인 필요」만 뜨고 `errorCode` 도 `transport` 도
+ * 비어 있어, 로그만 봐서는 폰이 무엇을 했는지조차 알 수 없다. 실제로 그렇게 3회 연속
+ * 실패했다(2026-09-23).
+ *
+ * ⚠️ **이 값으로 첨부를 미리 깎지 않는다.** 붙이는 시점에 깎아 버리면 어느 폰이 어디까지
+ * 보낼 수 있는지 알아낼 길이 사라진다 — 지금은 기기별 실제 한도를 실험으로 찾는 중이라,
+ * 크게 올려 보고 **발송 직전에 분명하게 실패시키는** 쪽을 택했다(→ `lib/sms-runner.ts`).
+ * 갇히지만 않으면 실패는 정보다.
+ *
+ * 환산은 두 단계다 — 포장(JSON 껍데기·본문·이름)을 먼저 빼고, 남은 폭을 base64 이전의
+ * 원본 바이트로 되돌린다(base64 는 3바이트를 4글자로 적으므로 ×3/4).
+ */
+export function bridgeAttachmentBudget(messageMaxBytes: number): number {
+  if (!Number.isFinite(messageMaxBytes)) return messageMaxBytes > 0 ? Number.POSITIVE_INFINITY : 0;
+  const usable = messageMaxBytes - BRIDGE_ENVELOPE_BYTES;
+  return usable > 0 ? Math.floor((usable * 3) / 4) : 0;
 }
 
 /** 이미 목표 이하면 아무것도 하지 않는다. */
