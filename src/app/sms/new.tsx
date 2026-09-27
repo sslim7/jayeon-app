@@ -4,7 +4,6 @@ import { Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { useHeaderActions } from '@/components/app-navigation';
 import { SmsHeaderActions } from '@/components/sms-header-actions';
 import { COMPACT_MAX_WIDTH } from '@/components/recipient-table-columns';
-import { CampaignHistorySheet } from '@/components/campaign-history-sheet';
 import { RecipientRegistrationSheet } from '@/components/recipient-registration-sheet';
 import { TemplateManager } from '@/components/template-manager';
 import { BottomSheet } from '@/components/bottom-sheet';
@@ -30,7 +29,7 @@ import { useReservations } from '@/hooks/use-reservations';
 import type { Attachment, CreateCampaignInput, MessageTemplate, Recipient } from '@/types/sms';
 export default function NewCampaignScreen() {
   const userId = useUserStore((s) => s.profile?.userId);
-  const [panel, setPanel] = useState<'register' | 'templates' | 'history' | null>(null);
+  const [panel, setPanel] = useState<'register' | 'templates' | null>(null);
   const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const params = useLocalSearchParams<{ ids?: string; closed?: string }>();
@@ -377,14 +376,12 @@ export default function NewCampaignScreen() {
   const pageActions = phone ? closeAction : <>
     <SmsButton label="수신자 등록" secondary disabled={frozen} onPress={() => setPanel('register')} />
     <SmsButton label="템플릿" secondary disabled={frozen} onPress={() => setPanel('templates')} />
-    <SmsButton label="발송 이력" secondary onPress={() => setPanel('history')} />
     {closeAction}
   </>;
   return (
     <SmsPage hideTitle wide={stage === 'recipients'} compact={listFooter} footer={listFooter ? sendButton : undefined} title={stage === 'recipients' ? '문자 보내기' : '문자 작성'} actions={pageActions}>
       {panel === 'register' || editingRecipient ? <RecipientRegistrationSheet recipient={editingRecipient ?? undefined} onClose={() => { setPanel(null); setEditingRecipient(null); }} onSaved={() => void load()} /> : null}
       {panel === 'templates' ? <TemplateManager onClose={() => setPanel(null)} /> : null}
-      {panel === 'history' ? <CampaignHistorySheet onClose={() => { setPanel(null); void load(); }} /> : null}
       {history ? <RecipientHistorySheet key={history.id} recipient={history} onClose={() => setHistory(null)} /> : null}
       {error ? <Notice error message={error} /> : null}
       {notice ? <Notice message={notice} /> : null}

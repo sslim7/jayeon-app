@@ -15,8 +15,8 @@ import { colors, fonts, radii, spacing, text } from '@/constants/theme';
 // 🔧 측정용(→ `components/asr-bench.tsx`). 끝나면 이 import 와 아래 갈래를 함께 지운다.
 import { isNativeShell, openNativeScreen } from '@/lib/native-bridge';
 
-type MenuIconKind = 'message' | 'reserved' | 'profile' | 'calls' | 'bench' | 'settings';
-type Destination = { href: '/sms/new' | '/sms/reserved' | '/calls' | '/asr-bench'; label: string; icon: MenuIconKind };
+type MenuIconKind = 'message' | 'reserved' | 'history' | 'profile' | 'calls' | 'bench' | 'settings';
+type Destination = { href: '/sms/new' | '/sms/reserved' | '/sms/history' | '/calls' | '/asr-bench'; label: string; icon: MenuIconKind };
 
 /**
  * ⚠️ **「받아쓰기 시험」은 임시 항목이다.** 폰에서 whisper 가 얼마나 걸리는지만 재는 화면이고
@@ -28,6 +28,7 @@ type Destination = { href: '/sms/new' | '/sms/reserved' | '/calls' | '/asr-bench
 const destinations: readonly Destination[] = [
   { href: '/sms/new', label: '문자 보내기', icon: 'message' },
   { href: '/sms/reserved', label: '예약 문자 보내기', icon: 'reserved' },
+  { href: '/sms/history', label: '발송 이력 보기', icon: 'history' },
   { href: '/calls', label: '통화분석', icon: 'calls' },
   // 🔧 **웹에서도 보여야 한다.** 로그인 이후 화면은 전부 웹이라 사용자가 보는 ☰ 는 웹이
   // 그린 것이고, 네이티브 메뉴는 화면에 나타나지 않는다. 대신 누르면 껍데기에게 네이티브
@@ -354,6 +355,8 @@ function MenuIcon({ kind }: { kind: MenuIconKind }) {
     {kind === 'bench' ? <><Circle cx={12} cy={13} r={7.5} /><Path d="M12 9.5V13l2.5 1.5M9.5 2.5h5" /></> : null}
     {/* 톱니: 앱 자신을 다루는 자리. 형제 앱 서랍의 설정 원과 같은 그림이다 */}
     {kind === 'settings' ? <><Circle cx={12} cy={12} r={3} /><Path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></> : null}
+    {/* 시계: 이미 나간 문자를 되돌아보는 자리. ⚠️ 바늘을 스톱워치(bench)와 **반대쪽**으로 뻗는다 — 같은 쪽이면 두 원이 서랍에서 구별되지 않는다 */}
+    {kind === 'history' ? <><Circle cx={12} cy={12} r={8.5} /><Path d="M12 7.5V12l-3.5 2" /></> : null}
     {/* 달력 + 체크: 아직 보내지 않고 담아 둔 문자 */}
     {kind === 'reserved' ? <><Rect x={3} y={5} width={18} height={16} rx={2.5} /><Path d="M8 3v4M16 3v4M3 10h18M9 15l2 2 4-4" /></> : null}
   </Svg>;
