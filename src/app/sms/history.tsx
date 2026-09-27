@@ -6,21 +6,20 @@ import { CampaignDetails } from '@/components/campaign-details';
 import { TextField } from '@/components/form-fields';
 import { AttachmentPreview } from '@/components/message-attachments';
 import { COMPACT_MAX_WIDTH } from '@/components/recipient-table-columns';
-import { Loading, Notice, SmsButton, SmsPage, s, smsError, statusLabel } from '@/components/sms-ui';
+import { ButtonRow, Loading, Notice, SmsButton, SmsPage, s, smsError, statusLabel } from '@/components/sms-ui';
 import { colors, fonts, spacing, text } from '@/constants/theme';
 import { formatPhone } from '@/lib/phone';
 import { dispatchReady, dispatchSubscriptionId, lineSelectable } from '@/lib/sms-capability';
 import { getCapabilities, type SmsCapabilities } from '@/lib/sms-device';
 import { smsDispatch } from '@/lib/sms-dispatch';
-import { groupSmsHistory, historyCampaignRecipientId, historyTime, needsAttention, outcomeSummary, withinPeriod, type HistoryPeriod } from '@/lib/sms-history-groups';
+import { groupSmsHistory, historyCampaignRecipientId, historyTime, outcomeSummary, withinPeriod, type HistoryPeriod } from '@/lib/sms-history-groups';
 import { recipientOutcome, type RecipientOutcome } from '@/lib/sms-outcome';
+import { USER_MARKED_NOT_SENT } from '@/lib/sms-runner';
 import { smsApi } from '@/lib/sms-api';
-import type { Campaign, RecipientHistory } from '@/types/sms';
+import type { RecipientHistory } from '@/types/sms';
 
 /** 한 줄이 서로 다른 발송을 가리키도록 시도 번호까지 붙인다(같은 사람에게 두 번 보냈을 수 있다). */
 const rowKey = (item: RecipientHistory) => `${item.id}:${item.attemptId ?? ''}`;
-/** 목록 한 줄에는 짧은 형식을 쓴다. 초까지 적으면 수신자 이름이 설 자리가 없다. */
-const timeLabel = (raw: string) => new Date(raw).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' });
 /**
  * 수신자 줄에 적는 **시각**. 날짜는 적지 않는다.
  *
@@ -97,6 +96,18 @@ const stripe = (index: number) => (index % 2 ? colors.bg : colors.card);
 const sendLabel = (item: RecipientHistory): string | null =>
   historyCampaignRecipientId(item) ? SEND_LABELS[recipientOutcome(item)] ?? null : null;
 /**
+ * 「발송중」으로 멈춰 선 줄인가 — **사람이 풀어 줘야 하는 줄**이다.
+ *
+ * 🔴 서버가 발송용으로 잡아 두고 결과를 받지 못한 사람이다. 서버는 이것을 스스로 풀지 않고
+ * (나갔는지 알 길이 없다), 이 줄이 하나라도 남아 있는 동안 그 캠페인은 **한 명도 더 보낼 수
+ * 없다**(→ `lib/sms-runner.ts` 의 `run` 이 그때 발송을 거절한다).
+ *
+ * ⚠️ 캠페인 수신자 id 를 뽑을 수 없는 줄에는 아무 버튼도 세우지 않는다 — 누구의 결과를 쓰는지
+ * 확신할 수 없으면 **엉뚱한 사람의 결과를 덮는다**(→ `historyCampaignRecipientId`).
+ */
+const stuckRow = (item: RecipientHistory): boolean =>
+  recipientOutcome(item) === 'SENDING' && !!item.campaignId && !!historyCampaignRecipientId(item);
+/**
  * 묶음 머리의 일자.
  *
  * 🔴 **`new Date('2026-09-27')` 를 거치지 않는다.** 날짜만 있는 ISO 문자열은 UTC 자정으로
@@ -108,12 +119,21 @@ const dateLabel = (date: string) => {
   return day ? `${year}. ${Number(month)}. ${Number(day)}.` : date;
 };
 
+/**
+ * 🔴 **목록 위에는 아무것도 세우지 않는다.**
+ *
+ * 예전에는 맨 위에 「확인이 필요한 발송 N건」 카드가 서서 손볼 것이 남은 캠페인을 따로 모아
+ * 보여 주었다. 사용자가 그것을 걷어 달라고 했다 — **이력을 보러 온 화면 위에 다른 목록이 서면
+ * 혼선만 준다.** 지금은 그 정보가 제자리로 갔다:
+ *
+ * - 시작은 했는데 결과를 못 받은 사람 → 그날 묶음에 **「발송중 N건」**으로 선다(→ `outcomeSummary`).
+ * - 아직 한 번도 안 보낸 캠페인 → **예약 화면**이 전부 담는다(→ `lib/sms-reservations.ts`).
+ *
+ * ⚠️ 되살리고 싶어지면 먼저 그 두 자리를 보라. 여기 다시 세우는 것은 같은 사실을 두 번째로
+ * 적는 일이고, 사용자가 이미 한 번 걷어 낸 것이다.
+ */
 export default function CampaignHistoryScreen() {
   const [detailId, setDetailId] = useState<string | null>(null);
-  /** 손볼 것이 남은 발송(→ `needsAttention`). 없으면 빈 배열이고, 그때는 아무것도 그리지 않는다. */
-  const [pending, setPending] = useState<Campaign[]>([]);
-  /** 🔴 기본은 **접힌 상태**. 이력을 보러 온 사람의 목록을 밀어내지 않는 것이 요점이다. */
-  const [pendingOpen, setPendingOpen] = useState(false);
   const [months, setMonths] = useState<HistoryPeriod>(DEFAULT_PERIOD);
   const [query, setQuery] = useState('');
   const [rows, setRows] = useState<RecipientHistory[]>([]);
@@ -125,6 +145,15 @@ export default function CampaignHistoryScreen() {
   /** 지금 보내는 중인 줄(`rowKey`). 버튼 글자를 바꾸고 나머지 버튼을 잠그는 데 쓴다. */
   const [sendingKey, setSendingKey] = useState<string | null>(null);
   const [sendError, setSendError] = useState('');
+  /** 지금 「발송중」을 풀고 있는 줄(`rowKey`). 서버를 부르는 동안 그 줄의 버튼을 잠근다. */
+  const [resolvingKey, setResolvingKey] = useState<string | null>(null);
+  /**
+   * 「안 나간 것으로 표시」를 되묻고 있는 줄(`rowKey`).
+   *
+   * 🔴 **되돌릴 수 없는 일이라 반드시 한 번 더 묻는다.** 실제로 나간 문자를 안 나갔다고 닫으면
+   * 그 사람은 미발송으로 돌아가고, 다음 발송에서 **같은 문자를 두 번 받는다.**
+   */
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
   /** 한 명 보내고 나면 그 줄의 상태가 바뀐다. 이 값을 올려 이력을 다시 읽는다. */
   const [reloadKey, setReloadKey] = useState(0);
   /** 러너는 싱글턴이다 — 다른 화면이 발송 중이면 여기서도 보낼 수 없다(→ `lib/sms-dispatch.ts`). */
@@ -151,7 +180,7 @@ export default function CampaignHistoryScreen() {
    * 이 기기가 문자를 보낼 수 있는지 확인한다.
    *
    * 🔴 **실패해도 화면을 세우지 않는다.** 이력을 보러 온 사람에게 단말 확인 실패를 들이밀 이유가
-   * 없다(→ 위 「확인이 필요한 발송」이 같은 태도다). 못 읽으면 `capability` 가 `null` 로 남고,
+   * 없다(곁다리 조회 실패로 이 화면을 세우지 않는다는 뜻이다). 못 읽으면 `capability` 가 `null` 로 남고,
    * 그때는 발송 버튼 대신 「확인하고 있어요」 한 줄이 선다 — 버튼이 그냥 사라지지는 않는다.
    */
   useEffect(() => {
@@ -204,25 +233,72 @@ export default function CampaignHistoryScreen() {
     }
   }
   /*
-   * 손볼 것이 남은 발송은 **누르지 않아도 확인한다.**
+   * 「발송중」으로 남은 줄의 **결과를 폰에서 다시 읽어 온다.**
    *
-   * 「미완료 발송 확인」 버튼이 목록 맨 위에 서 있던 자리다. 그 버튼은 놓을 데가 없어 여기
-   * 세워 둔 것이었고, **눌러 보기 전에는 있는지 없는지도 알 수 없었다** — 확인할 것이 있는데
-   * 모르고 지나가는 것이 이 화면의 진짜 결함이었다. 지금은 들어올 때 함께 조회해서 **있을 때만**
-   * 목록 위에 한 줄로 알린다. 검색어와 무관하므로 `query` 가 아니라 `detailId` 만 본다 —
-   * 상세를 보고 돌아오면 그 발송의 상태가 바뀌었을 수 있어 그때는 다시 확인해야 한다.
+   * 🔴 새 흐름이 아니다 — 발송 상세의 「결과 다시 확인」과 **같은 배선**이다
+   * (→ `components/campaign-details.tsx` 의 `recheck`). `smsDispatch.sync` 가 폰 저널에 남은
+   * 결과를 서버에 맞춰 준다. 폰이 결과를 들고 있었다면 이 한 번으로 그 줄이 성공·실패로
+   * 확정되고, 캠페인도 다시 보낼 수 있게 풀린다.
+   *
+   * ⚠️ 발송 중에는 부르지 않는다 — 러너가 지금 그 저널을 쓰고 있다.
    */
-  useEffect(() => {
-    if (detailId) return;
-    let alive = true;
-    void (async () => {
-      // 🔴 실패하면 조용히 없는 셈 친다. 이력을 보러 온 사람의 화면이 곁다리 조회 때문에 깨지면
-      // 안 된다(→ `hooks/use-asr-summary.ts` 가 같은 이유로 그렇게 한다). 늦게 온 응답은 버린다.
-      const items = await smsApi.list().catch(() => [] as Campaign[]);
-      if (alive) setPending(items.filter(needsAttention).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-    })();
-    return () => { alive = false; };
-  }, [detailId]);
+  async function recheckOne(item: RecipientHistory) {
+    const campaignId = item.campaignId;
+    if (!campaignId || resolvingKey || sendingKey || dispatch.running) return;
+    setResolvingKey(rowKey(item));
+    setSendError('');
+    try {
+      await smsDispatch.sync(campaignId);
+      setReloadKey((value) => value + 1);
+    } catch (e) {
+      setSendError(smsError(e));
+    } finally {
+      setResolvingKey(null);
+    }
+  }
+  /*
+   * 「발송중」으로 남은 줄을 **미발송으로 닫는다.**
+   *
+   * 🔴 **이 길이 없으면 그 캠페인은 영영 다시 못 보낸다.** 서버는 결과를 못 받은 사람을
+   * `SENDING` 인 채로 둔다(나갔는지 알 길이 없어 자동 판정하지 않는다). 그런데 러너는
+   * `SENDING` 이 하나라도 남으면 그 캠페인의 발송을 통째로 거절한다(→ `lib/sms-runner.ts`).
+   * 실제로 운영에서 막혀 Firestore 를 손으로 고쳐야 했다.
+   *
+   * 🔴 **`attemptId` 는 이력 줄에 없다.** 서버가 내려보내는 이력 항목에는 그 필드가 아예
+   * 없는데(`internal/recipients` 의 `History`), 결과 쓰기는 「그 시도의 결과」여야 하므로
+   * 시도 번호가 맞지 않으면 서버가 거절한다. 그래서 캠페인 수신자를 한 번 읽어 **지금 그
+   * 사람이 들고 있는 시도 번호**를 가져온다. 겸사겸사 그 사이에 결과가 확정되지 않았는지도
+   * 이 조회로 확인한다 — 이미 확정된 줄을 덮어쓰면 **나간 문자를 안 나갔다고 적는 일**이 된다.
+   */
+  async function markNotSent(item: RecipientHistory) {
+    const campaignId = item.campaignId;
+    const campaignRecipientId = historyCampaignRecipientId(item);
+    if (!campaignId || !campaignRecipientId || resolvingKey || sendingKey || dispatch.running) return;
+    setResolvingKey(rowKey(item));
+    setSendError('');
+    setConfirmKey(null);
+    try {
+      const found = (await smsApi.recipients(campaignId)).find((row) => row.id === campaignRecipientId);
+      if (!found) throw new Error('이 수신자를 찾지 못했어요. 목록을 새로 불러온 뒤 다시 확인해 주세요.');
+      if (found.status !== 'SENDING' || !found.attemptId) {
+        // 그 사이에 결과가 확정됐다. 덮어쓰지 않고 새 상태를 보여 주는 것이 맞다.
+        throw new Error('이 발송은 그 사이에 결과가 확인됐어요. 목록을 새로 불러왔으니 상태를 확인해 주세요.');
+      }
+      await smsApi.recordResult(campaignId, campaignRecipientId, {
+        status: 'FAILED',
+        attemptId: found.attemptId,
+        // 🔴 사유 코드는 `NOT_SENT_CODES` 에 들어 있어야 「실패」가 아니라 「미발송」으로 세어진다.
+        errorCode: USER_MARKED_NOT_SENT,
+        errorMessage: '폰 메시지함에 없어 보내는 사람이 안 나간 것으로 표시했어요.',
+      });
+    } catch (e) {
+      setSendError(smsError(e));
+    } finally {
+      // 성공이든 실패든 다시 읽는다 — 실패 사유가 「이미 확정됐다」일 때 그 새 상태를 보여야 한다.
+      setReloadKey((value) => value + 1);
+      setResolvingKey(null);
+    }
+  }
   // ⚠️ 못 찾는 값이 들어와도 **기본값 줄**로 떨어진다 — 고정 첨자를 적으면 기본값을 바꿀 때 어긋난다.
   const period = PERIODS.find((item) => item.months === months) ?? PERIODS.find((item) => item.months === DEFAULT_PERIOD)!;
   /*
@@ -252,36 +328,6 @@ export default function CampaignHistoryScreen() {
     <CampaignDetails id={detailId} />
   </SmsPage>;
   return <SmsPage hideTitle wide title="발송 이력">
-    {/*
-      확인이 필요한 발송이 **있을 때만** 선다. 0건이면 「없습니다」도 그리지 않는다 — 없는 것이
-      정상이고, 그 줄은 화면만 차지한다. 색은 경고(빨강)를 쓰지 않는다: 겁을 줄 일은 아니고,
-      대신 왼쪽 굵은 선과 굵은 글자로 목록 머리에서 눈에 걸리게 한다.
-    */}
-    {pending.length ? <View style={[s.card, styles.attention]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: pendingOpen }}
-        // aria-* 로도 적는다. react-native-web 은 RN 의 `expanded` 상태를 옮기지 않는다(§sms-ui `Choice`).
-        aria-expanded={pendingOpen}
-        accessibilityLabel={`확인이 필요한 발송 ${pending.length}건 ${pendingOpen ? '접기' : '펼치기'}`}
-        onPress={() => setPendingOpen(!pendingOpen)}
-        style={styles.attentionHead}
-      >
-        <Text style={s.subtitle}>확인이 필요한 발송 {pending.length}건</Text>
-        <Text aria-hidden={true} style={s.meta}>{pendingOpen ? '▲' : '▼'}</Text>
-      </Pressable>
-      {/* 🔴 일자·제목·상태·수신자 수를 적는다. 제목만 여덟 줄 서 있으면 무엇을 누를지 알 수 없다. */}
-      {pendingOpen ? pending.map((item, index) => <Pressable
-        key={item.id}
-        accessibilityRole="button"
-        accessibilityLabel={`${timeLabel(item.createdAt)} ${item.title} ${statusLabel[item.status] ?? item.status} 수신자 ${item.recipientCount}명 발송 상세 열기`}
-        onPress={() => setDetailId(item.id)}
-        style={[styles.pendingRow, { backgroundColor: stripe(index) }]}
-      >
-        <View style={styles.line}><Text style={[s.body, styles.pendingTitle]} numberOfLines={1}>{item.title}</Text><Text style={s.meta}>{statusLabel[item.status] ?? item.status}</Text></View>
-        <View style={styles.line}><Text style={s.meta}>{timeLabel(item.createdAt)}</Text><Text style={s.meta}>수신자 {item.recipientCount}명</Text></View>
-      </Pressable>) : null}
-    </View> : null}
     {/* 검색칸은 placeholder 가 같은 말을 하므로 라벨 글자를 걷는다(낭독기에는 그대로 읽힌다). */}
     <TextField hideLabel label="이름,전화번호 뒷자리 4자" placeholder="이름,전화번호 뒷자리 4자" maxLength={100} value={query} onChangeText={(value) => { setQuery(value); setLoading(true); }} />
     {/* 기간 선택은 수신자 화면의 그룹 선택 줄과 같은 모양이다(→ `app/recipients.tsx`). 고른 것만 진하다. */}
@@ -349,7 +395,12 @@ export default function CampaignHistoryScreen() {
               「지난 실패」와 「지금 대기」 두 줄로 내려온다. 목록은 두 줄 다 그리되(이력이니까),
               「누구에게 보내야 하나」는 접은 목록으로 본다(→ `lib/sms-history-groups.ts` 의 `current`).
             */
-            const sendable = group.items.filter((item) => sendLabel(item));
+            /*
+              ⚠️ **발송중 줄도 여기 센다.** 그 줄을 푸는 두 버튼(「결과 다시 확인」·「안 나간 것으로
+              표시」)도 보낼 수 있는 기기에서만 서기 때문이다. 세지 않으면 브라우저에서는 아무
+              버튼도 없고 **이유도 적혀 있지 않아**, 막힌 발송을 눈앞에 두고 할 일을 알 수 없다.
+            */
+            const sendable = group.items.filter((item) => sendLabel(item) || stuckRow(item));
             /*
               🔴 **왜 「새 문자」라는 길이 따로 필요한가.** 위의 「발송하기」·「다시 보내기」는 그
               사람이 들고 있던 **본문과 첨부를 그대로** 보낸다 — 서버가 claim 할 때 캠페인에 저장된
@@ -371,6 +422,10 @@ export default function CampaignHistoryScreen() {
                 const key = rowKey(item);
                 const open = openRow === key;
                 const label = sendLabel(item);
+                /** 사람이 풀어 줘야 하는 「발송중」 줄인가(→ `stuckRow`). */
+                const stuck = stuckRow(item);
+                /** 지금 이 화면에서 무언가 서버를 부르고 있는가. 한 번에 한 줄만 손댄다. */
+                const rowBusy = !!resolvingKey || !!sendingKey || dispatch.running;
                 // 🔴 홀짝은 **이 묶음 안의 순번**으로 센다(→ `stripe`). 선 대신 바탕으로 줄을 가른다.
                 return <View key={key} style={[styles.row, { backgroundColor: stripe(index) }]}>
                   {/*
@@ -411,6 +466,63 @@ export default function CampaignHistoryScreen() {
                       />
                     </View> : null}
                   </View>
+                  {/*
+                    발송중 줄을 푸는 두 가지 길. 🔴 **펼치지 않아도 보인다** — 발송 버튼과 같은
+                    이유다. 이 줄 하나 때문에 캠페인 전체가 막혀 있는데, 한 번 더 펼쳐야 나오면
+                    사용자는 막힌 이유를 찾지 못한다.
+
+                    ⚠️ 보낼 수 없는 기기(브라우저)에서는 세우지 않는다. 「결과 다시 확인」은 폰
+                    저널을 읽는 일이라 할 수 있는 것이 없고, 「안 나간 것으로 표시」는 폰 메시지함을
+                    눈으로 확인한 사람만 눌러야 하는 버튼이다.
+                  */}
+                  {stuck && !sendBlocked ? <View style={styles.resolve}>
+                    {confirmKey === key ? <>
+                      {/*
+                        🔴 **되돌릴 수 없다.** 실제로 나간 문자를 안 나갔다고 닫으면 그 사람은
+                        미발송으로 돌아가고, 다음 발송에서 **같은 문자를 두 번 받는다.** 그래서
+                        무엇을 확인하고 눌러야 하는지를 문구가 직접 말한다.
+                      */}
+                      <Notice error message={`${item.name} 님에게 문자가 나가지 않은 것으로 표시할까요? 폰 메시지함에 그 문자가 없는지 확인한 뒤 눌러 주세요. 이미 나간 문자를 안 나갔다고 표시하면 다시 보낼 때 두 번 갑니다.`} />
+                      <Notice message="표시하면 이 사람은 미발송으로 남아 이 자리에서 다시 보낼 수 있어요." />
+                      <ButtonRow>
+                        <SmsButton
+                          fill
+                          secondary
+                          danger
+                          label={resolvingKey === key ? '표시하는 중…' : '안 나간 것으로 표시'}
+                          accessibilityLabel={`${item.name} 안 나간 것으로 표시 확인`}
+                          disabled={rowBusy}
+                          onPress={() => void markNotSent(item)}
+                        />
+                        <SmsButton
+                          fill
+                          secondary
+                          label="취소"
+                          accessibilityLabel={`${item.name} 안 나간 것으로 표시 되돌리기`}
+                          disabled={rowBusy}
+                          onPress={() => setConfirmKey(null)}
+                        />
+                      </ButtonRow>
+                    </> : <ButtonRow>
+                      <SmsButton
+                        fill
+                        secondary
+                        label={resolvingKey === key ? '확인하는 중…' : '결과 다시 확인'}
+                        accessibilityLabel={`${item.name} 결과 다시 확인`}
+                        disabled={rowBusy}
+                        onPress={() => void recheckOne(item)}
+                      />
+                      <SmsButton
+                        fill
+                        secondary
+                        danger
+                        label="안 나간 것으로 표시"
+                        accessibilityLabel={`${item.name} 안 나간 것으로 표시`}
+                        disabled={rowBusy}
+                        onPress={() => { setSendError(''); setConfirmKey(key); }}
+                      />
+                    </ButtonRow>}
+                  </View> : null}
                   {open ? <View style={styles.detail}>
                     <Text selectable style={s.meta}>{formatPhone(item.phone)}{item.transport ? ` · ${item.transport}` : ''}</Text>
                     <Text selectable style={s.body}>{item.source === 'EXTERNAL' ? '외부에서 발송한 기록입니다.' : item.message || '이미지 메시지'}</Text>
@@ -436,21 +548,6 @@ export default function CampaignHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  /**
-   * 확인이 필요한 발송 카드. 왼쪽에 굵은 초록 선을 세워 평범한 카드와 구분한다.
-   * ⚠️ 빨강(`colors.red`)을 쓰지 않는다 — 고장이 아니라 **아직 안 끝난 일**이고, 이력 화면을
-   * 열 때마다 경고가 뜨면 사용자는 며칠 만에 그 색을 무시하기 시작한다.
-   */
-  attention: { borderLeftWidth: 3, borderLeftColor: colors.green },
-  /** 누를 자리는 손가락 크기(48)를 확보한다 — 화살표만 작게 찍혀 있으면 빗맞는다. */
-  attentionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, minHeight: 48 },
-  /**
-   * 확인이 필요한 발송 한 줄. 🔴 **선 대신 바탕으로 가른다**(색은 `stripe` 가 정한다).
-   * ⚠️ 위아래 여백을 줄이지 마라 — 색만으로는 대비가 낮은 화면에서 줄이 붙어 보인다.
-   */
-  pendingRow: { paddingVertical: spacing.md, paddingHorizontal: spacing.md, gap: spacing.xs },
-  /** 제목만 줄어든다 — 상태 글자가 밀려 나가면 무엇을 확인해야 하는지가 사라진다. */
-  pendingTitle: { flexShrink: 1 },
   /** 범위·개수(왼쪽)와 정렬 기준(오른쪽). 좁으면 줄바꿈하되 오른쪽 글자는 잘리지 않는다. */
   summary: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   sortNote: { marginLeft: 'auto', flexShrink: 0 },
@@ -508,5 +605,13 @@ const styles = StyleSheet.create({
   clock: { flexShrink: 0 },
   /** 폰 폭에서만 쓰는 자리. 줄 머리 아래에 버튼이 선다. 여백은 최소한만 — 줄이 길어지면 훑을 수 없다. */
   send: { paddingBottom: spacing.sm },
+  /**
+   * 「발송중」 줄을 푸는 자리. 줄 머리 **아래** 한 칸으로 선다.
+   *
+   * 🔴 **오른쪽 버튼 자리에 밀어 넣지 않는다.** 되묻는 문구가 두 줄이라 그 폭에서는 글자가
+   * 잘리고, 잘린 확인 문구는 **읽지 않고 누르게 만든다** — 되돌릴 수 없는 버튼에서 가장
+   * 비싼 실수다. 흔한 줄이 아니므로 여기만 조금 높아지는 것은 값을 치를 만하다.
+   */
+  resolve: { paddingBottom: spacing.sm, gap: spacing.xs },
   detail: { paddingBottom: spacing.md, gap: spacing.sm },
 });

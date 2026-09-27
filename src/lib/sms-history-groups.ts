@@ -1,8 +1,8 @@
 import { countOutcomes, type OutcomeCounts } from '@/lib/sms-outcome';
-import type { CampaignStatus, RecipientHistory } from '@/types/sms';
+import type { RecipientHistory } from '@/types/sms';
 
 /**
- * 발송 이력 화면이 쓰는 **순수 판정**: 「일자 · 템플릿」 묶기, 기간 거르기, 결과 집계, 미완료 여부.
+ * 발송 이력 화면이 쓰는 **순수 판정**: 「일자 · 템플릿」 묶기, 기간 거르기, 결과 집계.
  *
  * 이력은 수신자 한 명이 한 줄이라, 50명에게 한 번 보내면 목록이 50줄로 늘어난다. 그러면
  * 「언제 무엇을 보냈나」를 훑을 수가 없고 스크롤만 남는다. 그래서 먼저 발송 단위로 접어 두고,
@@ -276,6 +276,13 @@ const OUTCOME_LABELS: readonly (readonly [keyof OutcomeCounts, string])[] = [
   ['sent', '성공'],
   ['failed', '실패'],
   ['unsent', '미발송'],
+  /*
+   * 🔴 **「확인 필요」와 갈라 적는다.** 시작은 했는데 결과를 못 받은 사람이 그날 묶음에
+   * 「발송중 1건」으로 서는 것이 이 화면의 요점이다 — 그 한 줄이 없으면 그 캠페인이 왜 다시
+   * 보내지지 않는지 어디에도 적혀 있지 않다(→ `lib/sms-outcome.ts` 의 `sending`).
+   * ⚠️ 낱말은 발송 상세와 같아야 한다(`components/campaign-details.tsx` 도 「발송중」이다).
+   */
+  ['sending', '발송중'],
   ['review', '확인 필요'],
 ];
 export function outcomeSummary(counts: OutcomeCounts): string {
@@ -320,25 +327,4 @@ export function withinPeriod<T extends Timed>(items: readonly T[], months: Histo
     const at = new Date(historyTime(item) ?? '').getTime();
     return Number.isNaN(at) || at >= from;
   });
-}
-
-/**
- * 「확인이 필요한 발송」으로 셀 상태.
- *
- * 🔴 **`status !== 'COMPLETED'` 로 적으면 안 된다.** 그렇게 적었던 동안 **중단(`CANCELLED`)
- * 캠페인이 미완료로 섞여 올라왔다** — 운영에서 멈춰 세운 발송을 취소 처리했더니 그 3건이 전부
- * 「확인 필요」로 떴다. 중단은 사용자가 이미 결론을 낸 것이라 손볼 일이 없다.
- *
- * ⚠️ **막아 두는 쪽이 아니라 들여보내는 쪽을 적는다.** 새 상태가 생겼을 때 여기 이름을 적지
- * 않으면 목록에 나타나지 않는다 — 조용히 섞여 드는 것보다, 새 상태를 다룰 때 이 자리를 반드시
- * 지나가게 하는 편이 안전하다.
- */
-const NEEDS_ATTENTION: readonly CampaignStatus[] = [
-  'READY', // 만들어 두고 아직 보내지 않았다 — 보내거나 지워야 한다.
-  'SENDING', // 보내는 중에 멈췄을 수 있다 — 어디까지 나갔는지 확인해야 한다.
-  'PARTIAL_FAILED', // 일부가 실패했다 — 실패한 사람만 다시 보내야 한다.
-];
-
-export function needsAttention(campaign: { status: CampaignStatus }): boolean {
-  return NEEDS_ATTENTION.includes(campaign.status);
 }

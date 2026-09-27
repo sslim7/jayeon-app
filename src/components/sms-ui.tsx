@@ -157,7 +157,14 @@ export function Choice({
 }
 export const statusLabel: Record<string, string> = {
   READY: '대기',
-  SENDING: '발송 중 · 확인 필요',
+  /*
+   * 🔴 **「발송 중 · 확인 필요」가 아니다.** `SENDING` 은 서버가 이 사람을 발송용으로 잡아 둔
+   * 상태고, 서버는 나갔는지 스스로 판정하지 않는다. 그래서 이 줄은 사람이 풀어 줄 때까지
+   * 그대로 남는데, 여기에 「확인 필요」를 섞어 적으면 결과를 받았으나 나갔는지 모르는 줄
+   * (`UNKNOWN` = 「결과 확인 필요」)과 **같은 말로 읽혀** 무엇을 해야 하는지 갈리지 않는다.
+   * 집계 낱말도 여기에 맞춰 「발송중」이다(→ `lib/sms-history-groups.ts` 의 `OUTCOME_LABELS`).
+   */
+  SENDING: '발송중',
   SENT: '성공',
   FAILED: '실패',
   UNKNOWN: '결과 확인 필요',

@@ -32,13 +32,27 @@ export type ReservedGroup = {
 export const MAX_RESERVATION_SIZE = 50;
 
 /**
- * 예약으로 볼 캠페인.
+ * 이 화면에 모을 캠페인 — **아직 한 번도 보내지 않은 것 전부**다.
  *
- * 발송 준비만 해 두고 보내지 않은 문자도 READY 로 남기 때문에 상태만으로는 예약과 구분되지
- * 않는다. 「예약하기」로 만든 것만 `reserved` 가 true 다.
+ * 🔴 **`reserved` 로 좁히지 않는다.** 예전에는 `status === 'READY' && item.reserved` 였는데,
+ * `reserved` 는 「예약하기」로 만든 것만 참이라 두 부류가 **어느 화면에도 나타나지 않았다**:
+ *
+ * - 「발송 준비」로 만들어 두고 보내지 않은 캠페인(`reserved` 가 false)
+ * - 예약 기능이 생기기 전의 옛 문서(`reserved` 필드 자체가 없어 서버 정규화가 false 로 읽는다
+ *   → `lib/sms-api.ts` 의 `normalizeCampaign`)
+ *
+ * 발송 이력에도 없고(한 번도 시작하지 않은 캠페인은 서버가 이력에서 뺀다 — 발송 일자라는 것이
+ * 아예 없다) 여기에도 없으니, 그 사람들은 **찾을 길이 없었다.** 실제로 2026-09-16 에 만든
+ * 「더메이333」 1명이 그렇게 사라져 있었다.
+ *
+ * 아직 안 보낸 것은 **만든 경로와 무관하게** 여기 모인다. `status === 'READY'` 하나가 곧
+ * 「아직 아무것도 나가지 않았다」는 뜻이다 — 발송을 시작하면 서버가 `SENDING` 으로 옮긴다.
+ *
+ * ⚠️ `reserved` 필드는 그대로 둔다. 예약 취소 후 다시 만들 때 예약으로 남기는 표시로 쓰고
+ * 있고(→ `app/sms/reserved.tsx`), 나중에 「예약으로 만든 것」을 갈라 보여 줄 근거이기도 하다.
  */
 export function reservedCampaigns(campaigns: Campaign[]): Campaign[] {
-  return campaigns.filter((item) => item.status === 'READY' && item.reserved);
+  return campaigns.filter((item) => item.status === 'READY');
 }
 
 export function reservedRows(reservations: Reservation[]): ReservedRow[] {

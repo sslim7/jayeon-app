@@ -106,7 +106,13 @@ export default function ReservedScreen() {
       {notice ? <Notice message={notice} /> : null}
       {loading && !rows.length ? <Loading /> : !rows.length ? (
         <View style={[styles.empty, { minHeight: emptyHeight }]}>
-          <Notice message="예약된 문자가 없어요. 「문자 보내기」에서 수신자를 고르고 예약하기를 눌러 주세요." />
+          {/*
+            ⚠️ **「예약된 문자가 없어요」가 아니다.** 이 화면은 이제 「예약하기」로 만든 것만이
+            아니라 **아직 보내지 않은 문자 전부**를 담는다(→ `lib/sms-reservations.ts` 의
+            `reservedCampaigns`). 예전 문구대로 두면 발송 준비만 해 둔 문자가 여기 있는데도
+            사용자는 「예약만 없는 거겠지」로 읽어, 비었을 때 무엇이 없는 것인지가 어긋난다.
+          */}
+          <Notice message="아직 보내지 않은 문자가 없어요. 「문자 보내기」에서 수신자를 고르고 예약하기를 눌러 주세요." />
         </View>
       ) : <>
         {/* 템플릿 태그: 한 번에 한 템플릿만 보여 준다(발송도 그 단위로 한다). */}

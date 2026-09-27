@@ -16,7 +16,7 @@ import type { CampaignRecipient } from '@/types/sms';
  * ⚠️ 안드로이드에는 이 사유들이 거의 없다(「통과」와 한 건 확인창은 iPhone 전용이다). 분류가
  * 생겨도 안드로이드가 세는 값은 예전과 같다 — `tests/sms.test.cjs` 가 증거다.
  */
-export type RecipientOutcome = 'SENT' | 'FAILED' | 'UNSENT' | 'PENDING' | 'REVIEW';
+export type RecipientOutcome = 'SENT' | 'FAILED' | 'UNSENT' | 'PENDING' | 'REVIEW' | 'SENDING';
 
 /**
  * 「보내지 않았다」로 남은 사유들.
@@ -26,6 +26,8 @@ export type RecipientOutcome = 'SENT' | 'FAILED' | 'UNSENT' | 'PENDING' | 'REVIE
  */
 export const NOT_SENT_CODES = [
   'USER_SKIPPED', 'USER_CANCELLED', 'CANCELLED_BEFORE_SEND', 'IOS_COMPOSER_ABANDONED',
+  // 사람이 폰 메시지함을 보고 「안 나갔다」고 닫은 줄. 빠지면 「실패」로 세어져 다시 보내기가 가리킨다.
+  'USER_MARKED_NOT_SENT',
 ];
 
 /** 나갔는지 확인되지 않은 사유들. 자동 재발송을 막는 자리이며 예전 판정과 같은 목록이다. */
@@ -36,8 +38,22 @@ type Listed = Pick<CampaignRecipient, 'id' | 'status' | 'errorCode'>;
 
 export function recipientOutcome(row: Outcome): RecipientOutcome {
   if (row.status === 'SENT') return 'SENT';
-  // 🔴 「모른다」가 가장 먼저다. 모르는 것을 미발송으로 세면 이미 나간 문자를 다시 보내게 된다.
-  if (row.status === 'UNKNOWN' || row.status === 'SENDING' || REVIEW_CODES.includes(row.errorCode ?? '')) {
+  /*
+   * 🔴 **`SENDING` 은 「나갔는지 모름」과 갈라 센다.** 예전에는 둘 다 `REVIEW` 였고 화면은
+   * 그 칸을 「확인 필요」라고 불렀는데, 사용자에게 할 말이 서로 다르다:
+   *
+   * - `SENDING`: 서버가 이 사람을 발송용으로 잠근 뒤 결과를 **한 번도 받지 못했다.** 서버는
+   *   스스로 판정하지 않으므로(나갔는지 알 길이 없다) 이 줄은 사람이 풀어 주기 전까지 그대로
+   *   남는다. 화면은 이것을 **「발송중」**으로 보여 준다.
+   * - `REVIEW`(UNKNOWN·OUTCOME_UNKNOWN·PARTIAL_SENT): 결과는 받았는데 **나갔는지 확정되지
+   *   않은** 줄이다.
+   *
+   * ⚠️ 갈라도 **둘 다 재발송 대상이 아닌 것은 같다**(→ `unsentTargets`·`retryTargets`).
+   * 여기서 `SENDING` 을 미발송으로 세면 이미 나간 문자를 한 번 더 보낸다.
+   */
+  if (row.status === 'SENDING') return 'SENDING';
+  // 🔴 「모른다」가 먼저다. 모르는 것을 미발송으로 세면 이미 나간 문자를 다시 보내게 된다.
+  if (row.status === 'UNKNOWN' || REVIEW_CODES.includes(row.errorCode ?? '')) {
     return 'REVIEW';
   }
   if (row.status === 'FAILED') return NOT_SENT_CODES.includes(row.errorCode ?? '') ? 'UNSENT' : 'FAILED';
@@ -52,14 +68,24 @@ export interface OutcomeCounts {
   unsent: number;
   /** 나갔는지 확인되지 않은 사람. 자동으로 다시 보내지 않는다. */
   review: number;
+  /**
+   * 발송용으로 잡아 둔 채 결과를 받지 못한 사람. 화면에서는 **「발송중」**이다.
+   *
+   * 🔴 **`review` 와 한 칸에 두지 않는다.** 이 사람은 결과를 못 받은 것이지 「나갔는지 모르는」
+   * 것이 아니고, 남아 있는 한 그 캠페인은 **한 명도 더 보낼 수 없다**(→ `lib/sms-runner.ts` 가
+   * `SENDING` 이 하나라도 있으면 발송을 거절한다). 그래서 사용자가 풀어 줄 길이 필요하고,
+   * 풀어 줄 대상을 세는 칸이 따로 있어야 화면이 그 길을 세울 수 있다.
+   */
+  sending: number;
 }
 export function countOutcomes(rows: Outcome[]): OutcomeCounts {
-  const counts: OutcomeCounts = { sent: 0, failed: 0, unsent: 0, review: 0 };
+  const counts: OutcomeCounts = { sent: 0, failed: 0, unsent: 0, review: 0, sending: 0 };
   for (const row of rows) {
     const outcome = recipientOutcome(row);
     if (outcome === 'SENT') counts.sent += 1;
     else if (outcome === 'FAILED') counts.failed += 1;
     else if (outcome === 'REVIEW') counts.review += 1;
+    else if (outcome === 'SENDING') counts.sending += 1;
     else counts.unsent += 1;
   }
   return counts;
