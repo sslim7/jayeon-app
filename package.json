@@ -68,7 +68,8 @@
     "test:attach": "node --test tests/attachment-*.test.cjs",
     "test:shrink": "node --test tests/image-shrink.test.cjs",
     "test:sms-origin": "node --test tests/sms-origin.test.cjs",
-    "test:columns": "node --test tests/recipient-columns.test.cjs"
+    "test:columns": "node --test tests/recipient-columns.test.cjs",
+    "test:history": "node --test tests/sms-history.test.cjs"
   },
   "private": true
 }

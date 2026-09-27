@@ -5,6 +5,7 @@ export default function SmsLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="new" />
       <Stack.Screen name="reserved" />
+      <Stack.Screen name="history" />
       <Stack.Screen name="[id]" />
     </Stack>
   );
