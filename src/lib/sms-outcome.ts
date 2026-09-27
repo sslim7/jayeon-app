@@ -109,3 +109,22 @@ export function retryTargets(rows: Listed[]): string[] {
 export function hasClosedUnsent(rows: Outcome[]): boolean {
   return rows.some((row) => recipientOutcome(row) === 'UNSENT');
 }
+
+/**
+ * 「고른 사람에게만 보낸다」로 **좁힌다.**
+ *
+ * 🔴 **교집합이다. 받은 목록을 그대로 보내지 않는다.** `unsentTargets`·`retryTargets` 의 판정을
+ * 건너뛰고 화면이 준 id 를 러너에 그대로 넘기면, **이미 보낸 사람·결과가 확정되지 않은 사람에게
+ * 문자가 한 번 더 나간다.** 이 목록은 주소 파라미터를 타고 오기도 하므로(→ `lib/sms-origin.ts` 의
+ * `readSmsOnlyIds`), 그대로 믿으면 링크 한 줄이 위의 판정을 통째로 무력화하는 셈이 된다.
+ * 좁히는 것만 허용하고 **넓히는 것은 허용하지 않는다.**
+ *
+ * ⚠️ 「없음」과 「빈 목록」은 다르다. `null`/`undefined` 는 지정이 **없는** 평소 경로라 전원
+ * 그대로 두고, 빈 배열은 「아무도 고르지 않았다」라 아무도 남지 않는다. 둘을 같게 다루면
+ * 「한 명도 못 고른 화면」이 조용히 전원 발송으로 바뀐다.
+ */
+export function narrowTargets(targets: string[], only?: readonly string[] | null): string[] {
+  if (!only) return targets;
+  const wanted = new Set(only);
+  return targets.filter((id) => wanted.has(id));
+}

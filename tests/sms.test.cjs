@@ -374,10 +374,14 @@ test('선택한 예약 줄은 캠페인별로 묶여 남는 사람과 빼는 사
   ]);
   const one = reservedGroups(rows, ['c1:r2']);
   assert.equal(one.length, 1);
-  assert.deepEqual(plain(one[0]), { campaignId: 'c1', campaignTitle: '가을 안내', selectedRowIds: ['c1:r2'], removedRecipientIds: ['p2'], remainingRecipientIds: ['p1', 'p3'], total: 3 });
+  // 🔴 `selectedCampaignRecipientIds`(캠페인 수신자 id)와 `removedRecipientIds`(수신자 마스터 id)는
+  // **같은 사람의 다른 이름표**다. 발송은 앞의 것으로, 예약 취소는 뒤의 것으로 돈다. 둘을 바꿔
+  // 쓰면 발송이 아무도 못 찾아 조용히 전원 발송으로 돌아간다.
+  assert.deepEqual(plain(one[0]), { campaignId: 'c1', campaignTitle: '가을 안내', selectedRowIds: ['c1:r2'], selectedCampaignRecipientIds: ['r2'], removedRecipientIds: ['p2'], remainingRecipientIds: ['p1', 'p3'], total: 3 });
   // 캠페인 전체를 고르면 남는 사람이 없어 새 예약을 만들 필요가 없다.
   const whole = reservedGroups(rows, ['c1:r1', 'c1:r2', 'c1:r3']);
   assert.deepEqual(plain(whole[0].remainingRecipientIds), []);
+  assert.deepEqual(plain(whole[0].selectedCampaignRecipientIds), ['r1', 'r2', 'r3']);
   // 여러 캠페인에 걸친 선택은 묶음이 둘 이상이라 한 번에 발송할 수 없다.
   assert.deepEqual(reservedGroups(rows, ['c1:r1', 'c2:r4']).map(group => group.campaignId), ['c1', 'c2']);
   assert.deepEqual(plain(reservedGroups(rows, [])), []);
@@ -443,4 +447,51 @@ test('일괄 발송처리 결과는 성공·충돌·실패를 갈라 알린다',
   assert.equal(externalSendBatchNotice({ done: 1, failed: 2, conflicted: 0 }), '1명을 발송처리했어요. 2명은 발송처리하지 못했어요. 목록을 확인해 주세요.');
   assert.equal(externalSendBatchNotice({ done: 0, failed: 0, conflicted: 2 }), '0명을 발송처리했어요. 2명은 앞서 다른 일시로 이미 발송처리되어 있어 그대로 두었어요.');
   assert.equal(externalSendBatchNotice({ done: 1, failed: 1, conflicted: 1 }), '1명을 발송처리했어요. 1명은 앞서 다른 일시로 이미 발송처리되어 있어 그대로 두었어요. 1명은 발송처리하지 못했어요. 목록을 확인해 주세요.');
+});
+
+/*
+ * 「예약 문자 보내기에서 체크한 사람만 발송」의 심장.
+ *
+ * ┌────────────────────────────────────────────────────────────────────────────┐
+ * │ 🔴 화면이 준 목록을 **그대로** 발송 대상으로 삼으면, 이미 보낸 사람·결과가 확정되지 않은  │
+ * │ 사람에게 문자가 한 번 더 나간다. 이 목록은 주소 파라미터를 타고 오기도 해서, 링크 한 줄이 │
+ * │ `unsentTargets`·`retryTargets` 의 판정을 통째로 무력화하는 셈이 된다.                 │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ *
+ * 그래서 규칙은 **교집합**이다 — 좁히기만 하고 넓히지 않는다.
+ */
+const outcomeModule = { exports: {} };
+vm.runInNewContext(
+  `(function(exports){${ts.transpileModule(fs.readFileSync('src/lib/sms-outcome.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText}\n})`,
+  { Set, Array },
+)(outcomeModule.exports);
+const { narrowTargets, unsentTargets: unsent, retryTargets: retry } = outcomeModule.exports;
+
+test('🔴 고른 사람으로 좁혀도 보낼 수 있는 상태인 사람만 남는다', () => {
+  const rows = [
+    { id: 'r1', status: 'READY', errorCode: null },                       // 대기 → 보낼 수 있다
+    { id: 'r2', status: 'SENT', errorCode: null },                        // 이미 보냈다
+    { id: 'r3', status: 'FAILED', errorCode: 'USER_SKIPPED' },            // 내가 통과시켰다 → 보낼 수 있다
+    { id: 'r4', status: 'FAILED', errorCode: 'OUTCOME_UNKNOWN' },         // 나갔는지 모른다
+    { id: 'r5', status: 'SENDING', errorCode: null },                     // 결과를 못 받았다
+    { id: 'r6', status: 'FAILED', errorCode: 'CARRIER_REJECTED' },        // 확실히 실패했다
+  ];
+  // 고른 목록에 「보내면 안 되는 사람」을 전부 섞어도 그들은 떨어진다.
+  const picked = ['r1', 'r2', 'r3', 'r4', 'r5'];
+  assert.deepEqual(plain(narrowTargets(unsent(rows), picked)), ['r1', 'r3']);
+  assert.deepEqual(plain(narrowTargets(retry(rows), picked)), []);
+  // 고르지 않은 사람은 보낼 수 있는 상태여도 나가지 않는다 — 이것이 사용자가 지적한 바로 그 지점이다.
+  assert.deepEqual(plain(narrowTargets(unsent(rows), ['r3'])), ['r3']);
+  assert.deepEqual(plain(narrowTargets(retry(rows), ['r6'])), ['r6']);
+  // 목록에만 있고 캠페인에는 없는 id 는 아무것도 만들어 내지 않는다(넓히지 않는다).
+  assert.deepEqual(plain(narrowTargets(unsent(rows), ['없는사람'])), []);
+});
+
+test('🔴 「지정 없음」과 「아무도 안 고름」은 다르다', () => {
+  const targets = ['r1', 'r2'];
+  // 지정이 없으면 예전 그대로 전원이다 — 발송 이력·문자 보내기의 평소 경로가 달라지면 안 된다.
+  assert.deepEqual(plain(narrowTargets(targets, null)), ['r1', 'r2']);
+  assert.deepEqual(plain(narrowTargets(targets, undefined)), ['r1', 'r2']);
+  // 빈 목록은 「아무도 고르지 않았다」다. 전원으로 되돌리면 화면이 조용히 전원 발송으로 바뀐다.
+  assert.deepEqual(plain(narrowTargets(targets, [])), []);
 });

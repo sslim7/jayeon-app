@@ -27,7 +27,7 @@ const load = (file, mocks = {}) => {
   return module.exports;
 };
 
-const { readSmsOrigin, readSmsLeave, smsExit, SMS_ORIGIN_ROUTE, SMS_ORIGIN_PARAM, SMS_LEAVE_PARAM } =
+const { readSmsOrigin, readSmsLeave, readSmsOnlyIds, smsExit, SMS_ORIGIN_ROUTE, SMS_ORIGIN_PARAM, SMS_LEAVE_PARAM, SMS_ONLY_PARAM } =
   load('src/lib/sms-origin.ts');
 
 test('출처를 읽는다 — 모르는 값은 문자 보내기다', () => {
@@ -117,4 +117,47 @@ test('파라미터 이름은 한 자리에서만 정한다', () => {
     // 상수를 두고도 글자를 직접 적으면 다시 갈라진다.
     assert.ok(!/params:\s*{[^}]*\bfrom:\s*'/.test(source), screen);
   }
+});
+
+/*
+ * 「이 사람들에게만 보낸다」를 주소에서 읽는다.
+ *
+ * ┌────────────────────────────────────────────────────────────────────────────┐
+ * │ 🔴 이 값은 **실제로 문자가 나가는 대상**이 된다. 화면이 주소 한 줄을 그대로 믿으면, 이상한 │
+ * │ 링크 하나가 엉뚱한 사람에게 문자를 보낸다. 모양이 아니면 「없는 것」으로 떨어뜨린다.        │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ⚠️ 「없는 것」은 전원이라 떨어뜨리는 쪽도 공짜가 아니다. 그래서 좁힌 인원수를 화면이 적고,
+ * 좁힌 뒤에도 보낼 수 있는 상태인지는 `lib/sms-outcome.ts` 의 `narrowTargets` 가 다시 본다.
+ */
+test('파라미터 이름은 주소에 싣는 쪽과 읽는 쪽이 한 자리를 본다', () => {
+  assert.equal(SMS_ONLY_PARAM, 'only');
+});
+
+test('🔴 고른 사람 목록은 쉼표로 이은 id 일 때만 읽는다', () => {
+  assert.deepEqual(readSmsOnlyIds('abc123'), ['abc123']);
+  assert.deepEqual(readSmsOnlyIds('abc123,DEF456,g-h_i'), ['abc123', 'DEF456', 'g-h_i']);
+  // 배열로 올 수도 있다(같은 이름의 파라미터가 둘). 첫 값만 본다 — 출처를 읽을 때와 같은 태도다.
+  assert.deepEqual(readSmsOnlyIds(['r1,r2', 'r9']), ['r1', 'r2']);
+  // 같은 사람이 두 번 실려 와도 한 번만 센다 — 화면의 인원수가 실제 대상보다 부풀면 안 된다.
+  assert.deepEqual(readSmsOnlyIds('r1,r1,r2'), ['r1', 'r2']);
+});
+
+test('🔴 기대한 모양이 아니면 「없는 것」으로 친다', () => {
+  // 파라미터가 아예 없는 평소 경로. 여기서 빈 배열을 돌려주면 「아무도 아니다」가 되어
+  // 발송 이력·문자 보내기에서 들어온 화면이 한 명도 못 보내게 된다.
+  assert.equal(readSmsOnlyIds(undefined), null);
+  assert.equal(readSmsOnlyIds(''), null);
+  assert.equal(readSmsOnlyIds(null), null);
+  assert.equal(readSmsOnlyIds(123), null);
+  // 빈 칸이 섞인 목록(`a,,b`, `a,`)은 무엇을 뜻하는지 알 수 없다 — 짐작하지 않는다.
+  assert.equal(readSmsOnlyIds(','), null);
+  assert.equal(readSmsOnlyIds('a,,b'), null);
+  assert.equal(readSmsOnlyIds('a,'), null);
+  // id 에 없는 글자가 섞인 값. 주소를 손으로 고쳐 들어온 경우가 여기다.
+  assert.equal(readSmsOnlyIds('r1 r2'), null);
+  assert.equal(readSmsOnlyIds('r1,../admin'), null);
+  assert.equal(readSmsOnlyIds('r1,<script>'), null);
+  assert.equal(readSmsOnlyIds('사람'), null);
+  assert.equal(readSmsOnlyIds('a'.repeat(65)), null);
 });

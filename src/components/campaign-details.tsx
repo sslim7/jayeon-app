@@ -26,6 +26,7 @@ import { blockedByOther, type SendChoice, type SendPrompt } from '@/lib/sms-runn
 import {
   countOutcomes,
   hasClosedUnsent,
+  narrowTargets,
   recipientOutcome,
   retryTargets,
   unsentTargets,
@@ -33,7 +34,7 @@ import {
 import type { Campaign, CampaignRecipient } from '@/types/sms';
 /** 나갔는지 확인되지 않은 사람. 「실패」와도 「미발송」과도 다른 세 번째 칸이다. */
 const uncertain = (r: CampaignRecipient) => recipientOutcome(r) === 'REVIEW';
-export function CampaignDetails({ id, onOpenCampaign }: {
+export function CampaignDetails({ id, onOpenCampaign, onlyRecipientIds }: {
   id: string;
   /**
    * 다른 캠페인이 발송을 잡고 있을 때 그 화면으로 가는 길. 🔴 **라우트 화면만 준다** —
@@ -41,6 +42,20 @@ export function CampaignDetails({ id, onOpenCampaign }: {
    * 일어나지 않은 것처럼 보인다. 그쪽에서는 「중단」이 빠져나갈 길이다.
    */
   onOpenCampaign?: (campaignId: string) => void;
+  /**
+   * **이 사람들에게만 보낸다** — 캠페인 수신자 id 목록이다.
+   *
+   * ┌────────────────────────────────────────────────────────────────────────┐
+   * │ 🔴 예약 화면은 체크박스로 사람을 고르게 해 놓고, 보내기는 **예약한 건 전체**로 나갔다.  │
+   * │ 「체크해야 발송 버튼이 켜지는데 왜 다 나가느냐」 — 그 자리를 메우는 통로가 이 prop 이다. │
+   * └────────────────────────────────────────────────────────────────────────┘
+   *
+   * ⚠️ 주지 않으면(`undefined`) 예전 그대로 **전원**이다. 발송 이력·문자 보내기에서 들어오는
+   * 평소 경로는 아무것도 달라지지 않는다.
+   * 🔴 **좁히기만 한다.** 받은 id 를 그대로 러너에 넘기지 않고 `narrowTargets` 로 교집합을
+   * 낸다 — 이미 보낸 사람·결과 불명인 사람에게 다시 나가면 안 된다.
+   */
+  onlyRecipientIds?: string[] | null;
 }) {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [rows, setRows] = useState<CampaignRecipient[]>([]);
@@ -192,9 +207,15 @@ export function CampaignDetails({ id, onOpenCampaign }: {
             setPrompt(target);
           }) }
           : {}),
+        /*
+          🔴 **고른 사람이 있으면 목록을 반드시 넘긴다.** 예약(전원 READY)에는 되돌릴 사람이
+          없어 `hasClosedUnsent` 가 거짓이고, 예전에는 그때 목록 없이 돌아 **예약된 전원**이
+          나갔다. 러너는 `retryRecipientIds` 가 있으면 대기자를 그 집합으로 거르고, READY 인
+          줄은 되돌리기를 건너뛰므로 목록을 줘도 탈이 없다(→ `lib/sms-runner.ts`).
+        */
         ...(mode === 'retry'
           ? { retryRecipientIds: retryIds }
-          : hasClosedUnsent(rows) ? { retryRecipientIds: resumeIds } : {}),
+          : picking || hasClosedUnsent(rows) ? { retryRecipientIds: resumeIds } : {}),
       });
       await load();
     } catch (e) {
@@ -267,9 +288,19 @@ export function CampaignDetails({ id, onOpenCampaign }: {
     🔴 **두 목록은 한 사람도 겹치지 않는다.** 예전에는 중단·통과로 닫힌 사람이 「실패 다시
     보내기」에 들어가 「미발송 계속 보내기」와 나란히 서서, 어느 쪽을 눌러야 하는지 알 수 없었다.
   */
-  const resumeIds = unsentTargets(rows);
-  const retryIds = retryTargets(rows);
+  /*
+    🔴 **두 벌을 따로 둔다.** `allUnsentIds` 는 이 캠페인에 남은 미발송 **전체**이고,
+    `resumeIds` 는 그중 **이번에 실제로 보낼 사람**이다. 요약 줄(「미발송 N」)이 좁혀진 수를
+    적으면 사용자는 나머지가 이미 나간 줄 알고, 버튼이 전체 수를 적으면 고르지 않은 사람까지
+    보내는 줄 안다 — 둘 다 화면이 없던 일을 말하는 것이다.
+  */
+  const allUnsentIds = unsentTargets(rows);
+  const resumeIds = narrowTargets(allUnsentIds, onlyRecipientIds);
+  const retryIds = narrowTargets(retryTargets(rows), onlyRecipientIds);
   const retryable = retryIds.length > 0;
+  /** 고른 사람만 보내는 중인가. 빈 배열도 「골랐다」다(아무도 고르지 않았다는 뜻). */
+  const picking = !!onlyRecipientIds;
+  const pickedCount = resumeIds.length + retryIds.length;
   // 수신자별 카드가 없으니 사유는 대표 1건만 요약한다. 같은 사유가 반복되는 경우가 대부분이다.
   const reasons = (pick: (r: CampaignRecipient) => boolean) =>
     [...new Set(rows.filter(pick).map((r) => r.errorMessage).filter((m): m is string => !!m))];
@@ -329,8 +360,22 @@ export function CampaignDetails({ id, onOpenCampaign }: {
               읽는 데 방해만 된다(발송 이력의 요약도 같은 태도다 — `outcomeSummary`).
             */}
             <Text selectable style={s.body}>
-              성공 {sent} · 실패 {failed} · 미발송 {resumeIds.length}{inFlight ? ` · 발송중 ${inFlight}` : ''}
+              성공 {sent} · 실패 {failed} · 미발송 {allUnsentIds.length}{inFlight ? ` · 발송중 ${inFlight}` : ''}
             </Text>
+            {/*
+              🔴 **고른 사람만 보낸다는 사실을 여기서 밝힌다.** 예약 화면에서 3명을 체크하고
+              넘어온 사람이 이 화면에서 「전체가 나가는 줄」 알면, 버튼을 누르기 전에는 그 오해를
+              풀 자리가 없다. 아래 발송 버튼의 인원수만으로는 「전체 중 몇 명인지」가 보이지 않는다.
+              ⚠️ 좁혔는데 보낼 사람이 0이면 버튼 자체가 서지 않으므로, 그 경우도 말로 남긴다 —
+              말이 없으면 「버튼이 왜 없지」로 끝난다.
+            */}
+            {picking ? (
+              <Notice
+                message={pickedCount > 0
+                  ? `전체 ${rows.length}명 중 고른 ${pickedCount}명에게만 보냅니다.`
+                  : `전체 ${rows.length}명 중 고른 사람은 이미 보냈거나 지금 보낼 수 있는 상태가 아니에요. 보낼 사람이 없습니다.`}
+              />
+            ) : null}
             {errorMessages.length ? (
               <Notice
                 error
