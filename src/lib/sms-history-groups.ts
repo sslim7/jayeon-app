@@ -8,6 +8,11 @@ import type { CampaignStatus, RecipientHistory } from '@/types/sms';
  * 「언제 무엇을 보냈나」를 훑을 수가 없고 스크롤만 남는다. 그래서 먼저 발송 단위로 접어 두고,
  * 누른 묶음만 수신자 줄을 펼친다.
  *
+ * 🔴 **「줄」과 「사람」은 다르다.** 서버는 한 사람에 대해 「지난 실패」와 「지금 대기」를 **두
+ * 줄로** 내려보낸다(재시도한 사람). 그래서 목록은 줄 단위로 그리고(→ `items`), **세는 것은
+ * 사람 단위로**(→ `current`, `currentByRecipient`) 한다. 이 구분을 놓치면 한 사람이 「실패 1 ·
+ * 미발송 1」 두 명으로 세어진다 — 서버가 주는 `total` 도 사람 수가 아니라 줄 수다.
+ *
  * 🔴 **판정을 화면에서 하지 않는다.** 날짜 자르기와 정렬은 눈으로 확인하기 어려운 종류의
  * 실수(→ 아래 `historyDateKey`)를 품고 있어서, 화면 없이 `node --test` 로 고정한다
  * (→ `tests/sms-history.test.cjs`).
@@ -15,7 +20,13 @@ import type { CampaignStatus, RecipientHistory } from '@/types/sms';
 
 /** 묶는 데 필요한 것만 받는다 — 테스트가 수신자 한 줄을 통째로 짓지 않아도 되게. */
 type Timed = Pick<RecipientHistory, 'sentAt' | 'failedAt' | 'updatedAt'>;
-type Titled = Timed & Pick<RecipientHistory, 'campaignTitle' | 'status' | 'errorCode'>;
+/**
+ * ⚠️ `recipientId`·`campaignId` 는 **선택**으로 받는다. 외부 발송 기록에는 캠페인이 없고,
+ * 여기 판정들은 그 줄도 버리지 않고 각각 한 사람으로 세야 한다(→ `personKey`).
+ */
+type Titled = Timed
+  & Pick<RecipientHistory, 'campaignTitle' | 'status' | 'errorCode'>
+  & Partial<Pick<RecipientHistory, 'recipientId' | 'campaignId'>>;
 
 export type SmsHistoryGroup<T extends Titled> = {
   /** 펼침 상태를 기억할 키(→ `historyGroupKey`). */
@@ -23,16 +34,32 @@ export type SmsHistoryGroup<T extends Titled> = {
   /** 로컬 날짜 YYYY-MM-DD. */
   date: string;
   title: string;
-  /** 이 묶음의 수신자 줄 수. 아래 `counts` 의 합과 같다. */
+  /**
+   * 이 묶음의 **수신자 줄 수**.
+   *
+   * ⚠️ `counts` 의 합과 다를 수 있다. 한 사람이 「지난 실패」와 「지금 대기」 두 줄로 내려오기
+   * 때문이다(→ `currentByRecipient`). 줄 수와 사람 수는 서로 다른 것을 세고 있다.
+   */
   count: number;
   /**
-   * 결과별 인원.
+   * 결과별 **인원**. 🔴 줄 수가 아니다 — 세기 전에 `current` 로 접는다.
    *
    * 🔴 **묶을 때 함께 센다.** 화면이 묶음마다 다시 순회하면 같은 목록을 두 번 걷는 데다,
    * 세는 규칙이 화면으로 새어 나가 발송 상세와 다른 숫자가 나올 길이 열린다.
    */
   counts: OutcomeCounts;
+  /**
+   * 화면에 그리는 **줄 목록**. 🔴 **접지 않는다** — 「지난 실패」도 보여야 이력이다.
+   * 실패 줄이 사라지면 사용자는 그 사람이 왜 다시 대기가 되었는지 알 수 없다.
+   */
   items: T[];
+  /**
+   * 집계와 「누가 아직 안 받았나」에 쓰는 **사람 단위** 목록(→ `currentByRecipient`).
+   *
+   * 🔴 화면에 그리지 마라. 이것은 목록이 아니라 **세는 데 쓰는 눈**이다. 반대로 미발송 인원을
+   * 화면이 `items` 로 세면 한 사람이 두 명이 된다 — 이 필드를 내주는 이유가 그것이다.
+   */
+  current: T[];
 };
 
 /**
@@ -88,6 +115,113 @@ function sortableTime(item: Timed): number {
 }
 
 /**
+ * 대기 줄의 `id` 에 붙는 꼬리.
+ *
+ * 서버가 `_` 가 아니라 `#` 로 가른 이유가 있다 — 시도 id 는 `[A-Za-z0-9_-]` 만 쓸 수 있어
+ * `#` 을 담지 못한다. 그래서 이 꼬리는 어떤 시도 id 와도 헷갈리지 않는다.
+ */
+const PENDING_SUFFIX = '#pending';
+
+/**
+ * 이 이력 줄이 가리키는 **캠페인 수신자 id**. 뽑을 수 없으면 `null`.
+ *
+ * 🔴 **`RecipientHistory` 에는 이 값을 담은 필드가 없다.** `recipientId` 는 수신자 **마스터**
+ * id 라서 재발송에 넘기면 서버가 그 캠페인에서 아무도 찾지 못한다. 재발송이 요구하는 것은
+ * 캠페인 안의 그 사람 줄 id 다(→ `lib/sms-runner.ts` 의 `retryRecipientIds`). 그래서 서버가
+ * 만든 이력 줄 `id` 에서 되뽑는다:
+ *
+ * - 완료된 시도 줄: `{campaignId}_{campaignRecipientId}_{attemptId}`
+ * - 아직 안 보낸 대기 줄: `{campaignId}_{campaignRecipientId}#pending`
+ *
+ * 규칙은 두 가지다. **앞은 `campaignId` 로 잘라 낸다**(줄이 그 값을 함께 들고 온다). **뒤는**
+ * `#pending` 이면 통째로 떼고, 아니면 **첫 `_` 까지**가 캠페인 수신자 id 다 — 이 id 는
+ * Firestore 가 만든 `[A-Za-z0-9]{20}` 이라 `_` 를 담지 않는 반면 시도 id 는 담을 수 있어서,
+ * 뒤에서 자르면 시도 id 안의 `_` 에 걸려 엉뚱한 글자가 나온다.
+ *
+ * 🔴 **모양이 다르면 짐작하지 말고 `null` 이다.** 여기서 한 글자만 틀려도 「다시 보내기」가
+ * **엉뚱한 사람에게 문자를 보낸다.** 확신이 없으면 버튼을 세우지 않는 편이 낫다.
+ */
+export function historyCampaignRecipientId(item: Pick<RecipientHistory, 'id'> & Partial<Pick<RecipientHistory, 'campaignId'>>): string | null {
+  const campaignId = item.campaignId ?? '';
+  const id = item.id ?? '';
+  if (!campaignId || !id.startsWith(`${campaignId}_`)) return null;
+  const rest = id.slice(campaignId.length + 1);
+  if (rest.endsWith(PENDING_SUFFIX)) {
+    const found = rest.slice(0, -PENDING_SUFFIX.length);
+    return found && !found.includes('#') ? found : null;
+  }
+  const cut = rest.indexOf('_');
+  const found = cut > 0 ? rest.slice(0, cut) : '';
+  return found && !found.includes('#') ? found : null;
+}
+
+/**
+ * 「아직 안 보낸 사람」의 대기 줄인가.
+ *
+ * 서버가 대기 줄로 내려보내는 상태는 `READY`(차례가 안 옴)와 `SENDING`(시도 id 조차 없어
+ * 결과를 받을 길이 없는 줄) 둘뿐이다. 아래 `isNewer` 의 **동점 처리에만** 쓴다.
+ */
+const isWaitingRow = (item: Titled) => item.status === 'READY' || item.status === 'SENDING';
+
+/**
+ * 한 사람을 가리키는 키. 🔴 **수신자 id 만으로는 부족하고 캠페인까지 함께 본다.**
+ *
+ * 하루에 같은 템플릿을 두 번 보내면 두 발송이 한 묶음으로 들어온다(→ `groupSmsHistory`).
+ * 거기서 수신자 id 만으로 접으면 20명에게 두 번 보낸 40건이 「성공 20」으로 **줄어든다.**
+ * 접어야 하는 것은 **한 발송 안에서 같은 사람이 남긴 여러 줄**(지난 실패 + 지금 대기)뿐이다.
+ *
+ * ⚠️ 둘 중 하나라도 없으면(외부 발송 기록 등) `null` — 접지 않고 각각 한 사람으로 센다.
+ * 누구인지 확신할 수 없는 줄을 남의 줄과 합치면 사람 수가 조용히 줄어든다.
+ *
+ * 길이를 앞에 적는 이유는 `historyGroupKey` 와 같다 — 값 안에 구분자가 들어와도 안 겹친다.
+ */
+function personKey(item: Titled): string | null {
+  if (!item.campaignId || !item.recipientId) return null;
+  return `${item.campaignId.length}|${item.campaignId}|${item.recipientId}`;
+}
+
+/**
+ * 두 줄 중 어느 쪽이 그 사람의 「지금 상태」인가.
+ *
+ * 🔴 **시각이 같으면 대기 줄이 나중 것이다.** 재시도는 실패를 되돌려 놓는 일이라 실패 **뒤에**
+ * 오고, 그러므로 그 사람의 지금 상태는 「대기」다. 두 줄의 시각이 같게 들어오는 일은 실제로
+ * 생긴다 — 대기 줄이 시각으로 쓰는 `updatedAt` 이 되돌린 그 순간이라 실패 시각과 같은
+ * 밀리초일 수 있다. 여기서 실패 줄을 골라 버리면 **재시도를 눌러 둔 사람이 「실패」로 남아
+ * 미발송 수에서 빠지고**, 화면은 보내야 할 사람이 없다고 말한다.
+ */
+function isNewer(candidate: Titled, kept: Titled): boolean {
+  const a = sortableTime(candidate);
+  const b = sortableTime(kept);
+  if (a !== b) return a > b;
+  return isWaitingRow(candidate) && !isWaitingRow(kept);
+}
+
+/**
+ * 집계에 쓸 **사람 단위** 목록. 같은 발송·같은 사람의 여러 줄에서 「지금 상태」 한 줄만 남긴다.
+ *
+ * 🔴 **화면 목록을 접는 함수가 아니다.** 목록(`items`)은 줄 단위 그대로 둔다 — 「지난 실패」도
+ * 보여야 이력이고, 그 줄이 사라지면 사용자는 왜 그 사람이 다시 대기가 되었는지 알 수 없다.
+ * 접는 것은 **세는 일**뿐이다.
+ *
+ * 접지 않고 세면 실패했다가 재시도로 대기가 된 한 사람이 「실패 1 · 미발송 1」 — **두 명**으로
+ * 세어진다. 서버의 `total` 도 사람 수가 아니라 줄 수라, 믿고 쓰면 같은 자리에서 틀린다.
+ *
+ * 남는 순서는 **처음 만난 자리**다. 서버가 준 순서(최근 발송 순)를 흔들지 않기 위해서다.
+ */
+export function currentByRecipient<T extends Titled>(items: readonly T[]): T[] {
+  const slot = new Map<string, number>();
+  const out: T[] = [];
+  for (const item of items) {
+    const key = personKey(item);
+    if (key === null) { out.push(item); continue; }
+    const found = slot.get(key);
+    if (found === undefined) { slot.set(key, out.length); out.push(item); continue; }
+    if (isNewer(item, out[found])) out[found] = item;
+  }
+  return out;
+}
+
+/**
  * 「일자 · 템플릿」으로 접는다.
  *
  * ⚠️ **같은 템플릿을 하루에 두 번 보내면 한 묶음이 된다.** 사용자가 고른 기준이 「일자,
@@ -99,7 +233,8 @@ function sortableTime(item: Timed): number {
  * 그 순서이고, 여기서 다시 정렬하면 서버가 아는 순서(같은 시각의 동순위 처리 등)를 잃는다.
  */
 export function groupSmsHistory<T extends Titled>(items: readonly T[]): SmsHistoryGroup<T>[] {
-  const groups = new Map<string, SmsHistoryGroup<T> & { latest: number }>();
+  type Building = Omit<SmsHistoryGroup<T>, 'counts' | 'current'> & { latest: number };
+  const groups = new Map<string, Building>();
   for (const item of items) {
     const date = historyDateKey(item);
     const title = item.campaignTitle;
@@ -112,12 +247,16 @@ export function groupSmsHistory<T extends Titled>(items: readonly T[]): SmsHisto
       if (at > found.latest) found.latest = at;
       continue;
     }
-    groups.set(key, { key, date, title, count: 1, counts: { sent: 0, failed: 0, unsent: 0, review: 0 }, items: [item], latest: at });
+    groups.set(key, { key, date, title, count: 1, items: [item], latest: at });
   }
   return [...groups.values()]
     // 날짜는 YYYY-MM-DD 라 글자 비교가 곧 시간 순서다.
     .sort((a, b) => b.date.localeCompare(a.date) || b.latest - a.latest)
-    .map(({ latest: _latest, ...group }) => ({ ...group, counts: countOutcomes(group.items) }));
+    .map(({ latest: _latest, ...group }) => {
+      // 🔴 **세기 전에 사람 단위로 접는다.** `group.items` 를 그대로 세면 한 사람이 두 명이 된다.
+      const current = currentByRecipient(group.items);
+      return { ...group, current, counts: countOutcomes(current) };
+    });
 }
 
 /**
