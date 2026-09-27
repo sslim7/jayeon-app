@@ -12,7 +12,7 @@ import { matchesRecipientQuery } from '@/lib/recipient-search';
 import { newSmsRequestId } from '@/lib/sms-dispatch';
 import { smsApi } from '@/lib/sms-api';
 import { reservedGroups, reservedTags } from '@/lib/sms-reservations';
-import { readSmsLeave, smsExit, SMS_LEAVE_PARAM, SMS_ORIGIN_PARAM } from '@/lib/sms-origin';
+import { readSmsLeave, smsExit, SMS_LEAVE_PARAM, SMS_ONLY_PARAM, SMS_ORIGIN_PARAM } from '@/lib/sms-origin';
 
 export default function ReservedScreen() {
   const { reservations, rows, loading, error, reload } = useReservations();
@@ -151,9 +151,28 @@ export default function ReservedScreen() {
         {!visible.length ? <Notice message="검색어에 해당하는 예약이 없습니다." /> : null}
         <Text style={s.meta}>{active} {visible.length}명 · 선택 {picked.length}명</Text>
         {groups.length > 1 ? <Notice message={`「${active}」 예약은 인원이 많아 ${groups.length}건으로 나뉘어 있어요. 보내기는 한 건씩 하면 되니 한 건 안에서 골라 주세요.`} /> : null}
-        {single && single.selectedRowIds.length < single.total ? <Notice message={`보내기는 예약한 건 전체로 나갑니다. 같이 예약된 ${single.total - single.selectedRowIds.length}명도 함께 보내게 됩니다.`} /> : null}
         <ButtonRow>
-          <SmsButton fill label="발송" disabled={busy || !single} onPress={() => { if (single) router.push({ pathname: '/sms/[id]', params: { id: single.campaignId, [SMS_ORIGIN_PARAM]: 'reserved' } }); }} />
+          {/*
+            🔴 **체크한 사람만 보낸다.** 예전에는 캠페인 id 만 넘겨서, 체크박스로 3명을 골라도
+            예약된 사람 **전원**에게 나갔다 — 「체크해야 발송 버튼이 켜지는데 왜 다 나가느냐」가
+            그 자리다. 이제 고른 사람의 **캠페인 수신자 id** 를 함께 실어 보내고, 상세 화면이
+            그 목록으로 대상을 좁힌다(→ `lib/sms-origin.ts` 의 `SMS_ONLY_PARAM`).
+            ⚠️ 라벨에 인원수를 적는다. 그냥 「발송」이면 몇 명에게 나가는지 누를 때까지 모른다.
+            다 보내려면 머리줄의 전체 선택(☑)을 누르면 된다.
+          */}
+          <SmsButton
+            fill
+            label={single ? `${single.selectedCampaignRecipientIds.length}명 발송` : '발송'}
+            disabled={busy || !single}
+            onPress={() => {
+              if (!single) return;
+              router.push({ pathname: '/sms/[id]', params: {
+                id: single.campaignId,
+                [SMS_ORIGIN_PARAM]: 'reserved',
+                [SMS_ONLY_PARAM]: single.selectedCampaignRecipientIds.join(','),
+              } });
+            }}
+          />
           <SmsButton fill secondary danger label="삭제" disabled={busy || !picked.length} onPress={() => { setNotice(''); setConfirming(true); }} />
         </ButtonRow>
       </>}

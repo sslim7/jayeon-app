@@ -12,6 +12,14 @@ export type ReservedRow = {
   id: string;
   campaignId: string;
   campaignTitle: string;
+  /**
+   * 캠페인 안의 **그 사람 줄 id**(`CampaignRecipient.id`).
+   *
+   * 🔴 아래 `recipientId`(수신자 마스터 id)와 **다른 값이다.** 발송은 이 id 로 대상을 지목한다
+   * (→ `lib/sms-runner.ts` 의 `retryRecipientIds`). 둘을 바꿔 쓰면 러너가 그 사람을 못 찾거나
+   * **다른 사람**을 가리킨다 — 예약 취소는 마스터 id 로, 발송은 이 id 로 돈다.
+   */
+  campaignRecipientId: string;
   recipientId: string;
   name: string;
   phone: string;
@@ -20,6 +28,14 @@ export type ReservedGroup = {
   campaignId: string;
   campaignTitle: string;
   selectedRowIds: string[];
+  /**
+   * 고른 사람의 **캠페인 수신자 id** — 그대로 발송 대상이 된다.
+   *
+   * 🔴 `removedRecipientIds` 와 **같은 사람의 다른 이름표**다. 예약 취소는 마스터 id 로 예약을
+   * 다시 만들고, 발송은 이 id 로 캠페인 안의 줄을 지목한다. 한쪽을 다른 쪽 자리에 넣으면
+   * 조용히 어긋난다 — 취소는 엉뚱한 사람을 빼고, 발송은 아무도 못 찾아 **전원이 나간다.**
+   */
+  selectedCampaignRecipientIds: string[];
   /** 예약에서 빼려는 수신자 */
   removedRecipientIds: string[];
   /** 예약에 남는 수신자 */
@@ -62,6 +78,7 @@ export function reservedRows(reservations: Reservation[]): ReservedRow[] {
         id: `${campaign.id}:${item.id}`,
         campaignId: campaign.id,
         campaignTitle: campaign.title,
+        campaignRecipientId: item.id,
         recipientId: item.recipientId,
         name: item.name,
         phone: item.phone,
@@ -105,12 +122,13 @@ export function reservedGroups(rows: ReservedRow[], selectedRowIds: string[]): R
   for (const row of rows) {
     let group = groups.get(row.campaignId);
     if (!group) {
-      group = { campaignId: row.campaignId, campaignTitle: row.campaignTitle, selectedRowIds: [], removedRecipientIds: [], remainingRecipientIds: [], total: 0 };
+      group = { campaignId: row.campaignId, campaignTitle: row.campaignTitle, selectedRowIds: [], selectedCampaignRecipientIds: [], removedRecipientIds: [], remainingRecipientIds: [], total: 0 };
       groups.set(row.campaignId, group);
     }
     group.total += 1;
     if (selected.has(row.id)) {
       group.selectedRowIds.push(row.id);
+      group.selectedCampaignRecipientIds.push(row.campaignRecipientId);
       group.removedRecipientIds.push(row.recipientId);
     } else group.remainingRecipientIds.push(row.recipientId);
   }

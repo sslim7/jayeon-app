@@ -131,3 +131,40 @@ function notice(origin: SmsOrigin, leave: SmsLeave, count?: number): string {
   // 상세를 닫아도 만들어진 캠페인은 남는다. 어디서 다시 찾는지까지 적어야 「사라졌나」를 묻지 않는다.
   return '문자 보내기로 돌아왔어요. 준비한 문자는 「발송 이력」에 남아 있어요.';
 }
+
+/**
+ * 「이 사람들에게만 보낸다」를 싣는 파라미터 이름.
+ *
+ * 값은 **캠페인 수신자 id**(`CampaignRecipient.id`)를 쉼표로 이은 것이다. 🔴 수신자 마스터
+ * id(`recipientId`)가 아니다 — 러너가 캠페인 안의 줄을 그 id 로 찾는다(→ `lib/sms-runner.ts`).
+ * ⚠️ 한국어를 주소에 싣지 않는다는 이 파일의 태도는 그대로다. id 는 영숫자라 해당 없다.
+ */
+export const SMS_ONLY_PARAM = 'only';
+
+/** 서버가 내주는 id 의 모양. 주소에 실어도 탈이 없는 글자만 통과시킨다. */
+const ID_SHAPE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * 주소에 실린 「이 사람들만」을 읽는다.
+ *
+ * ┌────────────────────────────────────────────────────────────────────────────┐
+ * │ 🔴 **기대한 모양이 아니면 「없는 것」으로 친다.** 화면이 주소 한 줄을 그대로 믿고 그 값을    │
+ * │ 발송 대상으로 삼으면, 이상한 링크 하나가 **엉뚱한 사람에게 문자를 보낸다.** 여기서 막는다. │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ⚠️ 「없는 것」은 **전원**이라, 떨어뜨리는 쪽이 늘 안전한 것은 아니다. 그래서 받는 화면은
+ * 좁혀진 인원수를 눈에 보이게 적고, 보내는 것은 사람이 버튼을 눌러야만 시작된다
+ * (→ `components/campaign-details.tsx`). 그리고 좁힌 뒤에도 **보낼 수 있는 상태인지는 다시
+ * 판정한다**(→ `lib/sms-outcome.ts` 의 `narrowTargets`).
+ *
+ * ⚠️ 빈 문자열도 `null` 이다 — 파라미터를 달지 않은 것과 같게 읽어야, 예약 화면을 거치지 않고
+ * 들어온 평소 경로가 예전 그대로 돈다.
+ */
+export function readSmsOnlyIds(value: unknown): string[] | null {
+  const found = first(value);
+  if (!found) return null;
+  const parts = found.split(',');
+  if (!parts.every((part) => ID_SHAPE.test(part))) return null;
+  // 같은 사람이 두 번 실려 와도 한 번만 센다 — 인원수 표시가 실제 대상보다 부풀지 않게.
+  return Array.from(new Set(parts));
+}
