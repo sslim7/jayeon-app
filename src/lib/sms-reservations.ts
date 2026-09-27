@@ -61,14 +61,22 @@ export const MAX_RESERVATION_SIZE = 50;
  * 아예 없다) 여기에도 없으니, 그 사람들은 **찾을 길이 없었다.** 실제로 2026-09-16 에 만든
  * 「더메이333」 1명이 그렇게 사라져 있었다.
  *
- * 아직 안 보낸 것은 **만든 경로와 무관하게** 여기 모인다. `status === 'READY'` 하나가 곧
- * 「아직 아무것도 나가지 않았다」는 뜻이다 — 발송을 시작하면 서버가 `SENDING` 으로 옮긴다.
+ * 아직 안 보낸 것은 **만든 경로와 무관하게** 여기 모인다.
+ *
+ * 🔴 **기준은 캠페인 상태가 아니라 「아직 안 보낸 사람이 남았는가」(`readyCount > 0`)다.**
+ * 상태로 거르면 **일부만 보낸 순간 나머지가 통째로 사라진다**: 7명 예약에서 한 명만 보내면
+ * 서버가 캠페인을 `SENDING` 으로 옮기는데, `status === 'READY'` 만 보던 예전 규칙에서는 그
+ * 예약이 목록에서 빠져 **남은 6명을 여기서 찾을 수 없었다.** 실제로 그렇게 신고를 받았다.
+ *
+ * ⚠️ `CANCELLED` 는 남은 사람이 있어도 뺀다 — 사용자가 그만두기로 한 발송이라 「보낼 것」이
+ * 아니다. 그 사람들은 발송 이력의 그날 묶음에 미발송으로 남아 거기서 보낼 수 있다.
+ * `COMPLETED` 는 `readyCount` 가 0 이라 저절로 빠진다.
  *
  * ⚠️ `reserved` 필드는 그대로 둔다. 예약 취소 후 다시 만들 때 예약으로 남기는 표시로 쓰고
  * 있고(→ `app/sms/reserved.tsx`), 나중에 「예약으로 만든 것」을 갈라 보여 줄 근거이기도 하다.
  */
 export function reservedCampaigns(campaigns: Campaign[]): Campaign[] {
-  return campaigns.filter((item) => item.status === 'READY');
+  return campaigns.filter((item) => item.readyCount > 0 && item.status !== 'CANCELLED');
 }
 
 export function reservedRows(reservations: Reservation[]): ReservedRow[] {

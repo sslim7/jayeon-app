@@ -338,19 +338,27 @@ vm.runInNewContext(`(function(exports){${reservationCompiled}\n})`, { Error, Set
 const { reservedCampaigns, reservedRows, reservedRecipientIds, excludeReserved, reservedGroups, mergeReservation, MAX_RESERVATION_SIZE } = reservationModule.exports;
 // vm 밖에서 만든 객체와 비교하려면 realm 을 한 번 벗겨야 한다(프로토타입이 달라 deepEqual 이 막힌다).
 const plain = value => JSON.parse(JSON.stringify(value));
-const campaign = (id, title, status = 'READY', reserved = true) => ({ id, title, message: '안내', status, reserved, recipientCount: 0, createdAt: '2026-09-16T00:00:00Z' });
+const campaign = (id, title, status = 'READY', reserved = true, readyCount = 1) => ({ id, title, message: '안내', status, reserved, recipientCount: readyCount, readyCount, createdAt: '2026-09-16T00:00:00Z' });
 const target = (id, recipientId, name) => ({ id, recipientId, name, phone: `0100000000${id.slice(-1)}`, campaignId: '', message: '안내', status: 'READY', createdAt: '2026-09-16T00:00:00Z', updatedAt: '2026-09-16T00:00:00Z' });
 
-test('🔴 아직 보내지 않은 캠페인은 만든 경로와 무관하게 모두 이 화면에 모인다', () => {
-  const rows = [campaign('c1', '가'), campaign('c2', '나', 'SENDING'), campaign('c3', '다', 'COMPLETED'), campaign('c4', '라', 'CANCELLED'), campaign('c5', '마')];
-  // 🔴 「발송 준비」로 만들어 두고 보내지 않은 문자(reserved=false)와 예약 기능 이전의 옛 문서도
-  // 여기 들어와야 한다. 예전에는 `reserved` 가 참인 것만 골라서, 이 부류가 **예약 화면에도 발송
-  // 이력에도 없었다** — 한 번도 시작하지 않은 캠페인은 서버가 이력에서 빼기 때문이다. 실제로
-  // 2026-09-16 에 만든 「더메이333」 1명이 그렇게 어디에서도 보이지 않았다.
+test('🔴 아직 보내지 않은 사람이 남은 캠페인은 만든 경로·진행 상태와 무관하게 이 화면에 모인다', () => {
+  const rows = [
+    campaign('c1', '가'),
+    // 🔴 **일부만 보낸 예약.** 7명 중 1명을 보내면 서버가 캠페인을 SENDING 으로 옮기는데,
+    // 예전처럼 `status === 'READY'` 만 보면 이 예약이 목록에서 통째로 빠져 **남은 6명을
+    // 예약함에서 찾을 수 없었다.** 실제로 그렇게 신고를 받은 자리다.
+    campaign('c2', '나', 'SENDING', true, 6),
+    campaign('c3', '다', 'COMPLETED', true, 0),
+    campaign('c4', '라', 'CANCELLED', true, 5),
+    campaign('c5', '마'),
+  ];
+  // 「발송 준비」로 만들어 두고 보내지 않은 문자(reserved=false)와 예약 기능 이전의 옛 문서도
+  // 여기 들어와야 한다. 2026-09-16 에 만든 「더메이333」 1명이 어디에서도 보이지 않던 이유다.
   rows.push(campaign('c6', '바', 'READY', false));
-  assert.deepEqual(reservedCampaigns(rows).map(item => item.id), ['c1', 'c5', 'c6']);
-  // ⚠️ 가르는 기준은 상태 하나다 — 보내기 시작했거나 끝났거나 중단한 것은 들어오지 않는다.
-  assert.deepEqual(reservedCampaigns(rows).map(item => item.status), ['READY', 'READY', 'READY']);
+  assert.deepEqual(reservedCampaigns(rows).map(item => item.id), ['c1', 'c2', 'c5', 'c6']);
+  // ⚠️ 끝난 것(readyCount 0)과 중단한 것은 남은 사람이 있어도 들어오지 않는다.
+  assert.deepEqual(reservedCampaigns([campaign('x', '끝', 'COMPLETED', true, 0)]), []);
+  assert.deepEqual(reservedCampaigns([campaign('y', '중단', 'CANCELLED', true, 9)]), []);
 });
 test('예약 목록은 캠페인을 가로질러 이름순으로 모으고 같은 사람의 여러 예약을 모두 보여 준다', () => {
   const rows = reservedRows([

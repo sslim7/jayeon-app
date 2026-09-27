@@ -11,6 +11,13 @@ export type Campaign = {
   /** 「예약하기」로 만든 것만 true. 발송 준비로 만들어 두고 보내지 않은 문자와 구분한다(서버가 주기 전에는 false). */
   reserved: boolean;
   recipientCount: number;
+  /**
+   * 아직 보내지 않은 사람 수.
+   *
+   * 🔴 「예약함에 남아야 하는가」의 기준이다(→ `lib/sms-reservations.ts`). 캠페인 상태로
+   * 판단하면 일부만 보낸 순간 나머지가 목록에서 사라진다. 옛 서버가 주지 않으면 0 으로 읽는다.
+   */
+  readyCount: number;
   attachments?: Attachment[];
   createdAt: string;
   startedAt?: string | null;

@@ -355,17 +355,7 @@ export default function CampaignHistoryScreen() {
         {/* 정렬 기준만 짧게. 줄어들지 않는다 — 「최근 발송…」으로 잘리면 무슨 순서인지가 사라진다. */}
         <Text style={[s.meta, styles.sortNote]}>최근 발송순</Text>
       </View>
-      {/*
-        이 기기에서 보낼 수 없는 이유. 🔴 **목록 위에 한 번만 선다.**
-        묶음마다 그리면 이미 다 나간 발송 제목 바로 밑에도 붙어서, **그 발송이 안 나갔다**는
-        말로 읽힌다 — 실제로 「발송 이력에 이런 말이 왜 나오냐, 이미 발송한 건데」라는 말을
-        들은 자리다. 어느 묶음의 사정이 아니라 **이 화면 전체의 사정**이므로 위에 둔다.
 
-        ⚠️ 보낼 것이 하나도 없으면 그리지 않는다. 눌러야 할 버튼이 애초에 없는 사람에게는
-        「보낼 수 없다」가 아무 뜻도 없다.
-      */}
-      {sendBlocked && groups.some((group) => group.items.some((item) => sendLabel(item) || stuckRow(item)))
-        ? <Notice message={sendBlocked} /> : null}
       {/*
         **집계가 먼저다.** 50명에게 한 번 보내면 수신자 줄이 50개라, 이력을 그대로 펴 두면
         「언제 무엇을 보냈나」를 훑을 수가 없고 스크롤만 남는다. 그래서 「일자 · 템플릿 ·
@@ -411,7 +401,6 @@ export default function CampaignHistoryScreen() {
               표시」)도 보낼 수 있는 기기에서만 서기 때문이다. 세지 않으면 브라우저에서는 아무
               버튼도 없고 **이유도 적혀 있지 않아**, 막힌 발송을 눈앞에 두고 할 일을 알 수 없다.
             */
-            const sendable = group.items.filter((item) => sendLabel(item) || stuckRow(item));
             /*
               🔴 **왜 「새 문자」라는 길이 따로 필요한가.** 위의 「발송하기」·「다시 보내기」는 그
               사람이 들고 있던 **본문과 첨부를 그대로** 보낸다 — 서버가 claim 할 때 캠페인에 저장된
