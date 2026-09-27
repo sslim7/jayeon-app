@@ -94,6 +94,18 @@ export const recipientApi = {
 };
 const path = (id: string) => `/sms/campaigns/${segment(id)}`;
 export const smsApi = {
+  /**
+   * 발송 이력 전부.
+   *
+   * ⚠️ **전 기간을 100건씩 끝까지 받아 온다**(→ `allPages`). 기간 조건이 없는 것은 서버가
+   * 받지 않기 때문이고, 화면의 기간 선택(최근 1·3·6개월 · 전체)은 **받아 온 뒤** 거르기만
+   * 한다(→ `lib/sms-history-groups.ts` 의 `withinPeriod`). 즉 기간을 좁혀도 이 요청은 그대로
+   * 무거우며, 이력이 쌓이면 화면이 아니라 **여기가 먼저 느려진다.**
+   *
+   * 🔴 **이 화면이 느리다는 말이 나오면 볼 자리는 여기다.** 다음 단계는 `/sms/history` 가
+   * `from`/`to` 를 받게 하고 그 값을 여기서 넘기는 것 — 화면에서 거르기를 더 손봐도 받아
+   * 오는 양은 한 건도 줄지 않는다.
+   */
   history: (q = ''): Promise<RecipientHistory[]> => allPages<RecipientHistory>(`/sms/history?q=${segment(q)}`, withAttachments),
   attachmentContent: (id: string) => api.get<Attachment & { dataBase64: string }>(`/sms/attachments/${segment(id)}/content`),
   list: (): Promise<Campaign[]> => allPages<Campaign>('/sms/campaigns', normalizeCampaign),
