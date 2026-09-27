@@ -46,6 +46,22 @@ export const IOS_COMPOSER_ABANDONED = 'IOS_COMPOSER_ABANDONED';
 /** claim 까지 갔지만 보내기 전에 멈췄다. 실패가 아니라 **아직 안 보낸 사람**이다. */
 export const CANCELLED_BEFORE_SEND = 'CANCELLED_BEFORE_SEND';
 /**
+ * 발송중으로 남은 줄을 **사람이 폰 메시지함을 보고** 「안 나갔다」고 닫았다.
+ *
+ * 🔴 **러너가 쓰는 사유가 아니다.** 여기 두는 것은 사유 코드 글자를 한 군데에 모아 두기
+ * 위해서다(→ `lib/sms-outcome.ts` 의 `NOT_SENT_CODES` 가 같은 글자를 들고 있어야 한다).
+ * 쓰는 쪽은 발송 이력 화면이다(→ `app/sms/history.tsx`).
+ *
+ * 🔴 **왜 필요한가.** 결과를 못 받은 줄은 서버가 `SENDING` 인 채로 둔다 — 나갔는지 서버가
+ * 알 길이 없으므로 자동 판정하지 않는다. 그런데 `SENDING` 이 한 명이라도 남으면 이 러너가
+ * 그 캠페인의 발송을 통째로 거절해서(아래 `run`), 사람이 풀어 주지 않으면 **그 캠페인은
+ * 영영 다시 보낼 수 없다.** 실제로 운영에서 막혀 Firestore 를 손으로 고쳐야 했다.
+ *
+ * ⚠️ 다른 사유와 **글자를 갈라 둔다.** 「사람이 눈으로 확인하고 닫았다」는 통과·중단과 다른
+ * 사실이고, 나중에 「왜 안 갔지」를 볼 때 그 구분이 곧 답이다.
+ */
+export const USER_MARKED_NOT_SENT = 'USER_MARKED_NOT_SENT';
+/**
  * 첨부가 **껍데기 다리를 건널 수 없을 만큼 크다** — 단말에 넘기기도 전에 막았다.
  *
  * 🔴 다른 실패와 글자를 갈라 둔다. 통신사 거절(`SMS_FAILED`)이나 권한 문제와 섞이면,

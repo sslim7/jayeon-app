@@ -41,7 +41,7 @@ const capabilityModule = load('src/lib/sms-capability.ts');
 const outcomeModule = load('src/lib/sms-outcome.ts');
 const {
   SmsRunner, USER_SKIPPED, USER_CANCELLED, IOS_COMPOSER_ABANDONED, CANCELLED_BEFORE_SEND,
-  knownNotSent, skippedResult, blockedByOther,
+  USER_MARKED_NOT_SENT, knownNotSent, skippedResult, blockedByOther,
 } = runnerModule;
 const { mapComposeOutcome } = iosResult;
 const { lineSelectable, composerConfirm, dispatchReady, dispatchSubscriptionId } = capabilityModule;
@@ -348,7 +348,10 @@ test('매달린 약속이 정리되면 다음 사람으로 이어지고 다음 �
 test('중단·통과·시트 취소·정리는 실패가 아니라 미발송이다', () => {
   assert.equal(recipientOutcome({ status: 'SENT', errorCode: null }), 'SENT');
   assert.equal(recipientOutcome({ status: 'READY', errorCode: null }), 'PENDING');
-  for (const code of [USER_SKIPPED, USER_CANCELLED, CANCELLED_BEFORE_SEND, IOS_COMPOSER_ABANDONED]) {
+  // ⚠️ `USER_MARKED_NOT_SENT` 은 러너가 쓰는 사유가 아니라 **발송 이력 화면**이 발송중 줄을
+  // 닫을 때 쓰는 사유다(→ `app/sms/history.tsx`). 글자를 두 파일이 같이 들고 있어야 하는 것은
+  // 나머지와 똑같다 — 한쪽만 바뀌면 사용자가 방금 닫은 사람이 「실패」로 돌아간다.
+  for (const code of [USER_SKIPPED, USER_CANCELLED, CANCELLED_BEFORE_SEND, IOS_COMPOSER_ABANDONED, USER_MARKED_NOT_SENT]) {
     assert.equal(recipientOutcome({ status: 'FAILED', errorCode: code }), 'UNSENT', code);
     // 두 파일이 같은 글자를 써야 한다. 한쪽만 바뀌면 그 사유가 조용히 「실패」로 돌아간다.
     assert.ok(NOT_SENT_CODES.includes(code), code);
@@ -359,7 +362,9 @@ test('중단·통과·시트 취소·정리는 실패가 아니라 미발송이�
   }
   // 나갔는지 모르는 것은 어느 쪽도 아니다. 미발송으로 세면 이미 나간 문자를 다시 보내게 된다.
   assert.equal(recipientOutcome({ status: 'UNKNOWN', errorCode: null }), 'REVIEW');
-  assert.equal(recipientOutcome({ status: 'SENDING', errorCode: null }), 'REVIEW');
+  // 🔴 발송용으로 잡아 두고 결과를 못 받은 줄은 **따로** 센다 — 화면이 「발송중」이라고 부르는
+  // 자리다. 「나갔는지 모름」과 한 낱말로 묶으면 무엇을 확인해야 하는지가 갈리지 않는다.
+  assert.equal(recipientOutcome({ status: 'SENDING', errorCode: null }), 'SENDING');
   assert.equal(recipientOutcome({ status: 'FAILED', errorCode: 'OUTCOME_UNKNOWN' }), 'REVIEW');
   assert.equal(recipientOutcome({ status: 'FAILED', errorCode: 'PARTIAL_SENT' }), 'REVIEW');
 });
@@ -371,7 +376,7 @@ test('두 버튼은 같은 사람을 가리키지 않는다', () => {
     { id: 'r3', status: 'SENT', errorCode: null },
     { id: 'r4', status: 'FAILED', errorCode: 'OUTCOME_UNKNOWN' },
   ];
-  assert.deepEqual(plain(countOutcomes(rows)), { sent: 1, failed: 1, unsent: 2, review: 1 });
+  assert.deepEqual(plain(countOutcomes(rows)), { sent: 1, failed: 1, unsent: 2, review: 1, sending: 0 });
   // 미발송은 대기와 내가 닫은 사람을 한 묶음으로 — 버튼 하나가 이 목록을 그대로 보낸다.
   assert.deepEqual(plain(unsentTargets(rows)), ['r0', 'r1']);
   assert.deepEqual(plain(retryTargets(rows)), ['r2']);
@@ -379,7 +384,7 @@ test('두 버튼은 같은 사람을 가리키지 않는다', () => {
   assert.deepEqual(plain(overlap), []);
   // 한 사람은 정확히 한 칸에만 든다. 어느 칸에도 없는 사람도 없다.
   const counts = countOutcomes(rows);
-  assert.equal(counts.sent + counts.failed + counts.unsent + counts.review, rows.length);
+  assert.equal(counts.sent + counts.failed + counts.unsent + counts.review + counts.sending, rows.length);
   assert.equal(hasClosedUnsent(rows), true);
   assert.equal(hasClosedUnsent([{ id: 'r1', status: 'READY', errorCode: null }]), false);
 });
@@ -392,7 +397,7 @@ test('안드로이드 사유는 예전과 같게 실패로 센다', () => {
     { id: 'r3', status: 'FAILED', errorCode: 'NO_SERVICE' },
     { id: 'r4', status: 'READY', errorCode: null },
   ];
-  assert.deepEqual(plain(countOutcomes(rows)), { sent: 1, failed: 3, unsent: 1, review: 0 });
+  assert.deepEqual(plain(countOutcomes(rows)), { sent: 1, failed: 3, unsent: 1, review: 0, sending: 0 });
   assert.deepEqual(plain(retryTargets(rows)), ['r1', 'r2', 'r3']);
   assert.deepEqual(plain(unsentTargets(rows)), ['r4']);
   assert.equal(hasClosedUnsent(rows), false);

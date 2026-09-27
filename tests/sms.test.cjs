@@ -341,11 +341,16 @@ const plain = value => JSON.parse(JSON.stringify(value));
 const campaign = (id, title, status = 'READY', reserved = true) => ({ id, title, message: '안내', status, reserved, recipientCount: 0, createdAt: '2026-09-16T00:00:00Z' });
 const target = (id, recipientId, name) => ({ id, recipientId, name, phone: `0100000000${id.slice(-1)}`, campaignId: '', message: '안내', status: 'READY', createdAt: '2026-09-16T00:00:00Z', updatedAt: '2026-09-16T00:00:00Z' });
 
-test('예약은 아직 보내지 않았고 예약으로 표시된 것만이다', () => {
+test('🔴 아직 보내지 않은 캠페인은 만든 경로와 무관하게 모두 이 화면에 모인다', () => {
   const rows = [campaign('c1', '가'), campaign('c2', '나', 'SENDING'), campaign('c3', '다', 'COMPLETED'), campaign('c4', '라', 'CANCELLED'), campaign('c5', '마')];
-  // 발송 준비만 해 두고 보내지 않은 문자(reserved=false)는 예약이 아니다.
+  // 🔴 「발송 준비」로 만들어 두고 보내지 않은 문자(reserved=false)와 예약 기능 이전의 옛 문서도
+  // 여기 들어와야 한다. 예전에는 `reserved` 가 참인 것만 골라서, 이 부류가 **예약 화면에도 발송
+  // 이력에도 없었다** — 한 번도 시작하지 않은 캠페인은 서버가 이력에서 빼기 때문이다. 실제로
+  // 2026-09-16 에 만든 「더메이333」 1명이 그렇게 어디에서도 보이지 않았다.
   rows.push(campaign('c6', '바', 'READY', false));
-  assert.deepEqual(reservedCampaigns(rows).map(item => item.id), ['c1', 'c5']);
+  assert.deepEqual(reservedCampaigns(rows).map(item => item.id), ['c1', 'c5', 'c6']);
+  // ⚠️ 가르는 기준은 상태 하나다 — 보내기 시작했거나 끝났거나 중단한 것은 들어오지 않는다.
+  assert.deepEqual(reservedCampaigns(rows).map(item => item.status), ['READY', 'READY', 'READY']);
 });
 test('예약 목록은 캠페인을 가로질러 이름순으로 모으고 같은 사람의 여러 예약을 모두 보여 준다', () => {
   const rows = reservedRows([

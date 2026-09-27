@@ -234,6 +234,13 @@ export function CampaignDetails({ id, onOpenCampaign }: {
   const sent = counts.sent;
   const failed = counts.failed;
   const unknown = counts.review;
+  /*
+    🔴 **「발송중」과 「결과 확인 필요」는 다른 말이다.** `unknown`(REVIEW)은 결과를 받았는데
+    나갔는지 확정되지 않은 사람이고, 이 값은 **결과를 아예 받지 못한** 사람이다. 한 낱말로
+    묶어 부르던 동안 사용자는 무엇을 확인해야 하는지 알 수 없었다. ⚠️ 발송 이력의 묶음 머리도
+    같은 낱말을 쓴다(→ `lib/sms-history-groups.ts`) — 두 화면이 같은 발송을 다르게 부르면 안 된다.
+  */
+  const inFlight = counts.sending;
   const current = rows.find((r) => r.id === dispatch.currentRecipientId);
   const attachmentSupported = !campaign?.attachments?.length || !!capability?.mmsSupported;
   const available = dispatchReady(capability, sim, attachmentSupported);
@@ -243,8 +250,16 @@ export function CampaignDetails({ id, onOpenCampaign }: {
   // 데스크톱 브라우저처럼 발송 자체가 불가능한 곳. null(확인 중)과 구별한다 — 확인 중에는 버튼을 비활성으로 둔다.
   const browserOnly = capability?.supported === false;
   const sending = rows.some((r) => r.status === 'SENDING');
-  // 발송 중 지금 보내는 1건(SENDING)은 곧 확정되니 제외한다. 그 밖의 미확정은 자동 동기화로 안 풀릴 수 있어 직접 다시 확인할 길을 둔다.
-  const unresolved = rows.some((r) => uncertain(r) && !(running && r.status === 'SENDING'));
+  /*
+    발송 중 지금 보내는 1건(SENDING)은 곧 확정되니 제외한다. 그 밖의 미확정은 자동 동기화로
+    안 풀릴 수 있어 직접 다시 확인할 길을 둔다.
+
+    🔴 **`SENDING` 을 빠뜨리지 마라.** `uncertain` 이 REVIEW 만 보게 된 뒤로, 결과를 못 받아
+    발송중으로 남은 줄은 `uncertain` 에 들지 않는다. 여기서 따로 들여보내지 않으면 「결과 다시
+    확인」 버튼이 사라지고, 그 캠페인은 `SENDING` 이 하나 남았다는 이유로 영영 다시 보낼 수
+    없게 된다(→ `lib/sms-runner.ts` 의 `run` 이 그때 발송을 거절한다).
+  */
+  const unresolved = rows.some((r) => (uncertain(r) || r.status === 'SENDING') && !(running && r.status === 'SENDING'));
   /*
     수신자 목록을 없애며 개별 선택도 없앴다. 확실히 실패한 행은 전부 다시 보내고, 결과 미확정
     행은 중복 발송 위험이 있어 빼는 규칙은 그대로다.
@@ -307,9 +322,14 @@ export function CampaignDetails({ id, onOpenCampaign }: {
                 }}
               />
             </View>
-            {/* 🔴 「실패」는 보냈는데 안 간 사람, 「미발송」은 아직 안 보낸 사람이다. 섞으면 무엇을 해야 하는지 알 수 없다. */}
+            {/*
+              🔴 「실패」는 보냈는데 안 간 사람, 「미발송」은 아직 안 보낸 사람이다. 섞으면 무엇을
+              해야 하는지 알 수 없다.
+              ⚠️ **「발송중」은 0일 때 적지 않는다.** 보통은 없는 것이 정상이라, 늘 서 있으면
+              읽는 데 방해만 된다(발송 이력의 요약도 같은 태도다 — `outcomeSummary`).
+            */}
             <Text selectable style={s.body}>
-              성공 {sent} · 실패 {failed} · 미발송 {resumeIds.length}
+              성공 {sent} · 실패 {failed} · 미발송 {resumeIds.length}{inFlight ? ` · 발송중 ${inFlight}` : ''}
             </Text>
             {errorMessages.length ? (
               <Notice
@@ -325,6 +345,17 @@ export function CampaignDetails({ id, onOpenCampaign }: {
             {unknown ? (
               <Notice
                 message={`결과 확인 필요 ${unknown}건 · 실제 발송 여부를 확정할 수 없어 자동 재발송하지 않습니다.`}
+              />
+            ) : null}
+            {/*
+              🔴 **발송중으로 남은 줄이 있으면 이 캠페인은 한 명도 더 보낼 수 없다**
+              (→ `lib/sms-runner.ts` 의 `run`). 그 사실을 여기 적지 않으면 사용자는 버튼을
+              눌러 보고 나서야 「결과가 확인되지 않은 발송이 있어요」를 만난다.
+              ⚠️ 발송 중일 때는 지금 보내는 1건이 여기 세어지므로 적지 않는다 — 곧 확정된다.
+            */}
+            {inFlight && !running ? (
+              <Notice
+                message={`발송중 ${inFlight}건 · 결과를 받지 못해 이 발송은 더 보낼 수 없어요. 「결과 다시 확인」을 눌러 주세요. 폰 메시지함에도 없으면 발송 이력에서 「안 나간 것으로 표시」할 수 있어요.`}
               />
             ) : null}
             {unresolved ? (
