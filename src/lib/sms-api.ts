@@ -33,8 +33,13 @@ function withAttachments<T extends { attachments?: Attachment[] }>(value: T): T 
   return { ...value, attachments };
 }
 function normalizeCampaign(value: Campaign): Campaign {
+  const data = record(value);
+  // ⚠️ 남은 인원을 주지 않는 옛 서버에서는 0 으로 읽는다. 예약함에서 빠져 보일 뿐,
+  // 그 사람들은 발송 이력의 그날 묶음에 미발송으로 남아 거기서 보낼 수 있다.
+  const readyCount = typeof data.readyCount === 'number' && Number.isInteger(data.readyCount) && data.readyCount >= 0
+    ? data.readyCount : 0;
   // 예약 여부를 주지 않는 서버(구버전)에서는 예약이 아닌 것으로 읽는다 — 예약함이 비어 보일 뿐 화면은 그대로 돈다.
-  return { ...withAttachments(value), reserved: record(value).reserved === true };
+  return { ...withAttachments(value), reserved: data.reserved === true, readyCount };
 }
 function customFields(value: unknown): RecipientCustomField[] {
   const fields = nullableArray<RecipientCustomField>(value);
