@@ -309,7 +309,7 @@ export default function CampaignHistoryScreen() {
    * 일어난 일이다. 판정은 발송 상세와 같은 자리를 본다(→ `campaign-details.tsx` 의 `browserOnly`).
    */
   const browserOnly = capability?.supported === false;
-  const sendBlocked = browserOnly ? '문자는 Android 앱에서 보낼 수 있어요.'
+  const sendBlocked = browserOnly ? '이 화면에서는 문자를 보낼 수 없어요. 폰에 설치한 앱에서 보낼 수 있습니다.'
     : capability === null ? '문자 발송 기능을 확인하고 있어요.'
       : !dispatchReady(capability, sim, true)
         ? lineSelectable(capability) && capability.permissionGranted && sim === null
@@ -355,6 +355,17 @@ export default function CampaignHistoryScreen() {
         {/* 정렬 기준만 짧게. 줄어들지 않는다 — 「최근 발송…」으로 잘리면 무슨 순서인지가 사라진다. */}
         <Text style={[s.meta, styles.sortNote]}>최근 발송순</Text>
       </View>
+      {/*
+        이 기기에서 보낼 수 없는 이유. 🔴 **목록 위에 한 번만 선다.**
+        묶음마다 그리면 이미 다 나간 발송 제목 바로 밑에도 붙어서, **그 발송이 안 나갔다**는
+        말로 읽힌다 — 실제로 「발송 이력에 이런 말이 왜 나오냐, 이미 발송한 건데」라는 말을
+        들은 자리다. 어느 묶음의 사정이 아니라 **이 화면 전체의 사정**이므로 위에 둔다.
+
+        ⚠️ 보낼 것이 하나도 없으면 그리지 않는다. 눌러야 할 버튼이 애초에 없는 사람에게는
+        「보낼 수 없다」가 아무 뜻도 없다.
+      */}
+      {sendBlocked && groups.some((group) => group.items.some((item) => sendLabel(item) || stuckRow(item)))
+        ? <Notice message={sendBlocked} /> : null}
       {/*
         **집계가 먼저다.** 50명에게 한 번 보내면 수신자 줄이 50개라, 이력을 그대로 펴 두면
         「언제 무엇을 보냈나」를 훑을 수가 없고 스크롤만 남는다. 그래서 「일자 · 템플릿 ·
@@ -416,8 +427,6 @@ export default function CampaignHistoryScreen() {
               .map((item) => item.recipientId)
               .filter((id): id is string => !!id))];
             return <View style={styles.rows}>
-              {/* 🔴 보낼 것이 있는데 이 기기가 못 보낼 때만 선다. 보낼 것이 없으면 이 줄도 그리지 않는다. */}
-              {sendable.length && sendBlocked ? <Notice message={sendBlocked} /> : null}
               {group.items.map((item, index) => {
                 const key = rowKey(item);
                 const open = openRow === key;
