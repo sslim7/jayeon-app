@@ -28,7 +28,8 @@ function load(file) {
   vm.runInThisContext(`(function(exports, require){${compiled}\n})`)(mod.exports, (id) => (id.startsWith('@/') ? load(`src/${id.slice(2)}.ts`) : {}));
   return mod.exports;
 }
-const { historyDateKey, historyGroupKey, groupSmsHistory, historyTime, withinPeriod, needsAttention, outcomeSummary } = load('src/lib/sms-history-groups.ts');
+const { historyDateKey, historyGroupKey, groupSmsHistory, historyTime, withinPeriod, needsAttention, outcomeSummary, historyCampaignRecipientId, currentByRecipient } = load('src/lib/sms-history-groups.ts');
+const { recipientOutcome, retryTargets, unsentTargets } = load('src/lib/sms-outcome.ts');
 
 /**
  * 수신자 한 줄. 화면이 쓰는 나머지 필드는 묶음 판정과 무관해서 넣지 않는다.
@@ -151,7 +152,7 @@ test('전체(months = null)는 아무것도 거르지 않는다 — 100년 전 �
   const ancient = row('100년 전', '1926-09-27T12:00:00+09:00');
   const recent = row('더메이', '2026-09-27T01:00:00.000Z');
   assert.deepEqual(withinPeriod([ancient, recent], null, NOW), [ancient, recent]);
-  // 기간을 고르면 그 100년 전 것은 빠진다. 기본값(3개월)이 하는 일이 이것이다.
+  // 기간을 고르면 그 100년 전 것은 빠진다. 기간 기본값이 하는 일이 이것이다.
   assert.deepEqual(withinPeriod([ancient, recent], 6, NOW).map((item) => item.campaignTitle), ['더메이']);
 });
 
@@ -237,4 +238,142 @@ test('⚠️ 결과 요약에서 0인 칸은 적지 않는다', () => {
   assert.equal(outcomeSummary({ sent: 1, failed: 2, unsent: 3, review: 4 }), '성공 1 · 실패 2 · 미발송 3 · 확인 필요 4');
   // 다 0이면 빈 글자 대신 `0건`. 머리에 아무 글자도 없는 묶음이 서는 것보다 낫다.
   assert.equal(outcomeSummary({ sent: 0, failed: 0, unsent: 0, review: 0 }), '0건');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 한 사람이 두 줄로 온다 — 「미발송 2명이 누구인지 안 보여준다?」가 시작된 자리
+//
+// 서버는 재시도한 사람에 대해 「지난 실패 줄」과 「지금 대기 줄」을 **둘 다** 내려준다. 이력이니
+// 의도한 동작이다. 그래서 서버의 `total` 은 사람 수가 아니라 줄 수고, 화면이 줄을 그대로 세면
+// 한 사람이 두 명이 된다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 캠페인 `c1` 안의 수신자 한 줄. `id` 는 서버가 만드는 모양 그대로다. */
+const line = (id, extra) => ({
+  id, campaignId: 'c1', campaignTitle: '더메이', name: '박새롬',
+  sentAt: null, failedAt: null, updatedAt: null, status: 'READY', errorCode: null, ...extra,
+});
+/** 「지난 실패」 줄. 완료된 시도라 `{campaignId}_{campaignRecipientId}_{attemptId}` 다. */
+const failedLine = (recipientId, campaignRecipientId, at) => line(`c1_${campaignRecipientId}_attempt-1`, {
+  recipientId, status: 'FAILED', errorCode: 'CARRIER_REJECTED', failedAt: at, updatedAt: at,
+});
+/** 「지금 대기」 줄. 아직 시도가 없어 `#pending` 이 붙는다. */
+const pendingLine = (recipientId, campaignRecipientId, at) => line(`c1_${campaignRecipientId}#pending`, {
+  recipientId, status: 'READY', updatedAt: at,
+});
+
+test('🔴 실패했다가 재시도로 대기가 된 사람은 **한 명**으로 세어진다', () => {
+  // 그대로 세면 「실패 1 · 미발송 1」 — 한 사람인데 두 명이다. 사용자가 「미발송 2명」을 찾다가
+  // 막힌 자리가 정확히 이것이다.
+  const groups = groupSmsHistory([
+    failedLine('r1', 'cr1', '2026-09-23T01:00:00.000Z'),
+    pendingLine('r1', 'cr1', '2026-09-23T02:00:00.000Z'),
+  ]);
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].counts, { sent: 0, failed: 0, unsent: 1, review: 0 });
+  assert.equal(outcomeSummary(groups[0].counts), '미발송 1');
+});
+
+test('🔴 그런데 **목록에는 두 줄 다 남는다** — 「지난 실패」도 보여야 이력이다', () => {
+  const rows = [
+    failedLine('r1', 'cr1', '2026-09-23T01:00:00.000Z'),
+    pendingLine('r1', 'cr1', '2026-09-23T02:00:00.000Z'),
+  ];
+  const groups = groupSmsHistory(rows);
+  // 접는 것은 **세는 일**뿐이다. 실패 줄이 사라지면 사용자는 왜 다시 보내야 하는지 알 수 없다.
+  assert.deepEqual(groups[0].items.map((item) => item.id), rows.map((item) => item.id));
+  assert.equal(groups[0].count, 2);
+  // 줄 수(`count` 2)와 사람 수(`counts` 합 1)는 서로 다른 것을 센다.
+  assert.equal(groups[0].counts.sent + groups[0].counts.failed + groups[0].counts.unsent + groups[0].counts.review, 1);
+});
+
+test('🔴 시각이 같으면 **대기 줄**이 지금 상태다 — 재시도는 실패 뒤에 온다', () => {
+  // 대기 줄의 시각(`updatedAt`)이 되돌린 그 순간이라 실패 시각과 같은 밀리초일 수 있다. 여기서
+  // 실패 줄을 골라 버리면 재시도를 눌러 둔 사람이 「실패 1」로 남아 미발송 수에서 빠진다.
+  const at = '2026-09-23T01:00:00.000Z';
+  const groups = groupSmsHistory([pendingLine('r1', 'cr1', at), failedLine('r1', 'cr1', at)]);
+  assert.deepEqual(groups[0].counts, { sent: 0, failed: 0, unsent: 1, review: 0 });
+  // 순서를 뒤집어도 같다.
+  const flipped = groupSmsHistory([failedLine('r1', 'cr1', at), pendingLine('r1', 'cr1', at)]);
+  assert.deepEqual(flipped[0].counts, { sent: 0, failed: 0, unsent: 1, review: 0 });
+});
+
+test('다른 사람은 각각 센다 — 접는 기준은 「같은 발송 · 같은 사람」이다', () => {
+  const groups = groupSmsHistory([
+    failedLine('r1', 'cr1', '2026-09-23T01:00:00.000Z'),
+    pendingLine('r1', 'cr1', '2026-09-23T02:00:00.000Z'),
+    pendingLine('r2', 'cr2', '2026-09-23T02:00:00.000Z'),
+  ]);
+  assert.deepEqual(groups[0].counts, { sent: 0, failed: 0, unsent: 2, review: 0 });
+  assert.equal(groups[0].count, 3);
+});
+
+test('⚠️ 하루에 같은 템플릿을 두 번 보내면 같은 사람도 두 번 센다 — 발송이 다르기 때문이다', () => {
+  // 수신자 id 만으로 접으면 20명에게 두 번 보낸 40건이 「성공 20」으로 줄어든다. 접어야 하는
+  // 것은 **한 발송 안에서** 같은 사람이 남긴 여러 줄뿐이다.
+  const morning = { ...line('c1_cr1_a1', { recipientId: 'r1', status: 'SENT', sentAt: '2026-09-23T01:00:00.000Z', updatedAt: '2026-09-23T01:00:00.000Z' }) };
+  const evening = { ...line('c2_cr9_a2', { recipientId: 'r1', status: 'SENT', sentAt: '2026-09-23T09:00:00.000Z', updatedAt: '2026-09-23T09:00:00.000Z' }), campaignId: 'c2' };
+  const groups = groupSmsHistory([morning, evening]);
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].counts, { sent: 2, failed: 0, unsent: 0, review: 0 });
+});
+
+test('⚠️ `recipientId`(또는 `campaignId`)가 없는 줄은 접히지 않는다 — 외부 발송 기록이 그렇다', () => {
+  // 누구인지 확신할 수 없는 줄을 남의 줄과 합치면 사람 수가 조용히 줄어든다.
+  const at = '2026-09-23T01:00:00.000Z';
+  const external = { campaignTitle: '외부 발송 등록', sentAt: at, failedAt: null, updatedAt: at, status: 'SENT', errorCode: null, id: 'x1', source: 'EXTERNAL' };
+  const groups = groupSmsHistory([external, { ...external, id: 'x2' }]);
+  assert.deepEqual(groups[0].counts, { sent: 2, failed: 0, unsent: 0, review: 0 });
+  // 캠페인은 있는데 수신자 id 만 없는 줄도 마찬가지다.
+  const noRecipient = line('c1_cr1#pending', { updatedAt: at });
+  assert.equal(currentByRecipient([noRecipient, { ...noRecipient, id: 'c1_cr2#pending' }]).length, 2);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 캠페인 수신자 id 뽑기 — 여기가 틀리면 **엉뚱한 사람에게 문자가 간다**
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('🔴 대기 줄 `id` 에서 캠페인 수신자 id 를 뽑는다(`#pending` 을 뗀다)', () => {
+  assert.equal(historyCampaignRecipientId({ id: 'c1_cr1#pending', campaignId: 'c1' }), 'cr1');
+  // 완료된 시도 줄은 뒤에 시도 id 가 붙는다.
+  assert.equal(historyCampaignRecipientId({ id: 'c1_cr1_attempt-1', campaignId: 'c1' }), 'cr1');
+});
+
+test('🔴 시도 id 안의 `_` 에 걸리지 않는다 — 앞에서부터 첫 `_` 까지가 캠페인 수신자 id 다', () => {
+  // 캠페인 수신자 id 는 Firestore 가 만든 `[A-Za-z0-9]{20}` 이라 `_` 를 담지 않는 반면,
+  // 시도 id 는 담을 수 있다. 뒤에서 자르면 여기서 조용히 틀린다.
+  assert.equal(historyCampaignRecipientId({ id: 'c1_cr1_sms_1727_3_abc', campaignId: 'c1' }), 'cr1');
+});
+
+test('🔴 모양이 다르면 짐작하지 않고 `null` 이다 — 잘못 뽑느니 버튼을 안 세우는 편이 낫다', () => {
+  // 캠페인을 모르는 줄(외부 발송 기록)은 앞을 잘라 낼 기준이 없다.
+  assert.equal(historyCampaignRecipientId({ id: 'x1' }), null);
+  assert.equal(historyCampaignRecipientId({ id: 'c1_cr1#pending', campaignId: '' }), null);
+  // 앞이 이 캠페인의 것이 아니다.
+  assert.equal(historyCampaignRecipientId({ id: 'other_cr1_a1', campaignId: 'c1' }), null);
+  // 구분자가 없어 어디까지가 수신자 id 인지 알 수 없다.
+  assert.equal(historyCampaignRecipientId({ id: 'c1_cr1', campaignId: 'c1' }), null);
+  assert.equal(historyCampaignRecipientId({ id: 'c1_#pending', campaignId: 'c1' }), null);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 「나갔는지 모르는 줄」에는 재발송 버튼을 달지 않는다
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('🔴 `REVIEW` 줄은 재발송 대상이 아니다 — 이미 나간 문자를 또 보내게 된다', () => {
+  // 화면의 버튼 표(`app/sms/history.tsx` 의 `SEND_LABELS`)는 `UNSENT`·`PENDING`·`FAILED` 에만
+  // 글자를 둔다. 그 판정이 여기 `recipientOutcome` 과 **같은 모듈**이라는 것이 요점이다.
+  const unknown = { id: 'c1_cr1_a1', status: 'UNKNOWN', errorCode: null };
+  const partial = { id: 'c1_cr2_a2', status: 'FAILED', errorCode: 'PARTIAL_SENT' };
+  const sending = { id: 'c1_cr3_a3', status: 'SENDING', errorCode: null };
+  assert.deepEqual([unknown, partial, sending].map(recipientOutcome), ['REVIEW', 'REVIEW', 'REVIEW']);
+  assert.deepEqual(retryTargets([unknown, partial, sending]), []);
+  assert.deepEqual(unsentTargets([unknown, partial, sending]), []);
+  // 성공한 줄도 마찬가지로 아무 목록에도 들지 않는다.
+  const sent = { id: 'c1_cr4_a4', status: 'SENT', errorCode: null };
+  assert.equal(recipientOutcome(sent), 'SENT');
+  assert.deepEqual([...retryTargets([sent]), ...unsentTargets([sent])], []);
+  // 그리고 묶음 집계에서는 「확인 필요」 칸으로 간다 — 미발송에 섞이지 않는다.
+  const groups = groupSmsHistory([line('c1_cr1_a1', { recipientId: 'r1', status: 'UNKNOWN', updatedAt: '2026-09-23T01:00:00.000Z' })]);
+  assert.deepEqual(groups[0].counts, { sent: 0, failed: 0, unsent: 0, review: 1 });
 });

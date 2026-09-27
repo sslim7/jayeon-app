@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
 import { TextField } from '@/components/form-fields';
@@ -16,6 +16,17 @@ import { readSmsLeave, smsExit, SMS_LEAVE_PARAM, SMS_ORIGIN_PARAM } from '@/lib/
 
 export default function ReservedScreen() {
   const { reservations, rows, loading, error, reload } = useReservations();
+  /*
+   * 예약이 하나도 없을 때 안내를 **화면 가운데**에 세우기 위한 높이.
+   *
+   * 🔴 `flex: 1` 로는 안 된다. `SmsPage` 는 `ScrollView` 이고 그 내용 컨테이너가
+   * `flexGrow` 를 갖지 않아(→ `components/sms-ui.tsx` 의 `s.page`), 자식이 채울 높이 자체가
+   * 없다. 그래서 채울 높이를 **창 높이에서 직접** 가져온다.
+   *
+   * ⚠️ 빼는 값은 헤더와 페이지 여백 몫의 어림이다. 정확할 필요는 없다 — 조금 모자라면
+   * 안내가 살짝 위에 서고, 넘치면 스크롤이 생길 뿐이라 어느 쪽도 화면을 깨지 않는다.
+   */
+  const emptyHeight = Math.max(160, useWindowDimensions().height - 220);
   /*
    * 발송 상세를 닫고 **여기로 돌아온 경우**. 그때 무슨 말을 할지는 출처가 정한다
    * (→ `lib/sms-origin.ts`). 🔴 이 화면의 안내는 「예약을 취소했어요」처럼 **예약에 손을 댔다**는
@@ -94,7 +105,9 @@ export default function ReservedScreen() {
       {failure ? <Notice error message={failure} /> : null}
       {notice ? <Notice message={notice} /> : null}
       {loading && !rows.length ? <Loading /> : !rows.length ? (
-        <Notice message="예약된 문자가 없어요. 「문자 보내기」에서 수신자를 고르고 예약하기를 눌러 주세요." />
+        <View style={[styles.empty, { minHeight: emptyHeight }]}>
+          <Notice message="예약된 문자가 없어요. 「문자 보내기」에서 수신자를 고르고 예약하기를 눌러 주세요." />
+        </View>
       ) : <>
         {/* 템플릿 태그: 한 번에 한 템플릿만 보여 준다(발송도 그 단위로 한다). */}
         <View style={styles.tags}>
@@ -149,6 +162,8 @@ export default function ReservedScreen() {
 }
 
 const styles = StyleSheet.create({
+  /** 예약이 없을 때의 안내 자리. 넓은 화면에서 글이 왼쪽 위에 홀로 붙어 있지 않게 가운데 세운다. */
+  empty: { alignItems: 'center', justifyContent: 'center' },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   tag: { minHeight: 40, justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.borderPill, backgroundColor: colors.card },
   tagOn: { borderColor: colors.greenText, backgroundColor: colors.sageRow },
