@@ -540,6 +540,15 @@ export function CampaignDetails({ id, onOpenCampaign, onlyRecipientIds }: {
                     ? '메시지 화면에서 이미 보낸 문자는 취소할 수 없습니다. 현재 결과 저장 후 멈춥니다.'
                     : '이미 Android에 전달한 문자는 취소할 수 없습니다. 현재 결과 저장 후 멈춥니다.'}
                 />
+                {/*
+                  🔴 **중단이 무엇을 남기는지 숫자로 말한다.** 예전에는 중단이 캠페인을 취소해
+                  남은 사람이 예약에서 사라졌고, 지금은 그대로 남는다(→ `lib/sms-runner.ts`).
+                  바뀐 사실을 화면이 말하지 않으면 사용자는 여전히 「멈추면 다 날아간다」로 알고
+                  중단 버튼을 못 누른다 — 그래서 끝까지 보내거나 앱을 끄는 수밖에 없었다.
+                */}
+                <Notice
+                  message={`지금 멈춰도 여기까지 보낸 ${sent}건은 그대로 남고, 남은 ${allUnsentIds.length}명은 미발송으로 예약에 머물러요. 다시 보낼지 지울지는 직접 정하면 됩니다.`}
+                />
               </>
             ) : (
               /*
@@ -562,6 +571,13 @@ export function CampaignDetails({ id, onOpenCampaign, onlyRecipientIds }: {
                 ) : null}
                 {confirmStop ? (
                   <>
+                    {/*
+                      ⚠️ 이 문구는 **이제야 사실이 되었다.** 예전에는 중단이 캠페인을 `CANCELLED` 로
+                      바꿔 버려 「나중에 이어 보낼 수 있어요」가 거짓이었다 — 취소된 캠페인은 예약
+                      목록에서 빠져 이어 보낼 자리가 없었다. 중단이 상태를 건드리지 않게 되면서
+                      (→ `lib/sms-runner.ts` 의 `run`) 남은 사람이 실제로 예약에 머문다.
+                      🔴 러너가 다시 취소를 부르게 되면 이 문장부터 거짓말이 된다.
+                    */}
                     <Notice error message={`${otherTitle ? `「${otherTitle}」` : '다른 문자'} 발송을 지금 멈출까요? 이미 보낸 문자는 취소되지 않고, 남은 사람은 미발송으로 남아 나중에 이어 보낼 수 있어요.`} />
                     <ButtonRow>
                       <SmsButton fill secondary danger label="중단합니다" onPress={() => void stop()} />
