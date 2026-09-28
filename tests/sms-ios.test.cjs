@@ -201,7 +201,14 @@ test('「중단」은 그 사람을 보내지 않고 닫고 여기까지의 결�
   assert.equal(h.rows[1].errorCode, 'CANCELLED_BEFORE_SEND');
   // 뒤에 남은 사람들은 손대지 않는다 — 다시 「미발송 계속 보내기」로 이어갈 수 있다.
   assert.deepEqual(h.rows.slice(2).map(r => r.status), ['READY', 'READY']);
-  assert.equal(h.campaign.status, 'CANCELLED');
+  /*
+    🔴 **캠페인은 취소되지 않는다.** 예전에는 여기서 `'CANCELLED'` 를 기대했는데, 그 취소가
+    남은 사람의 예약을 지우고 있었다(→ `lib/sms-reservations.ts` 의 `reservedCampaigns`).
+    실제 발송하지 못한 건은 발송을 시도하지 않은 것과 같으니, 캠페인은 `SENDING` 인 채
+    미발송을 안고 예약에 남는다.
+  */
+  assert.equal(h.campaign.status, 'SENDING');
+  assert.ok(!h.events.includes('CANCELLED'));
   // vm 밖에서 만든 객체와 비교하려면 realm 을 한 번 벗겨야 한다(프로토타입이 달라 deepEqual 이 막힌다).
   assert.deepEqual(JSON.parse(JSON.stringify(h.runner.getSnapshot())), { campaignId: 'c1', running: false, stopping: false, currentRecipientId: null, error: null });
 });
@@ -295,7 +302,9 @@ test('중단은 답이 오지 않는 확인창을 끊고 running 을 실제로 �
   // 답을 못 받은 사람에게 문자가 나가지는 않았고, claim 한 채로 남지도 않는다.
   assert.deepEqual(sends(h), []);
   assert.equal(h.rows[0].errorCode, CANCELLED_BEFORE_SEND);
-  assert.equal(h.campaign.status, 'CANCELLED');
+  // 🔴 여기서도 캠페인은 취소하지 않는다 — 남은 r1·r2 의 예약을 지우지 않기 위해서다.
+  assert.equal(h.campaign.status, 'SENDING');
+  assert.ok(!h.events.includes('CANCELLED'));
   // 그리고 막혔던 발송을 다시 시작할 수 있다 — 앱을 껐다 켜지 않아도 된다.
   await h.runner.run('c1', { subscriptionId: 0, confirm: async () => 'send' });
   assert.deepEqual(sends(h), ['r1', 'r2']);

@@ -79,7 +79,56 @@ test('중복 버튼은 하나만 진행하고 중지는 진행 1건 결과 저�
   const sending = run(h); await entered.promise;
   await assert.rejects(run(h), /이미 발송/); h.runner.stop(); wait.resolve(); await sending;
   assert.deepEqual(h.events.filter(x => x.startsWith('send:')), ['send:r0']);
-  assert.ok(h.events.indexOf('save:r0') < h.events.indexOf('CANCELLED'));
+  /*
+    🔴 **중단은 진행 1건만 저장하고 멈춘다 — 캠페인을 취소하지는 않는다.**
+    예전에는 여기서 `CANCELLED` 가 뒤따르는 것을 기대했다. 그 취소가 바로 남은 사람의 예약을
+    지우던 동작이라(→ `lib/sms-reservations.ts` 의 `reservedCampaigns` 가 `CANCELLED` 를 뺀다)
+    기대를 뒤집는다. 실제 발송하지 못한 건은 발송을 시도하지 않은 것과 같으므로, 남은 r1·r2 는
+    `READY` 로 예약에 머물러야 한다.
+  */
+  assert.ok(h.events.includes('save:r0'));
+  assert.ok(!h.events.includes('CANCELLED'));
+  assert.equal(h.rows[0].status, 'SENT');
+  assert.deepEqual(h.rows.slice(1).map(r => r.status), ['READY', 'READY']);
+  // 캠페인은 SENDING 인 채 미발송이 남아 예약 목록에 그대로 보인다.
+  assert.equal(h.events.filter(x => x === 'SENDING').length, 1);
+});
+/*
+  🔴 **발송을 시작하기도 전에 중단한 경우.** 예약 화면에서 10명 중 3명만 골라 상세로 들어가
+  버튼을 누르기 전에 「중단」을 누르면, 예전에는 캠페인 전체가 `CANCELLED` 가 되어 **고르지도
+  않은 7명의 예약까지 사라졌다.** 한 통도 나가지 않았으니 상태를 건드릴 이유가 없다.
+*/
+test('발송 전에 중단하면 캠페인을 취소하지 않고 모두 예약에 남는다', async () => {
+  const h = setup(10);
+  // `stop()` 은 발송 중일 때만 듣는다. 실제 화면처럼 「발송 시작 직후, 첫 claim 전」에 누른다.
+  const capabilities = h.device.getCapabilities;
+  h.device.getCapabilities = async () => { h.runner.stop(); return capabilities(); };
+  await run(h);
+  // setStatus 도 claim 도 없다 — 서버는 이 중단을 알 필요조차 없다.
+  assert.deepEqual(h.events, []);
+  assert.ok(h.rows.every(r => r.status === 'READY'));
+  // 그리고 다시 보낼 수 있다 — 예약이 남아 있으니 이어서 누르면 그대로 나간다.
+  h.device.getCapabilities = capabilities;
+  await run(h);
+  assert.equal(h.events.filter(x => x.startsWith('send:')).length, 10);
+});
+/*
+  🔴 **일부만 보낸 뒤 중단한 경우.** 7명 중 1명만 보내고 멈췄더니 6명이 사라졌다는 신고가
+  이 자리에서 났다. 보낸 사람은 결과로 남고, 못 보낸 사람은 손도 대지 않은 채 `READY` 로
+  남아야 한다.
+*/
+test('일부 보낸 뒤 중단해도 남은 사람은 READY 로 예약에 머문다', async () => {
+  const h = setup(7); const wait = deferred(); const entered = deferred(); const send = h.device.send;
+  h.device.send = async input => { entered.resolve(); await wait.promise; return send(input); };
+  const sending = run(h); await entered.promise;
+  h.runner.stop(); wait.resolve(); await sending;
+  assert.deepEqual(h.events.filter(x => x.startsWith('send:')), ['send:r0']);
+  assert.ok(!h.events.includes('CANCELLED'));
+  assert.equal(h.rows[0].status, 'SENT');
+  assert.deepEqual(h.rows.slice(1).map(r => r.status), Array(6).fill('READY'));
+  // 남은 6명은 「미발송 계속 보내기」로 이어 보낼 수 있다 — 예약이 그대로 있으니까.
+  await run(h);
+  assert.deepEqual(h.events.filter(x => x.startsWith('send:')), ['send:r0', 'send:r1', 'send:r2', 'send:r3', 'send:r4', 'send:r5', 'send:r6']);
 });
 test('SENT와 UNKNOWN은 재시도하지 않고 FAILED 선택만 다시 보낸다', async () => {
   const h = setup(4); Object.assign(h.rows[0], { status: 'SENT' }); Object.assign(h.rows[1], { status: 'FAILED' });

@@ -327,7 +327,23 @@ export class SmsRunner {
       }
       rows = await this.api.recipients(campaignId);
       this.assertSession(version);
-      if (this.state.stopping) { await this.api.setStatus(campaignId, 'CANCELLED'); return; }
+      /*
+       * 🔴 **중단은 여기서 멈추는 것이지, 남은 사람의 예약을 없애는 일이 아니다.**
+       *
+       * 예전에는 이 자리에서 `setStatus(campaignId, 'CANCELLED')` 를 불렀다. 그러면 아직 한 통도
+       * 나가지 않았는데 캠페인이 취소로 바뀌고, 예약 목록은 `CANCELLED` 를 통째로 빼므로
+       * (→ `lib/sms-reservations.ts` 의 `reservedCampaigns`) **고르지도 않은 사람까지 사라졌다.**
+       * 10명 예약에서 3명만 골라 상세로 들어가 발송 전에 「중단」을 누르면, 손대지 않은 7명의
+       * 예약이 없어졌다.
+       *
+       * **실제 발송하지 못한 건은 발송을 시도하지 않은 것과 같다.** 개개의 발송 건이 저마다 하나의
+       * 트랜잭션이고, 묶어서 예약하거나 보내는 것은 기능일 뿐이다. 남은 사람은 예약에 그대로
+       * 머물고, 다시 보낼지 지울지는 **사용자가 정한다.**
+       *
+       * ⚠️ 「중단했으면 캠페인도 취소해야지」라며 이 줄을 되살리지 마라. 되살리는 순간, 사용자가
+       * 만들지도 않은 취소가 조용히 일어나 그 예약을 어느 화면에서도 찾을 수 없게 된다.
+       */
+      if (this.state.stopping) return;
       const retrySelection = options.retryRecipientIds ? new Set(options.retryRecipientIds) : null;
       const pending = rows.filter((row) => row.status === 'READY' && (!retrySelection || retrySelection.has(row.id)));
       if (!pending.length) return;
@@ -384,7 +400,13 @@ export class SmsRunner {
         if (bytes > budget) oversized.set(row.id, bridgeOversizeMessage(budget, bytes));
       }
       this.assertSession(version);
-      if (this.state.stopping) { await this.api.setStatus(campaignId, 'CANCELLED'); return; }
+      /*
+       * 🔴 위와 같은 이유로 취소하지 않는다. 첨부 준비까지 마쳤어도 **한 통도 나가지 않았다** —
+       * 준비는 발송이 아니다. 아직 `SENDING` 으로 올리기 전이라 캠페인은 `READY` 그대로 남고,
+       * 그래서 예약 목록에 그대로 보인다. 여기서 취소하면 「파일 받다가 멈췄더니 예약이
+       * 사라졌다」가 된다.
+       */
+      if (this.state.stopping) return;
       await this.api.setStatus(campaignId, 'SENDING');
       for (const [position, row] of pending.entries()) {
         this.assertSession(version);
@@ -445,7 +467,16 @@ export class SmsRunner {
         if (result.status === 'UNKNOWN' && !knownNotSent(result)) throw new Error('발송 결과가 불확실해 중단했어요. 해당 대상은 자동으로 다시 보내지 않아요.');
       }
       this.assertSession(version);
-      if (this.state.stopping) await this.api.setStatus(campaignId, 'CANCELLED');
+      /*
+       * 🔴 **중단으로 루프를 빠져나와도 캠페인을 취소하지 않는다.** 예전에는 여기서
+       * `setStatus(campaignId, 'CANCELLED')` 를 불러, 7명 중 1명만 보내고 멈추면 남은 6명이
+       * 예약 목록에서 통째로 사라졌다 — 보내지도 않은 사람들이 「그만둔 발송」으로 묶인 것이다.
+       *
+       * 보낸 사람은 결과로 남고, 못 보낸 사람은 **애초에 시도하지 않은 것과 같다.** 캠페인은
+       * `SENDING` 인 채 `readyCount > 0` 이라 예약에 그대로 남는다(서버 `recount` 도 미발송이
+       * 남아 있는 한 상태를 끝으로 옮기지 않는다 → `jayeon-was/internal/sms/model.go`).
+       * 이어 보낼지 지울지는 사용자가 정한다.
+       */
     } catch (error) {
       this.update({ error: error instanceof Error ? error.message : '발송을 중단했어요. 결과를 확인해 주세요.' });
       throw error;
