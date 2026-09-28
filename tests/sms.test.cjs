@@ -436,6 +436,94 @@ test('합친 명단은 중복을 걸러 50명씩 나눈다', () => {
   assert.deepEqual(plain(twice.chunks), [['p1']]);
 });
 
+const { sameReservationContent, planReservedSend } = reservationModule.exports;
+/** 본문·첨부만 다르게 둔 예약 한 건. 합쳐도 되는지는 이 둘로만 정한다. */
+const content = (id, message, attachments) => ({ ...campaign(id, '더메이'), message, attachments });
+/** 예약 한 건(캠페인 + 수신자 줄). 내용을 주지 않으면 모두 같은 내용이다. */
+const reserved = (id, recipients, message = '안내', attachments = []) => ({ campaign: content(id, message, attachments), recipients });
+
+test('🔴 예약함 줄은 아직 보내지 않은 사람만 세운다', () => {
+  // 일부만 보낸 예약은 목록에 남는다(→ readyCount > 0). 거르지 않으면 이미 받은 사람이
+  // 예약처럼 서 있어 **중복으로 보이고, 골라 보내면 같은 문자를 두 번 받는다.**
+  const rows = reservedRows([
+    { campaign: campaign('c1', '더메이', 'SENDING', true, 1), recipients: [
+      { ...target('r1', 'p1', '보낸이'), status: 'SENT' },
+      { ...target('r2', 'p2', '실패한이'), status: 'FAILED' },
+      target('r3', 'p3', '안보낸이'),
+    ] },
+  ]);
+  assert.deepEqual(rows.map(row => row.name), ['안보낸이']);
+  assert.deepEqual([...reservedRecipientIds(rows)], ['p3']);
+});
+test('🔴 예약을 합칠 때 이미 보낸 사람은 다시 끌어오지 않는다', () => {
+  // 흡수한 예약은 곧 취소된다. 보낸 사람까지 담아 다시 만들면 그 사람은 한 번 더 받는다.
+  const merged = mergeReservation([{ campaign: campaign('c1', '가을 안내', 'SENDING', true, 1), recipients: [
+    { ...target('r1', 'p1', '보낸이'), status: 'SENT' },
+    target('r2', 'p2', '남은이'),
+  ] }], '가을 안내', ['p9']);
+  assert.deepEqual(plain(merged.chunks), [['p2', 'p9']]);
+  assert.equal(merged.mergedCount, 1);
+});
+test('🔴 합칠 수 있는지는 본문과 첨부가 같은지로만 정한다', () => {
+  const base = content('c1', '안내', [{ id: 'a1' }, { id: 'a2' }]);
+  assert.equal(sameReservationContent(base, content('c2', '안내', [{ id: 'a1' }, { id: 'a2' }])), true);
+  // 첨부 순서는 서버가 주는 차례일 뿐이다 — 이것으로 막으면 합칠 수 있는 것을 못 합친다.
+  assert.equal(sameReservationContent(base, content('c2', '안내', [{ id: 'a2' }, { id: 'a1' }])), true);
+  // 🔴 본문이 다르면 합칠 수 없다. 합치면 누군가는 자기가 예약된 것과 다른 문자를 받는다.
+  assert.equal(sameReservationContent(base, content('c2', '고친 안내', [{ id: 'a1' }, { id: 'a2' }])), false);
+  assert.equal(sameReservationContent(base, content('c2', '안내', [{ id: 'a1' }])), false);
+  assert.equal(sameReservationContent(base, content('c2', '안내', [{ id: 'a1' }, { id: 'a3' }])), false);
+  // 첨부가 없는 것과 빈 목록은 같은 뜻이다(옛 문서는 필드 자체가 없다).
+  assert.equal(sameReservationContent(content('c1', '안내', undefined), content('c2', '안내', [])), true);
+  assert.equal(sameReservationContent(base, { ...content('c2', '안내', [{ id: 'a1' }, { id: 'a2' }]), title: '다른 제목' }), false);
+});
+test('한 건 안의 선택은 합치지 않고 그 건으로 그대로 보낸다', () => {
+  const list = [reserved('c1', [target('r1', 'p1', '가'), target('r2', 'p2', '나')])];
+  const rows = reservedRows(list);
+  assert.deepEqual(plain(planReservedSend(list, reservedGroups(rows, ['c1:r1']))), { kind: 'single', campaignId: 'c1', campaignRecipientIds: ['r1'], count: 1 });
+  // 아무도 고르지 않았으면 보낼 계획 자체가 없다(버튼이 꺼진다).
+  assert.equal(planReservedSend(list, reservedGroups(rows, [])), null);
+});
+test('🔴 여러 건에 걸친 선택은 고른 사람만 새 건으로 가고 나머지는 원래 건에 남는다', () => {
+  const list = [
+    reserved('c1', [target('r1', 'p1', '가'), target('r2', 'p2', '나')], '안내', [{ id: 'a1' }]),
+    reserved('c2', [target('r3', 'p3', '다'), target('r4', 'p4', '라')], '안내', [{ id: 'a1' }]),
+  ];
+  const rows = reservedRows(list);
+  const plan = planReservedSend(list, reservedGroups(rows, ['c1:r1', 'c2:r4']));
+  assert.equal(plan.kind, 'merge');
+  // 새 건에는 고른 사람만, 원래 건에는 고르지 않은 사람만 — 한 명이라도 어긋나면 빠지거나 두 번 간다.
+  assert.deepEqual(plain(plan.recipientIds), ['p1', 'p4']);
+  assert.deepEqual(plain(plan.sources), [
+    { campaignId: 'c1', remainingRecipientIds: ['p2'] },
+    { campaignId: 'c2', remainingRecipientIds: ['p3'] },
+  ]);
+  assert.deepEqual([plan.title, plan.message, plain(plan.attachmentIds), plan.count], ['더메이', '안내', ['a1'], 2]);
+});
+test('🔴 같은 사람이 두 건에 들어 있어도 새 건에는 한 번만 담는다', () => {
+  // 한 예약에 같은 수신자를 두 번 넣으면 서버가 거절한다. 인원수도 줄 수가 아니라 사람 수로 센다.
+  const list = [reserved('c1', [target('r1', 'p1', '가')]), reserved('c2', [target('r2', 'p1', '가')])];
+  const plan = planReservedSend(list, reservedGroups(reservedRows(list), ['c1:r1', 'c2:r2']));
+  assert.deepEqual(plain(plan.recipientIds), ['p1']);
+  assert.equal(plan.count, 1);
+});
+test('🔴 내용이 다른 건에 걸친 선택은 합치지 않고 몇 명씩인지 알려 준다', () => {
+  const list = [
+    reserved('c1', [target('r1', 'p1', '가'), target('r2', 'p2', '나')], '안내'),
+    reserved('c2', [target('r3', 'p3', '다')], '고친 안내'),
+  ];
+  const plan = planReservedSend(list, reservedGroups(reservedRows(list), ['c1:r1', 'c1:r2', 'c2:r3']));
+  assert.deepEqual(plain(plan), { kind: 'blocked', reason: 'content', parts: [{ campaignId: 'c1', count: 2 }, { campaignId: 'c2', count: 1 }], count: 3 });
+});
+test('합친 인원이 한 건 한도를 넘으면 합치지 않는다', () => {
+  const people = (mark) => Array.from({ length: 30 }, (_, i) => target(`r${mark}-${i}`, `p${mark}-${i}`, `사람${mark}${String(i).padStart(2, '0')}`));
+  const list = [reserved('c1', people('a')), reserved('c2', people('b'))];
+  const rows = reservedRows(list);
+  const plan = planReservedSend(list, reservedGroups(rows, rows.map(row => row.id)));
+  assert.deepEqual([plan.kind, plan.reason, plan.count], ['blocked', 'size', 60]);
+  assert.ok(60 > MAX_RESERVATION_SIZE);
+});
+
 const batchModule = { exports: {} };
 const batchCompiled = ts.transpileModule(fs.readFileSync('src/lib/external-send-batch.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 // 일괄 경로도 1명씩 등록하는 경로와 **같은 날짜 헬퍼**를 통과해야 한다 — 여기서 갈라지면 두 경로의 저장 형식이 어긋난다.
