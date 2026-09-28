@@ -591,3 +591,36 @@ test('🔴 「지정 없음」과 「아무도 안 고름」은 다르다', () =
   // 빈 목록은 「아무도 고르지 않았다」다. 전원으로 되돌리면 화면이 조용히 전원 발송으로 바뀐다.
   assert.deepEqual(plain(narrowTargets(targets, [])), []);
 });
+
+/*
+ * 발송 상세가 줄을 펼쳐 보여 주는 본문은 **러너가 실제로 보내는 본문과 같은 글자여야 한다.**
+ *
+ * 🔴 화면이 `@name` 을 직접 바꾸면 두 자리의 규칙이 갈라질 수 있고, 갈라졌다는 사실은
+ * **문자가 나간 뒤에야** 드러난다(화면에는 「권자연님」, 실제로는 「@name님」). 그래서 화면과
+ * 러너가 **같은 함수**를 부르는지를 소스에서 확인한다 — 이 사실은 타입이 잡아 주지 않는다.
+ */
+const { personalizeMessage } = mod.exports;
+test('🔴 발송 상세의 본문 미리보기는 러너와 같은 치환 함수를 쓴다', () => {
+  assert.equal(personalizeMessage('@name님 안녕하세요, @name님', '권자연'), '권자연님 안녕하세요, 권자연님');
+  // 토큰이 없으면 그대로 둔다. 첨부만 있는 발송은 본문이 비어 있을 수도 있다.
+  assert.equal(personalizeMessage('공지', '강민지'), '공지');
+  assert.equal(personalizeMessage('', '강민지'), '');
+
+  const details = fs.readFileSync('src/components/campaign-details.tsx', 'utf8');
+  // 러너에서 가져온다 — 화면 안에 같은 이름의 지역 함수를 만들면 이 줄이 깨진다.
+  assert.match(details, /import \{[^}]*\bpersonalizeMessage\b[^}]*\} from '@\/lib\/sms-runner'/);
+  assert.match(details, /personalizeMessage\(item\.message, item\.name\)/);
+  // 🔴 화면이 직접 치환하는 자리가 하나라도 생기면 러너와 갈라진다.
+  assert.equal(details.includes("'@name'"), false);
+  assert.equal(details.includes('replaceAll'), false);
+
+  /*
+   * 🔴 **캠페인 본문·첨부를 대표로 세우지 않는다.** 발송은 수신자 줄이 들고 있는 내용을
+   * 보내므로(`CampaignRecipient.message`), 캠페인 본문을 크게 세우면 「한 발송 = 한 내용」이라는
+   * 없는 규칙이 생긴다. 되살리려는 손을 여기서 한 번 멈춰 세운다.
+   */
+  assert.equal(details.includes('{campaign.message}'), false);
+  // 첨부는 **펼친 줄에서만** 바로 받는다(`auto`). 캠페인 첨부를 목록 위에 세우면 안 된다.
+  assert.equal(details.includes('campaign.attachments?.map'), false);
+  assert.match(details, /<AttachmentPreview key=\{attachment\.id\} attachment=\{attachment\} auto \/>/);
+});

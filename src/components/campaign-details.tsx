@@ -1,6 +1,6 @@
 import { formatPhone } from '@/lib/phone';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   ButtonRow,
   Choice,
@@ -12,7 +12,7 @@ import {
   statusLabel,
 } from '@/components/sms-ui';
 import { AttachmentPreview } from '@/components/message-attachments';
-import { colors, radii } from '@/constants/theme';
+import { colors, radii, spacing } from '@/constants/theme';
 import { smsApi } from '@/lib/sms-api';
 import {
   composerConfirm,
@@ -22,7 +22,7 @@ import {
 } from '@/lib/sms-capability';
 import { getCapabilities, requestPermissions, type SmsCapabilities } from '@/lib/sms-device';
 import { smsDispatch } from '@/lib/sms-dispatch';
-import { blockedByOther, type SendChoice, type SendPrompt } from '@/lib/sms-runner';
+import { blockedByOther, personalizeMessage, type SendChoice, type SendPrompt } from '@/lib/sms-runner';
 import {
   countOutcomes,
   hasClosedUnsent,
@@ -119,6 +119,12 @@ export function CampaignDetails({ id, onOpenCampaign, onlyRecipientIds }: {
    * 바뀌면 물음이 저절로 무효가 된다.
    */
   const [confirmStopId, setConfirmStopId] = useState<string | null>(null);
+  /**
+   * 펼쳐 둔 수신자 줄(`CampaignRecipient.id`). 🔴 **한 번에 하나만 편다** — 발송 이력과 같은
+   * 방식이다(→ `app/sms/history.tsx`). 여러 줄이 동시에 펼쳐지면 접어 둔 이유가 사라지고,
+   * 더 나쁘게는 펼친 줄마다 첨부를 받으므로 **50명이면 수십 MB 를 한꺼번에 받게 된다.**
+   */
+  const [openRow, setOpenRow] = useState<string | null>(null);
   const confirmStop = !!blockedId && confirmStopId === blockedId;
   const load = useCallback(async () => {
     if (!id) return;
@@ -332,10 +338,23 @@ export function CampaignDetails({ id, onOpenCampaign, onlyRecipientIds }: {
               {statusLabel[campaign.status]} ·{' '}
               {new Date(campaign.createdAt).toLocaleString('ko-KR')}
             </Text>
-            <Text selectable style={s.body}>
-              {campaign.message}
-            </Text>
-            {campaign.attachments?.map((attachment) => <AttachmentPreview key={attachment.id} attachment={attachment} />)}
+            {/*
+              🔴 **캠페인의 본문·첨부를 여기 크게 세우지 마라.** 두 가지 이유가 겹친다.
+
+              1) **발송은 캠페인의 내용을 보내지 않는다.** 나가는 글과 이미지는 수신자 줄이
+                 각자 들고 있는 것이다(`CampaignRecipient.message` / `.attachments`) — 러너가
+                 발송 직전에 꺼내 쓰는 것도 그쪽이다(→ `lib/sms-runner.ts`). 캠페인 본문은
+                 **여러 명에게 공통일 때만** 맞는 이야기이고, 그것을 대표로 세우면 「한 발송 =
+                 한 내용」이라는 없는 규칙이 생긴다. 실제로 그 오해 위에 예약 합치기의
+                 「내용이 같아야 합친다」 제약이 얹혔다가 걷혔다.
+              2) **이미 두 번 확정한 내용을 세 번째로 보여 주는 자리였다.** 문자 보내기 흐름은
+                 템플릿을 고를 때 한 번, 작성 화면에서 한 번 같은 글을 보여 준다. 마지막 화면이
+                 할 일은 **「누구에게 나가는가」**를 보여 주고 보내는 것이다.
+
+              ⚠️ 「발송 전에 내용을 확인해야 하지 않나」로 되살리려면 먼저 아래 수신자 목록을
+              보라. 줄을 펼치면 **그 사람 이름으로 치환된 실제 본문과 첨부**가 나온다 — 앞의 두
+              화면이 못 보여 주던 것(`@name` 이 실제로 어떻게 나가는지)이 거기 있다.
+            */}
             <Text style={s.title} accessibilityLiveRegion="polite">
               {sent + failed} / {rows.length}
             </Text>
@@ -583,8 +602,98 @@ export function CampaignDetails({ id, onOpenCampaign, onlyRecipientIds }: {
               ) : null}
             </>
           )}
+          {/*
+            발송 대상 목록 — **이 화면의 본론**이다.
+
+            🔴 **버튼보다 아래에 둔다.** 한 발송은 50명까지라 목록이 위에 서면 발송 버튼과
+            iPhone 한 건 확인창이 50줄 밑으로 밀려난다. 확인창은 한 건마다 답해야 하는 것이라
+            매번 스크롤을 내리게 되면 25명이 50번의 탭이 아니라 50번의 탭 + 50번의 스크롤이 된다.
+
+            🔴 **줄을 펼쳐야 내용을 읽는다.** 접힌 줄은 이름·번호·상태만 그리고 본문도 첨부도
+            **불러오지 않는다**(→ `AttachmentPreview` 의 `auto`). 목록 전체의 첨부를 미리 받으면
+            한 장 700KB × 50명이 그대로 요청이 된다.
+          */}
+          <View style={{ gap: spacing.xs }}>
+            <Text accessibilityRole="header" style={s.subtitle}>발송 대상 {rows.length}명</Text>
+            {/*
+              ⚠️ 아직 아무도 없을 수 있다(막 만든 캠페인을 3초 주기가 따라잡기 전). 빈 자리를
+              말없이 두면 「수신자가 사라졌나」로 읽힌다.
+            */}
+            {rows.length ? (
+              <View style={styles.list}>
+                {rows.map((item, index) => {
+                  const open = openRow === item.id;
+                  const outcome = recipientOutcome(item);
+                  /*
+                    🔴 **러너와 같은 함수로 치환한다**(`personalizeMessage`). 손으로 `@name` 을
+                    바꾸면 화면에 보이는 글자와 실제 나가는 글자가 갈라질 수 있고, 그것은
+                    **보내고 나서야** 드러난다. 같은 함수를 부르는 한 둘은 어긋날 수 없다
+                    (→ `lib/sms-runner.ts` 의 `personalizeMessage(recipient.message, recipient.name)`).
+                  */
+                  const body = personalizeMessage(item.message, item.name);
+                  return (
+                    <View key={item.id} style={[styles.row, { backgroundColor: index % 2 ? colors.bg : colors.card }]}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: open }}
+                        // aria-* 로도 적는다. react-native-web 은 RN 의 `expanded` 상태를 옮기지 않는다.
+                        aria-expanded={open}
+                        accessibilityLabel={`${item.name} ${formatPhone(item.phone)} ${statusLabel[item.status]} 보낼 내용 ${open ? '접기' : '펼치기'}`}
+                        onPress={() => setOpenRow(open ? null : item.id)}
+                        style={styles.head}
+                      >
+                        <View style={styles.line}>
+                          <Text style={[s.body, styles.name]} numberOfLines={1}>{item.name}</Text>
+                          <Text style={[s.meta, styles.fixed]}>{formatPhone(item.phone)}</Text>
+                          <Text style={[s.meta, styles.fixed]}>{statusLabel[item.status]}</Text>
+                          <Text aria-hidden={true} style={s.meta}>{open ? '▲' : '▼'}</Text>
+                        </View>
+                      </Pressable>
+                      {open ? (
+                        <View style={styles.detail}>
+                          {/* 본문이 비어 있는 발송(이미지만)도 있다. 빈 자리를 두지 않는다. */}
+                          <Text selectable style={s.body}>{body || '이미지 메시지'}</Text>
+                          {/* 🔴 `auto` 는 **펼친 줄에서만**이다. 접힌 줄에 달면 목록 전체를 미리 받는다. */}
+                          {item.attachments?.map((attachment) => (
+                            <AttachmentPreview key={attachment.id} attachment={attachment} auto />
+                          ))}
+                          {/*
+                            ⚠️ 미발송 사유는 빨간 글씨로 적지 않는다 — 고장이 아니라 사람이
+                            통과·중단으로 그렇게 정한 결과다(→ `lib/sms-outcome.ts`).
+                          */}
+                          {item.errorMessage ? <Notice error={outcome === 'FAILED'} message={item.errorMessage} /> : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            ) : loading ? null : (
+              <Notice message="이 발송에 담긴 수신자가 없어요." />
+            )}
+          </View>
         </>
       ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  /**
+   * 수신자 목록. 🔴 **줄 사이에 선을 긋지 않는다.** 줄은 홀짝 바탕색으로 가른다 — 발송 이력과
+   * 수신자 표가 이미 같은 두 색으로 줄무늬를 그리고 있어(→ `app/sms/history.tsx` 의 `stripe`),
+   * 여기만 선을 쓰면 같은 앱에서 목록마다 모양이 달라진다.
+   */
+  list: { borderWidth: 1, borderColor: colors.borderCard, borderRadius: radii.card, overflow: 'hidden' },
+  row: { paddingHorizontal: spacing.md },
+  /**
+   * 🔴 **44 아래로 내리지 마라.** 눌러서 펼치는 줄이라 손가락이 닿는 최소 크기다(발송 이력의
+   * 수신자 줄과 같은 값이다).
+   */
+  head: { minHeight: 44, justifyContent: 'center', paddingVertical: spacing.sm },
+  line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  /** 폭이 모자라면 **이름만** 줄어든다. 번호와 상태가 잘리면 누구인지·어떻게 됐는지가 사라진다. */
+  name: { flexShrink: 1 },
+  fixed: { flexShrink: 0 },
+  detail: { paddingBottom: spacing.md, gap: spacing.sm },
+});

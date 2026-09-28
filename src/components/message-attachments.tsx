@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Text, View } from 'react-native';
 import { FilePicker } from '@/components/file-picker';
 import { Loading, Notice, SmsButton, s, smsError } from '@/components/sms-ui';
@@ -13,22 +13,71 @@ import { attachmentApi } from '@/lib/sms-api';
 import type { PickedFile } from '@/components/file-picker-types';
 import type { Attachment } from '@/types/sms';
 
-export function AttachmentPreview({ attachment }: { attachment: Attachment }) {
+/**
+ * 첨부 한 장.
+ *
+ * # 왜 「누르면 받기」와 「열리자마자 받기」가 따로 있나
+ *
+ * 첨부는 한 장이 최대 700KB 다. 수신자 50명이 서 있는 목록에서 전부 미리 받으면 **보지도
+ * 않을 수십 MB 를 받기 시작한다** — 폰 회선에서는 그것만으로 화면이 멈춘 것처럼 보이고,
+ * 발송 중이라면 네트워크를 놓고 러너와 다투게 된다.
+ *
+ * 그래서 기본은 지금처럼 **눌러야 받는다**(첨부 편집기가 그 자리다). `auto` 를 켜는 쪽은
+ * **이미 펼쳐진 한 줄에서만**이다 — 사람이 그 줄을 연 것 자체가 「이 한 장을 보겠다」는
+ * 뜻이므로, 거기서 한 번 더 누르게 할 이유가 없다.
+ *
+ * ⚠️ `auto` 를 「이 화면은 첨부를 보여 준다」 정도의 뜻으로 펼쳐지지 않은 줄에까지 달지 마라.
+ * 줄이 있는 만큼 요청이 나간다.
+ */
+export function AttachmentPreview({ attachment, auto }: { attachment: Attachment; auto?: boolean }) {
   const [uri, setUri] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  async function show() {
+  /**
+   * 이 카드가 아직 화면에 있는가.
+   *
+   * 🔴 펼친 줄을 곧바로 접으면 이 컴포넌트는 사라지는데 **받던 요청은 남는다.** 사라진 자리에
+   * 결과를 쓰면 경고가 뜨고, 700KB 짜리 base64 문자열이 그대로 붙잡혀 있게 된다.
+   */
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+  const show = useCallback(async () => {
     setLoading(true);
     try {
       const content = await attachmentApi.content(attachment.id);
+      if (!alive.current) return;
       setUri(`data:${content.mimeType};base64,${content.dataBase64}`);
       setError('');
-    } catch (e) { setError(smsError(e)); }
-    finally { setLoading(false); }
-  }
+    } catch (e) { if (alive.current) setError(smsError(e)); }
+    finally { if (alive.current) setLoading(false); }
+  }, [attachment.id]);
+  /**
+   * 🔴 **자동으로 받는 것은 한 번뿐이다.** 실패해도 다시 받지 않는다 — 발송 상세는 3초마다
+   * 목록을 다시 읽어 그리므로(→ `components/campaign-details.tsx`), 실패할 때마다 다시 받게
+   * 두면 못 받는 첨부 하나가 **3초에 한 번씩 서버를 두드린다.**
+   * ⚠️ 버튼 경로(`auto` 없음)는 예전 그대로 몇 번이든 다시 누를 수 있다.
+   */
+  const fetched = useRef(false);
+  useEffect(() => {
+    if (!auto || fetched.current) return;
+    fetched.current = true;
+    void show();
+  }, [auto, show]);
   return <View style={{ gap: 8 }}>
     <Text style={s.body}>{attachment.name} · {Math.ceil(attachment.size / 1024)} KB</Text>
-    {uri ? <Image accessibilityLabel={attachment.name} source={{ uri }} resizeMode="contain" style={{ width: '100%', height: 200 }} /> : <SmsButton label={`${attachment.name} 미리보기`} secondary disabled={loading} onPress={() => void show()} />}
+    {/*
+      ⚠️ 못 받았을 때는 **이미지 자리를 비워 둔다.** 사유는 아래 `Notice` 가 적는다. `auto` 인
+      곳에 미리보기 버튼을 대신 세우지 않는 이유는, 거기서만 버튼이 튀어나오면 「무엇이
+      고장났나」로 읽히기 때문이다.
+    */}
+    {uri
+      ? <Image accessibilityLabel={attachment.name} source={{ uri }} resizeMode="contain" style={{ width: '100%', height: 200 }} />
+      : auto
+        ? (loading ? <Loading /> : null)
+        : <SmsButton label={`${attachment.name} 미리보기`} secondary disabled={loading} onPress={() => void show()} />}
     {error ? <Notice error message={error} /> : null}
   </View>;
 }
